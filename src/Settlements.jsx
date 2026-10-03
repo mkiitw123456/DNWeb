@@ -34,12 +34,14 @@ export default function Settlements({ data, mutate, busy, ask }) {
       <div className="tabs">
         <button
           className={!history ? "active" : ""}
+          aria-pressed={!history}
           onClick={() => setHistory(false)}
         >
           待領取 <span>{scoped.filter((x) => !x.completedAt).length}</span>
         </button>
         <button
           className={history ? "active" : ""}
+          aria-pressed={history}
           onClick={() => setHistory(true)}
         >
           歷史紀錄 <span>{scoped.filter((x) => x.completedAt).length}</span>
@@ -99,6 +101,7 @@ export default function Settlements({ data, mutate, busy, ask }) {
                     </strong>
                     {data.me.admin || data.me.id === p.userId ? (
                       <Button
+                        primary={!p.claimedAt}
                         disabled={
                           busy || Boolean(p.claimedAt && !data.me.admin)
                         }

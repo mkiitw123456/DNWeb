@@ -1,12 +1,13 @@
 import {
   useEffect,
+  useId,
   useRef,
   useContext,
   createContext,
   cloneElement,
   isValidElement,
 } from "react";
-import { X, Plus } from "lucide-react";
+import { X, Plus, PackageOpen } from "lucide-react";
 export const FormErrorContext = createContext("");
 export const money = (n) => Number(n).toLocaleString("zh-TW");
 export function Button({ children, primary = false, ...props }) {
@@ -36,7 +37,9 @@ export function NumberField(props) {
 export function Empty({ title, description, action }) {
   return (
     <div className="empty">
-      <div className="empty-mark">◇</div>
+      <div className="empty-mark" aria-hidden="true">
+        <PackageOpen size={32} strokeWidth={1.5} />
+      </div>
       <h2>{title}</h2>
       <p>{description}</p>
       {action}
@@ -45,6 +48,7 @@ export function Empty({ title, description, action }) {
 }
 export function Modal({ title, children, onClose }) {
   const ref = useRef();
+  const titleId = useId();
   const error = useContext(FormErrorContext);
   useEffect(() => {
     const previous = document.activeElement;
@@ -54,13 +58,14 @@ export function Modal({ title, children, onClose }) {
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       onCancel={onClose}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div className="modal-header">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button aria-label="關閉" onClick={onClose}>
           <X size={18} />
         </button>

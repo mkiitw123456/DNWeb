@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SquarePen, Trash2, ArrowUpRight } from "lucide-react";
+import { SquarePen, Trash2, ArrowUpRight, Gem } from "lucide-react";
 import ScopeFilter from "./ScopeFilter.jsx";
 import { isRelated } from "./filters.js";
 import {
@@ -150,7 +150,9 @@ export default function Marketplace({ data, mutate, busy, ask }) {
         <div className="market-list">
           {listings.map((item) => (
             <article key={item.id} className="market-item">
-              <div className="item-symbol">◇</div>
+              <div className="item-symbol" aria-hidden="true">
+                <Gem size={23} strokeWidth={1.5} />
+              </div>
               <div className="item-info">
                 <h2>{item.name}</h2>
                 <p>

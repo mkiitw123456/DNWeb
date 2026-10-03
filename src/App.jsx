@@ -103,8 +103,9 @@ export default function App() {
   if (!data)
     return (
       <main className="login">
-        <div className="login-brand">
-          DN<span>DNWeb</span>
+        <div className="login-brand brand">
+          <span>DN</span>
+          <strong>DNWeb</strong>
         </div>
         <section>
           <h1>歡迎回來</h1>
@@ -113,7 +114,8 @@ export default function App() {
             onSubmit={async (e) => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
-              await mutate("login", Object.fromEntries(form), "登入成功");
+              if (await mutate("login", Object.fromEntries(form), "登入成功"))
+                setPage("characters");
             }}
           >
             <Field
@@ -156,14 +158,15 @@ export default function App() {
             <span>DN</span>
             <strong>DNWeb</strong>
           </div>
-          <nav>
+          <nav aria-label="主要導覽">
             {nav.map(([id, label, Icon]) => (
               <button
                 key={id}
                 className={page === id ? "active" : ""}
+                aria-current={page === id ? "page" : undefined}
                 onClick={() => setPage(id)}
               >
-                <Icon size={22} />
+                <Icon size={19} strokeWidth={1.7} />
                 {label}
               </button>
             ))}
@@ -172,9 +175,11 @@ export default function App() {
             {data.me.admin && (
               <button
                 className={page === "admin" ? "active" : ""}
+                aria-current={page === "admin" ? "page" : undefined}
+                aria-label="管理後台"
                 onClick={() => setPage("admin")}
               >
-                <Settings size={22} />
+                <Settings size={19} strokeWidth={1.7} />
                 管理後台
               </button>
             )}
@@ -189,6 +194,7 @@ export default function App() {
                 onClick={async () => {
                   try {
                     await request("logout");
+                    setPage("characters");
                     setData(null);
                     setError("");
                   } catch (e) {

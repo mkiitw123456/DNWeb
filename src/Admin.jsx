@@ -28,6 +28,7 @@ export default function Admin({ data, mutate, busy, ask }) {
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
+            aria-pressed={tab === id}
             key={id}
             onClick={() => {
               setTab(id);

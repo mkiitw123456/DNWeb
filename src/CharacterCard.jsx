@@ -13,7 +13,7 @@ export default function CharacterCard({
   return (
     <article
       className="compact-character"
-      style={{ "--profession-color": profession?.color || "#435568" }}
+      style={{ "--profession-color": profession?.color || "#454650" }}
       aria-label={`角色 ${c.name}`}
     >
       <header className="compact-character-header">
