@@ -134,8 +134,10 @@ test("sale is idempotent, only recipient/admin can claim, archive then reopen", 
   assert.throws(() =>
     action(s, member, "settlement.claim", { id, userId: u.id }),
   );
-  action(s, member, "settlement.claim", { id, userId: member.id });
+  assert.ok(s.settlements[0].payouts.find((p) => p.userId === u.id).claimedAt);
   assert.equal(s.settlements[0].completedAt, null);
+  action(s, member, "settlement.claim", { id, userId: member.id });
+  assert.ok(s.settlements[0].completedAt);
   assert.throws(() =>
     action(s, u, "settlement.edit", {
       id,
@@ -149,4 +151,18 @@ test("sale is idempotent, only recipient/admin can claim, archive then reopen", 
   assert.ok(s.settlements[0].completedAt);
   action(s, u, "settlement.claim", { id, userId: u.id, claimed: false });
   assert.equal(s.settlements[0].completedAt, null);
+});
+
+test("seller auto-claim uses listing owner when admin sells, including seller-only and absent seller", () => {
+  const s = initialState(), admin = s.users[0];
+  action(s, admin, "user.save", { username: "Seller", password: "x" });
+  const seller = s.users[1];
+  for (const participants of [[seller.id, admin.id], [seller.id], [admin.id]]) {
+    action(s, seller, "listing.save", { name: "Loot", price: 100, cost: 0, taxed: false, participants });
+    action(s, admin, "listing.sell", { id: s.listings.at(-1).id });
+    const settlement = s.settlements[0];
+    for (const payout of settlement.payouts)
+      assert.equal(Boolean(payout.claimedAt), payout.userId === seller.id);
+    assert.equal(Boolean(settlement.completedAt), participants.length === 1 && participants[0] === seller.id);
+  }
 });

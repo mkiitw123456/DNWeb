@@ -320,12 +320,16 @@ export function action(s, u, type, p, now = Date.now()) {
       ...result,
       payouts: result.payouts.map((x) => ({
         ...x,
+        claimedAt: x.userId === item.ownerId ? now : null,
         username: s.users.find((u) => u.id === x.userId).username,
       })),
       createdAt: now,
       completedAt: null,
       notification: "pending",
     };
+    settlement.completedAt = settlement.payouts.every((x) => x.claimedAt)
+      ? now
+      : null;
     item.soldId = settlement.id;
     s.settlements.unshift(settlement);
     return settlement.id;

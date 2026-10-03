@@ -75,6 +75,8 @@ test("cost notes survive sale, edit, claiming and history; old records remain co
   const settlementId = action(s, u, "listing.sell", { id: listing.id });
   const settlement = s.settlements[0];
   assert.equal(settlement.costNote, "手續費");
+  assert.ok(settlement.completedAt);
+  action(s, u, "settlement.claim", { id: settlementId, userId: u.id, claimed: false });
   action(s, u, "settlement.edit", {
     id: settlementId,
     name: "道具",
