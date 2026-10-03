@@ -43,7 +43,13 @@ export default function CharacterCard({
           </div>
         ))}
       </div>
-      <div className="compact-dungeons">
+      <div
+        className={
+          dungeons.length > 3
+            ? "compact-dungeons many-dungeons"
+            : "compact-dungeons"
+        }
+      >
         {dungeons.map((d) => (
           <label key={d.id} className="compact-run">
             <span title={d.name}>{d.name}</span>

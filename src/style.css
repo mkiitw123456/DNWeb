@@ -456,6 +456,19 @@ small {
   border: 0;
   padding-bottom: 0;
 }
+.compact-dungeons.many-dungeons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+.many-dungeons .compact-run {
+  gap: 6px;
+}
+.many-dungeons .compact-run > div {
+  gap: 5px;
+}
+.many-dungeons .compact-run input {
+  width: 32px;
+}
 .compact-run > span {
   color: #b4b6c4;
   overflow: hidden;
