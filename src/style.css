@@ -644,6 +644,73 @@ small {
   font-size: 11px;
   margin-right: 10px;
 }
+.claim-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+  margin-bottom: 24px;
+  border: 1px solid #51476e;
+  border-radius: var(--radius);
+  background: #1d1b29;
+}
+.claim-summary-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border: 1px solid #8b7cf833;
+  border-radius: 10px;
+  color: var(--gold);
+  background: var(--accent-soft);
+}
+.claim-summary-amount {
+  min-width: 0;
+  flex: 1;
+}
+.claim-summary-amount > span,
+.bulk-claim-total > span {
+  color: #beb9d1;
+  font-size: 12px;
+}
+.claim-summary-amount > strong,
+.bulk-claim-total > strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.claim-summary-amount p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.claim-summary-action {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+.claim-summary-action button {
+  white-space: nowrap;
+}
+.claim-summary-action small {
+  font-size: 10px;
+}
+.bulk-claim-question {
+  font-size: 14px;
+}
+.bulk-claim-total {
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+}
+.bulk-claim-total > strong {
+  color: var(--gold);
+}
 .settlement-list {
   display: grid;
   gap: 20px;
@@ -1154,6 +1221,22 @@ legend {
   }
 }
 @media (max-width: 700px) {
+  .claim-summary {
+    flex-wrap: wrap;
+    padding: 18px 16px;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .claim-summary-amount > strong {
+    font-size: 25px;
+  }
+  .claim-summary-action {
+    width: 100%;
+    justify-items: stretch;
+    text-align: center;
+    padding-top: 14px;
+    border-top: 1px solid #51476e;
+  }
   .sidebar {
     position: static;
     width: 100%;

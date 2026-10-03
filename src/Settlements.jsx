@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Check, SquarePen, Trash2, Send } from "lucide-react";
+import {
+  Check,
+  SquarePen,
+  Trash2,
+  Send,
+  Wallet,
+  CheckCheck,
+} from "lucide-react";
 import { Heading, Button, Modal, FormActions, Empty, money } from "./ui.jsx";
 import { SaleFields } from "./Marketplace.jsx";
 import ScopeFilter from "./ScopeFilter.jsx";
@@ -18,15 +25,48 @@ const statuses = {
 };
 export default function Settlements({ data, mutate, busy, ask }) {
   const [history, setHistory] = useState(false),
-    [editing, setEditing] = useState(null);
+    [editing, setEditing] = useState(null),
+    [claiming, setClaiming] = useState(null);
   const [scope, setScope] = useState("mine");
   const scoped = data.settlements.filter(
     (x) => scope === "all" || isRelated(x, data.me.id),
   );
   const visible = scoped.filter((x) => Boolean(x.completedAt) === history);
+  const pending = data.settlements.flatMap((item) => {
+    const payout = item.payouts.find((p) => p.userId === data.me.id);
+    return payout && !payout.claimedAt
+      ? [{ id: item.id, amount: payout.amount }]
+      : [];
+  });
+  const pendingTotal = pending.reduce((total, p) => total + p.amount, 0);
   return (
     <>
       <Heading title="結算" description="一起冒險，一起分享每一份收穫" />
+      <section className="claim-summary" aria-label="我的待領總額">
+        <span className="claim-summary-icon" aria-hidden="true">
+          <Wallet size={22} strokeWidth={1.7} />
+        </span>
+        <div className="claim-summary-amount">
+          <span>我的待領總額</span>
+          <strong>
+            {money(pendingTotal)} <small>金幣</small>
+          </strong>
+          <p>{pending.length} 筆待領款項 · 公會共同倉庫</p>
+        </div>
+        <div className="claim-summary-action">
+          <Button
+            primary
+            disabled={busy || !pending.length}
+            onClick={() =>
+              setClaiming({ claims: pending, total: pendingTotal })
+            }
+          >
+            <CheckCheck size={17} />
+            一次領取全部
+          </Button>
+          <small>僅結清自己尚未領取的款項</small>
+        </div>
+      </section>
       <div className="toolbar">
         <ScopeFilter value={scope} onChange={setScope} />
         <span>{scoped.length} 筆結算</span>
@@ -211,6 +251,43 @@ export default function Settlements({ data, mutate, busy, ask }) {
             </p>
             <FormActions busy={busy} onClose={() => setEditing(null)} />
           </form>
+        </Modal>
+      )}
+      {claiming && (
+        <Modal title="一次結清確認" onClose={() => !busy && setClaiming(null)}>
+          <p className="bulk-claim-question">
+            要一次結清這 {claiming.claims.length} 筆待領款項嗎？
+          </p>
+          <div className="bulk-claim-total">
+            <span>本次領取總額</span>
+            <strong>
+              {money(claiming.total)} <small>金幣</small>
+            </strong>
+          </div>
+          <p className="hint">
+            請先確認已從公會共同倉庫領取這筆金額。確認後，這些分帳會標記為「已領取」；所有人都領完的結算會移入歷史紀錄。
+          </p>
+          <div className="form-actions">
+            <Button disabled={busy} onClick={() => setClaiming(null)}>
+              取消
+            </Button>
+            <Button
+              primary
+              disabled={busy}
+              onClick={async () => {
+                if (
+                  await mutate(
+                    "settlement.claimAll",
+                    { claims: claiming.claims },
+                    "這批款項已全部標記為領取",
+                  )
+                )
+                  setClaiming(null);
+              }}
+            >
+              {busy ? "結清中…" : "確認全部已領取"}
+            </Button>
+          </div>
         </Modal>
       )}
     </>

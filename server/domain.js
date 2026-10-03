@@ -334,6 +334,39 @@ export function action(s, u, type, p, now = Date.now()) {
     s.settlements.unshift(settlement);
     return settlement.id;
   }
+  if (type === "settlement.claimAll") {
+    if (!Array.isArray(p.claims) || p.claims.length === 0)
+      fail("請選擇要一次結清的領取項目");
+    const ids = new Set();
+    const claims = p.claims.map((claim) => {
+      if (!claim || typeof claim !== "object" || Array.isArray(claim))
+        fail("領取項目格式不正確");
+      const settlementId = text(claim.id, "結算編號");
+      if (settlementId !== claim.id || ids.has(settlementId))
+        fail("結算編號不可空白或重複");
+      ids.add(settlementId);
+      return {
+        id: settlementId,
+        amount: number(claim.amount, "確認領取金額", Number.MAX_SAFE_INTEGER),
+      };
+    });
+    // Check the complete confirmation snapshot before changing any payout.
+    const targets = claims.map((claim) => {
+      const item = s.settlements.find((x) => x.id === claim.id);
+      const payout = item?.payouts.find((x) => x.userId === u.id);
+      if (!payout || (!payout.claimedAt && payout.amount !== claim.amount))
+        fail("結算資料已變更，請重新整理後再次確認一次結清的金額", 409);
+      return { item, payout };
+    });
+    for (const { item, payout } of targets) {
+      if (payout.claimedAt) continue;
+      payout.claimedAt = now;
+      item.completedAt = item.payouts.every((x) => x.claimedAt)
+        ? item.completedAt || now
+        : null;
+    }
+    return;
+  }
   if (type === "settlement.claim") {
     const item = s.settlements.find((x) => x.id === p.id);
     if (!item) fail("結算不存在");
