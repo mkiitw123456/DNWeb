@@ -112,7 +112,7 @@ export function SaleFields({ value, onChange, users }) {
         )}
       </div>
       <p className="hint">
-        先扣交易稅，再扣成本，最後平均分配。每人金額無條件捨去至整數，餘額留在公會共同倉庫。
+        先扣交易稅，再扣成本，最後平均分配。每人金額無條件捨去至整數，餘額由賣家保留。
       </p>
     </>
   );

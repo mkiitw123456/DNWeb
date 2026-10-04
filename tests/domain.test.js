@@ -33,7 +33,7 @@ test("Taipei 09:00 daily and Saturday weekly boundaries, including missed weeks"
   reset(s, after + 21 * 86400000);
   assert.deepEqual(s.characters[0].runs, {});
 });
-test("equal integer shares round down and leave the remainder in the guild warehouse", () => {
+test("equal integer shares round down and leave the remainder with the seller", () => {
   const r = split(1001, 100, true, ["a", "b", "c"]);
   assert.equal(r.tax, 100);
   assert.equal(r.net, 801);

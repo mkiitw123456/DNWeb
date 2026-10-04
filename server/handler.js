@@ -79,7 +79,7 @@ export async function notify(settlementId) {
       item.net - item.payouts.reduce((sum, p) => sum + p.amount, 0);
     if (retained > 0)
       lines.push(
-        `餘額 ${retained.toLocaleString("en-US")} 金幣留在公會共同倉庫。`,
+        `餘額 ${retained.toLocaleString("en-US")} 金幣由賣家保留。`,
       );
     const response = await fetch(url, {
       method: "POST",

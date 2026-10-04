@@ -124,7 +124,7 @@ export default function Settlements({ data, mutate, busy, ask }) {
                       item.net -
                         item.payouts.reduce((sum, p) => sum + p.amount, 0),
                     )}{" "}
-                    金幣留在公會共同倉庫。
+                    金幣由賣家保留。
                   </p>
                 )}
                 {item.costNote && (

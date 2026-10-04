@@ -48,7 +48,7 @@ test("Discord success, failure, retry and missing configuration persist without 
     assert.deepEqual(sentBody.allowed_mentions.users, ["123456789012345678"]);
     assert.equal((sentBody.content.match(/：16 金幣/g) || []).length, 4);
     assert.ok(!sentBody.content.includes("：17 金幣"));
-    assert.ok(sentBody.content.includes("餘額 2 金幣留在公會共同倉庫"));
+    assert.ok(sentBody.content.includes("餘額 2 金幣由賣家保留"));
     assert.deepEqual(
       await transact((s) => s.settlements[0].payouts.map((p) => p.amount)),
       [16, 16, 16, 16],
