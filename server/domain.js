@@ -104,9 +104,9 @@ export function split(price, cost, taxed, ids) {
     net,
     share,
     remainder,
-    payouts: ids.map((userId, i) => ({
+    payouts: ids.map((userId) => ({
       userId,
-      amount: share + (i < remainder ? 1 : 0),
+      amount: share,
       claimedAt: null,
     })),
   };

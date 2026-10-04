@@ -75,6 +75,12 @@ export async function notify(settlementId) {
       const discord = users.find((x) => x.id === p.userId)?.discordId;
       return `${discord ? `<@${discord}>` : p.username}：${p.amount.toLocaleString("en-US")} 金幣`;
     });
+    const retained =
+      item.net - item.payouts.reduce((sum, p) => sum + p.amount, 0);
+    if (retained > 0)
+      lines.push(
+        `餘額 ${retained.toLocaleString("en-US")} 金幣留在公會共同倉庫。`,
+      );
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

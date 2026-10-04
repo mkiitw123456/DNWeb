@@ -112,10 +112,21 @@ export default function Settlements({ data, mutate, busy, ask }) {
                   額外成本<strong>− {money(item.cost)}</strong>
                 </span>
                 <span>
-                  分配總額<strong className="gold">{money(item.net)}</strong>
+                  可分配金額<strong className="gold">{money(item.net)}</strong>
                 </span>
               </div>
               <div className="payouts">
+                {item.net >
+                  item.payouts.reduce((sum, p) => sum + p.amount, 0) && (
+                  <p className="hint">
+                    餘額{" "}
+                    {money(
+                      item.net -
+                        item.payouts.reduce((sum, p) => sum + p.amount, 0),
+                    )}{" "}
+                    金幣留在公會共同倉庫。
+                  </p>
+                )}
                 {item.costNote && (
                   <p className="cost-note">
                     <span>成本備註</span>

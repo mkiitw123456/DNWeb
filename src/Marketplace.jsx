@@ -104,7 +104,7 @@ export function SaleFields({ value, onChange, users }) {
         </span>
         {value.participants?.length > 0 && (
           <span>
-            每人至少
+            每人領取
             <strong>
               {money(Math.floor(net / value.participants.length))}
             </strong>
@@ -112,8 +112,7 @@ export function SaleFields({ value, onChange, users }) {
         )}
       </div>
       <p className="hint">
-        先扣交易稅，再扣成本，最後平均分配。金額採整數，餘數依參與者順序各加 1
-        金幣。
+        先扣交易稅，再扣成本，最後平均分配。每人金額無條件捨去至整數，餘額留在公會共同倉庫。
       </p>
     </>
   );

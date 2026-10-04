@@ -17,12 +17,14 @@ test("Discord success, failure, retry and missing configuration persist without 
     const id = await transact((s) => {
       const u = s.users[0];
       u.discordId = "123456789012345678";
+      for (const username of ["A", "B", "C"])
+        action(s, u, "user.save", { username, password: "test" });
       action(s, u, "listing.save", {
         name: "Sword",
-        price: 100,
+        price: 73,
         cost: 0,
         taxed: true,
-        participants: [u.id],
+        participants: s.users.map((user) => user.id),
       });
       return action(s, u, "listing.sell", { id: s.listings[0].id });
     });
@@ -35,15 +37,22 @@ test("Discord success, failure, retry and missing configuration persist without 
       s.webhook = "https://discord.com/api/webhooks/123/fake-test-token";
     });
     let sent = 0;
+    let sentBody;
     globalThis.fetch = async (url, options) => {
       sent++;
-      const body = JSON.parse(options.body);
-      assert.deepEqual(body.allowed_mentions.parse, []);
-      assert.deepEqual(body.allowed_mentions.users, ["123456789012345678"]);
-      assert.ok(body.content.includes("90"));
+      sentBody = JSON.parse(options.body);
       return { ok: false };
     };
     await notify(id);
+    assert.deepEqual(sentBody.allowed_mentions.parse, []);
+    assert.deepEqual(sentBody.allowed_mentions.users, ["123456789012345678"]);
+    assert.equal((sentBody.content.match(/：16 金幣/g) || []).length, 4);
+    assert.ok(!sentBody.content.includes("：17 金幣"));
+    assert.ok(sentBody.content.includes("餘額 2 金幣留在公會共同倉庫"));
+    assert.deepEqual(
+      await transact((s) => s.settlements[0].payouts.map((p) => p.amount)),
+      [16, 16, 16, 16],
+    );
     assert.equal(
       await transact((s) => s.settlements[0].notification),
       "failed",

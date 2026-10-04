@@ -33,7 +33,7 @@ test("Taipei 09:00 daily and Saturday weekly boundaries, including missed weeks"
   reset(s, after + 21 * 86400000);
   assert.deepEqual(s.characters[0].runs, {});
 });
-test("integer split preserves every coin, tax optional and invalid data rejected", () => {
+test("equal integer shares round down and leave the remainder in the guild warehouse", () => {
   const r = split(1001, 100, true, ["a", "b", "c"]);
   assert.equal(r.tax, 100);
   assert.equal(r.net, 801);
@@ -43,8 +43,27 @@ test("integer split preserves every coin, tax optional and invalid data rejected
   );
   assert.deepEqual(
     split(10, 0, false, ["a", "b", "c"]).payouts.map((x) => x.amount),
-    [4, 3, 3],
+    [3, 3, 3],
   );
+  for (const [price, cost, taxed, expectedNet, amount, remainder] of [
+    [66, 0, false, 66, 16, 2],
+    [73, 0, true, 66, 16, 2],
+    [100, 24, true, 66, 16, 2],
+    [3, 0, false, 3, 0, 3],
+    [0, 0, true, 0, 0, 0],
+  ]) {
+    const result = split(price, cost, taxed, ["a", "b", "c", "d"]);
+    assert.equal(result.net, expectedNet);
+    assert.deepEqual(
+      result.payouts.map((p) => p.amount),
+      Array(4).fill(amount),
+    );
+    assert.equal(result.remainder, remainder);
+    assert.equal(
+      result.payouts.reduce((sum, p) => sum + p.amount, 0) + remainder,
+      expectedNet,
+    );
+  }
   for (const args of [
     [1, 2, false, ["a"]],
     [10, 0, true, []],
@@ -154,15 +173,25 @@ test("sale is idempotent, only recipient/admin can claim, archive then reopen", 
 });
 
 test("seller auto-claim uses listing owner when admin sells, including seller-only and absent seller", () => {
-  const s = initialState(), admin = s.users[0];
+  const s = initialState(),
+    admin = s.users[0];
   action(s, admin, "user.save", { username: "Seller", password: "x" });
   const seller = s.users[1];
   for (const participants of [[seller.id, admin.id], [seller.id], [admin.id]]) {
-    action(s, seller, "listing.save", { name: "Loot", price: 100, cost: 0, taxed: false, participants });
+    action(s, seller, "listing.save", {
+      name: "Loot",
+      price: 100,
+      cost: 0,
+      taxed: false,
+      participants,
+    });
     action(s, admin, "listing.sell", { id: s.listings.at(-1).id });
     const settlement = s.settlements[0];
     for (const payout of settlement.payouts)
       assert.equal(Boolean(payout.claimedAt), payout.userId === seller.id);
-    assert.equal(Boolean(settlement.completedAt), participants.length === 1 && participants[0] === seller.id);
+    assert.equal(
+      Boolean(settlement.completedAt),
+      participants.length === 1 && participants[0] === seller.id,
+    );
   }
 });

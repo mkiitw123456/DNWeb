@@ -150,8 +150,11 @@ test("API login, member permissions, simultaneous sell/claim and durable data", 
   assert.equal(settlement.notification, "unconfigured");
   assert.equal(
     settlement.payouts.reduce((n, p) => n + p.amount, 0),
-    801,
+    800,
   );
+  assert.deepEqual(settlement.payouts.map((p) => p.amount), [400, 400]);
+  assert.equal(settlement.remainder, 1);
+  assert.equal(settlement.net, 801);
   assert.equal(
     (
       await call(
