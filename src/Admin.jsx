@@ -126,11 +126,17 @@ export default function Admin({ data, mutate, busy, ask }) {
         <section className="admin-panel narrow">
           <h2>Discord 售出通知</h2>
           <p className="muted">
-            {data.webhookConfigured ? "已設定通知網址" : "尚未設定通知網址"}
+            {data.discordClaimsEnabled
+              ? "已啟用 Discord 按鈕領取"
+              : data.webhookConfigured
+                ? "已設定通知網址"
+                : "尚未設定通知網址"}
           </p>
           <p>
             物品賣出時，自動通知參與者可領取的金額。填寫成員的 Discord ID
             後，通知會標記該成員。
+            {data.discordClaimsEnabled &&
+              " 成員可直接按通知下方的「確認領取」，系統會依 Discord ID 登記本人的領取狀態。"}
           </p>
           <form
             onSubmit={async (e) => {

@@ -4,6 +4,7 @@ import {
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
+import { discordEnabled } from "./discord.js";
 export const id = () => randomUUID();
 export function fail(message, status = 400) {
   throw Object.assign(new Error(message), { status });
@@ -123,6 +124,7 @@ export function publicState(s, u) {
       s.users.find((x) => x.id === u.id) &&
       (({ password, version, ...rest }) => rest)(u),
     webhookConfigured: !!(s.webhook || process.env.DISCORD_WEBHOOK_URL),
+    discordClaimsEnabled: discordEnabled(),
     storage: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ? "Firebase" : "本機",
   };
 }
@@ -176,6 +178,11 @@ export function action(s, u, type, p, now = Date.now()) {
     const discordId = typeof p.discordId === "string" ? p.discordId.trim() : "";
     if (discordId && !/^\d{17,20}$/.test(discordId))
       fail("Discord ID 應為 17–20 位數字");
+    if (
+      discordId &&
+      s.users.some((x) => x.id !== p.id && x.discordId === discordId)
+    )
+      fail("此 Discord ID 已綁定其他帳號");
     if (old?.admin && p.active === false) fail("不能停用管理員");
     const password = p.password
       ? hash(text(p.password, "密碼", 128))
@@ -405,6 +412,8 @@ export function action(s, u, type, p, now = Date.now()) {
       })),
       notification: "pending",
     });
+    item.discordClaimKey = id();
+    delete item.discordMessage;
     return;
   }
   if (type === "settlement.delete") {

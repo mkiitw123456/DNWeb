@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { transact } from "./store.js";
-import { action, fail, matches, publicState, reset } from "./domain.js";
+import { action, fail, id, matches, publicState, reset } from "./domain.js";
+import { DISCORD_API, discordEnabled, saleMessage } from "./discord.js";
 function signature(value) {
   if (!process.env.SESSION_SECRET) fail("請設定 SESSION_SECRET", 503);
   return createHmac("sha256", process.env.SESSION_SECRET)
@@ -51,54 +52,70 @@ export async function notify(settlementId) {
         Date.now() - (item.notificationAt || 0) < 60000)
     )
       return null;
-    const url = s.webhook || process.env.DISCORD_WEBHOOK_URL;
+    const interactive = discordEnabled();
+    const url = interactive
+      ? `${DISCORD_API}/channels/${process.env.DISCORD_CHANNEL_ID}/messages`
+      : s.webhook || process.env.DISCORD_WEBHOOK_URL;
     if (!url) {
       item.notification = "unconfigured";
       return null;
     }
     item.notification = "sending";
     item.notificationAt = Date.now();
+    if (interactive) item.discordClaimKey ||= id();
     return {
       url,
+      interactive,
       item: structuredClone(item),
       users: s.users.map((x) => ({ id: x.id, discordId: x.discordId })),
     };
   });
   if (!notification) return;
-  const { url, item, users } = notification;
+  const { url, item, users, interactive } = notification;
   let status = "failed";
+  let discordMessage = null;
   try {
-    const mentions = item.payouts
-      .map((p) => users.find((x) => x.id === p.userId)?.discordId)
-      .filter(Boolean);
-    const lines = item.payouts.map((p) => {
-      const discord = users.find((x) => x.id === p.userId)?.discordId;
-      return `${discord ? `<@${discord}>` : p.username}：${p.amount.toLocaleString("en-US")} 金幣`;
-    });
-    const retained =
-      item.net - item.payouts.reduce((sum, p) => sum + p.amount, 0);
-    if (retained > 0)
-      lines.push(
-        `餘額 ${retained.toLocaleString("en-US")} 金幣由賣家保留。`,
-      );
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(interactive
+          ? { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` }
+          : {}),
+      },
       body: JSON.stringify({
-        content: `【物品已售出】${item.name}\n${lines.join("\n")}\n請到 DNWeb 結算分頁確認領取。\n結算編號：${item.id}`,
-        allowed_mentions: { parse: [], users: mentions },
+        ...saleMessage(item, users, interactive),
+        ...(interactive
+          ? {
+              nonce: item.discordClaimKey.replaceAll("-", "").slice(0, 25),
+              enforce_nonce: true,
+            }
+          : {}),
       }),
       signal: AbortSignal.timeout(8000),
     });
-    if (response.ok) status = "sent";
+    if (response.ok) {
+      if (interactive) {
+        const message = await response.json();
+        if (!/^\d{17,20}$/.test(message.id))
+          throw new Error("Invalid Discord message");
+        discordMessage = {
+          id: message.id,
+          channelId: process.env.DISCORD_CHANNEL_ID,
+          guildId: process.env.DISCORD_GUILD_ID,
+        };
+      }
+      status = "sent";
+    }
   } catch {
     /* Persist failure for explicit retry. */
   }
   await transact((s) => {
     const current = s.settlements.find((x) => x.id === settlementId);
-    if (current) {
+    if (current && current.discordClaimKey === item.discordClaimKey) {
       current.notification = status;
       current.notificationAt = Date.now();
+      if (discordMessage) current.discordMessage = discordMessage;
     }
   });
 }

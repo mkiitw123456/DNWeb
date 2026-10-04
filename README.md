@@ -65,6 +65,16 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## Discord
 
+### Discord 直接領取
+
+設定 `DISCORD_APPLICATION_ID`、`DISCORD_PUBLIC_KEY`、`DISCORD_BOT_TOKEN`、`DISCORD_GUILD_ID`、`DISCORD_CHANNEL_ID` 後，新售出通知改由機器人送出並附上「確認領取」按鈕。Token 只放在 Vercel 正式環境的 Secret/Sensitive 變數，勿提交 Git。機器人在指定頻道需要檢視頻道與傳送訊息權限，不需要管理員權限或 Message Content Intent。
+
+Discord Developer Portal 的 Interactions Endpoint URL 設為 `https://你的網域/api/discord`。端點以原始請求驗證 Ed25519 簽章與五分鐘時效、檢查應用程式與公會，立即回覆私人延後回應，再以 Vercel `waitUntil` 處理 Firestore 領取並回覆結果。點擊者必須對應唯一且啟用的 DNWeb Discord ID，並且是該結算的參與者；訊息、頻道與結算版本也會比對。重複點擊不改變已領取時間，全員領完照常歸檔。網站最遲於下一次 30 秒更新或切回視窗時同步。
+
+既有 Webhook 通知不自動補按鈕或重送。未完整設定機器人時，保留原本 Webhook 通知。修改結算後，舊按鈕失效；重新發送的通知才可操作。設定 Discord ID 時會阻止重複綁定；舊資料若已有重複，按鈕會拒絕領取，需由管理員修正。
+
+### 原有 Webhook 通知
+
 管理後台 → Discord 通知，貼上 Webhook URL。管理員再為各帳號填入 Discord 使用者 ID（17–20 位數字）。物品賣出後會標記成員、列出金額與結算編號；未填 ID 的成員只顯示名稱。`allowed_mentions` 限制只標記指定使用者。
 
 售出會先可靠保存結算，再發送通知。通知失敗不會回滾交易，卡片顯示失敗並可重試；未設定 URL 時顯示未設定。成功紀錄不重送。若 Discord 已收到但回應中斷，手動重試可能產生重複通知，可用結算編號辨識。沒有背景通知工作程序，失敗後需手動重試。
