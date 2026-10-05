@@ -132,8 +132,8 @@ export default function Marketplace({ data, mutate, busy, ask }) {
         onAdd={() =>
           setEditing({
             name: "",
-            price: 0,
-            cost: 0,
+            price: "",
+            cost: "",
             taxed: true,
             participants: [data.me.id],
           })
@@ -228,6 +228,7 @@ export default function Marketplace({ data, mutate, busy, ask }) {
       )}
       {editing && (
         <Modal
+          explicitCloseOnly
           title={editing.id ? "編輯物品" : "新增物品"}
           onClose={() => setEditing(null)}
         >
@@ -242,7 +243,7 @@ export default function Marketplace({ data, mutate, busy, ask }) {
               onChange={setEditing}
               users={data.users}
             />
-            <FormActions busy={busy} onClose={() => setEditing(null)} />
+            <FormActions busy={busy} showCancel={false} />
           </form>
         </Modal>
       )}

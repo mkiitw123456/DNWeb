@@ -46,7 +46,7 @@ export function Empty({ title, description, action }) {
     </div>
   );
 }
-export function Modal({ title, children, onClose }) {
+export function Modal({ title, children, onClose, explicitCloseOnly = false }) {
   const ref = useRef();
   const titleId = useId();
   const error = useContext(FormErrorContext);
@@ -61,10 +61,10 @@ export function Modal({ title, children, onClose }) {
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        if (!explicitCloseOnly) onClose();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (!explicitCloseOnly && e.target === e.currentTarget) onClose();
       }}
     >
       <div className="modal-header">
@@ -98,12 +98,14 @@ export function Heading({ title, description, onAdd, addLabel }) {
     </header>
   );
 }
-export function FormActions({ busy, onClose }) {
+export function FormActions({ busy, onClose, showCancel = true }) {
   return (
     <div className="form-actions">
-      <Button type="button" onClick={onClose}>
-        取消
-      </Button>
+      {showCancel && (
+        <Button type="button" onClick={onClose}>
+          取消
+        </Button>
+      )}
       <Button primary disabled={busy}>
         {busy ? "儲存中…" : "儲存"}
       </Button>
