@@ -5,6 +5,9 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { discordEnabled } from "./discord.js";
+import { professionIcons } from "../shared/professions.js";
+import { communityAction, groupOf } from "./community.js";
+import { cleanupAccounts } from "./account-cleanup.js";
 export const id = () => randomUUID();
 export function fail(message, status = 400) {
   throw Object.assign(new Error(message), { status });
@@ -64,12 +67,26 @@ export function periods(now = Date.now()) {
 }
 export function reset(state, now = Date.now()) {
   state.professions ??= [];
+  state.groups ??= [];
+  state.invitations ??= [];
+  state.bounties ??= [];
+  if (!state.professionIconsMigrated) {
+    for (const preset of professionIcons) {
+      const existing = state.professions.find(
+        (p) =>
+          p.name === preset.name ||
+          p.name.toLowerCase() === preset.english.toLowerCase(),
+      );
+      if (existing)
+        Object.assign(existing, { name: preset.name, icon: preset.icon });
+      else state.professions.push({ ...preset });
+    }
+    state.professionIconsMigrated = true;
+  }
   const p = periods(now);
   for (const c of state.characters) {
-    if (c.day !== p.day) {
-      c.fatigue = 700;
-      c.day = p.day;
-    }
+    delete c.fatigue;
+    delete c.day;
     if (c.week !== p.week) {
       c.runs = {};
       c.week = p.week;
@@ -83,7 +100,7 @@ export function initialState() {
     users: [
       {
         id: id(),
-        username: "Wolf",
+        username: "MrAirWolf",
         password: hash(process.env.INITIAL_ADMIN_PASSWORD),
         discordId: "",
         admin: true,
@@ -92,7 +109,11 @@ export function initialState() {
       },
     ],
     characters: [],
-    professions: [],
+    professions: professionIcons.map((p) => ({ ...p })),
+    professionIconsMigrated: true,
+    groups: [],
+    invitations: [],
+    bounties: [],
     dungeons: [
       { id: id(), name: "森林聖域", max: 7 },
       { id: id(), name: "黑龍巢穴", max: 3 },
@@ -131,19 +152,48 @@ export function split(price, cost, taxed, ids) {
   };
 }
 export function publicState(s, u) {
+  const ownGroup = groupOf(s, u.id);
+  const visibleIds = new Set(ownGroup?.memberIds || [u.id]);
+  const safeUser = ({ password, version, ...rest }) => rest;
   return {
-    users: s.users.map(({ password, version, ...rest }) => rest),
-    characters: s.characters,
+    users: s.users
+      .filter((x) => u.admin || visibleIds.has(x.id))
+      .map((x) =>
+        u.admin || x.id === u.id
+          ? safeUser(x)
+          : { id: x.id, username: x.username, active: x.active },
+      ),
+    characters: s.characters.filter(
+      (c) => u.admin || visibleIds.has(c.ownerId),
+    ),
+    groups: s.groups.filter((g) => u.admin || g.id === ownGroup?.id),
+    invitations: s.invitations
+      .filter((i) => u.admin || i.toUserId === u.id || i.fromUserId === u.id)
+      .map((i) => ({
+        ...i,
+        groupName:
+          s.groups.find((g) => g.id === i.groupId)?.name || "已刪除群組",
+        fromName:
+          s.users.find((x) => x.id === i.fromUserId)?.username || "未知成員",
+        toName:
+          s.users.find((x) => x.id === i.toUserId)?.username || "未知成員",
+      })),
+    bounties: s.bounties.map((b) => ({
+      ...b,
+      ownerName:
+        s.users.find((x) => x.id === b.ownerId)?.username || "已刪除帳號",
+    })),
     professions: s.professions || [],
     dungeons: s.dungeons,
-    listings: s.listings,
-    settlements: s.settlements,
+    listings: u.admin ? s.listings : [],
+    settlements: u.admin ? s.settlements : [],
     me:
       s.users.find((x) => x.id === u.id) &&
       (({ password, version, ...rest }) => rest)(u),
     webhookConfigured: !!(s.webhook || process.env.DISCORD_WEBHOOK_URL),
     discordClaimsEnabled: discordEnabled(),
     storage: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ? "Firebase" : "本機",
+    accountCleanupCompleted: !!s.accountCleanupCompleted,
   };
 }
 function owned(item, user, field = "ownerId") {
@@ -153,9 +203,16 @@ function owned(item, user, field = "ownerId") {
 }
 export function action(s, u, type, p, now = Date.now()) {
   reset(s, now);
+  if (communityAction(s, u, type, p, now)) return;
   const admin = () => {
     if (!u.admin) fail("僅管理員可操作", 403);
   };
+  if (type === "maintenance.cleanup") {
+    admin();
+    if (p.confirm !== "MrAirWolf") fail("請輸入 MrAirWolf 確認帳號整理");
+    cleanupAccounts(s);
+    return;
+  }
   if (type === "profession.save") {
     admin();
     const old = p.id ? s.professions.find((x) => x.id === p.id) : null;
@@ -167,9 +224,10 @@ export function action(s, u, type, p, now = Date.now()) {
       )
     )
       fail("職業名稱已存在");
-    if (typeof p.color !== "string" || !/^#[0-9a-f]{6}$/i.test(p.color))
-      fail("請選擇有效的職業顏色（#RRGGBB）");
-    const item = { id: old?.id || id(), name, color: p.color.toLowerCase() };
+    const icon = p.icon ?? old?.icon ?? "";
+    if (icon && !professionIcons.some((preset) => preset.icon === icon))
+      fail("請選擇有效的職業圖示");
+    const item = { id: old?.id || id(), name, icon };
     if (old) Object.assign(old, item);
     else s.professions.push(item);
     return;
@@ -236,6 +294,8 @@ export function action(s, u, type, p, now = Date.now()) {
   }
   if (type === "dungeon.delete") {
     admin();
+    if (s.bounties.some((b) => b.dungeonId === p.id))
+      fail("此關卡仍有懸賞，請先移動或刪除懸賞");
     s.dungeons = s.dungeons.filter((x) => x.id !== p.id);
     for (const c of s.characters) delete c.runs[p.id];
     return;
@@ -260,9 +320,8 @@ export function action(s, u, type, p, now = Date.now()) {
       name: text(p.name, "角色名稱"),
       hp: number(p.hp, "血量"),
       attack: number(p.attack, "攻擊力"),
-      fatigue: number(p.fatigue, "疲勞值", 700),
       runs: old?.runs || {},
-      ...periods(now),
+      week: periods(now).week,
     };
     if (old) Object.assign(old, item);
     else s.characters.push(item);
@@ -276,14 +335,17 @@ export function action(s, u, type, p, now = Date.now()) {
     s.characters = s.characters.filter((x) => x.id !== p.id);
     return;
   }
-  if (type === "character.run") {
+  if (type === "character.run" || type === "character.complete") {
     const c = owned(
       s.characters.find((x) => x.id === p.id),
       u,
     );
     const d = s.dungeons.find((x) => x.id === p.dungeonId);
     if (!d) fail("副本不存在");
-    c.runs[d.id] = number(p.count, "已完成次數", d.max);
+    c.runs[d.id] =
+      type === "character.complete"
+        ? d.max
+        : number(p.count, "已完成次數", d.max);
     return;
   }
   if (type === "listing.save") {

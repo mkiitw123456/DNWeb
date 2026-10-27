@@ -1,4 +1,5 @@
-import { SquarePen, Heart, Zap, Swords } from "lucide-react";
+import { SquarePen, Heart, Swords } from "lucide-react";
+import ProfessionIcon from "./ProfessionIcon.jsx";
 import { Button, money } from "./ui.jsx";
 export default function CharacterCard({
   character: c,
@@ -11,17 +12,10 @@ export default function CharacterCard({
 }) {
   const profession = professions.find((p) => p.id === c.professionId);
   return (
-    <article
-      className="compact-character"
-      style={{ "--profession-color": profession?.color || "#454650" }}
-      aria-label={`角色 ${c.name}`}
-    >
+    <article className="compact-character" aria-label={`角色 ${c.name}`}>
       <header className="compact-character-header">
         <h3 title={c.name}>{c.name}</h3>
-        <span className="profession-label">
-          <i style={{ background: profession?.color || "#65758a" }} />
-          {profession?.name || "未設定職業"}
-        </span>
+        <ProfessionIcon profession={profession} />
         {canEdit && (
           <Button aria-label={`編輯角色 ${c.name}`} onClick={onEdit}>
             <SquarePen size={14} />
@@ -31,7 +25,6 @@ export default function CharacterCard({
       <div className="compact-stats">
         {[
           [Heart, "血量", c.hp],
-          [Zap, "疲勞", c.fatigue],
           [Swords, "攻擊", c.attack],
         ].map(([Icon, label, value]) => (
           <div key={label}>
@@ -51,7 +44,7 @@ export default function CharacterCard({
         }
       >
         {dungeons.map((d) => (
-          <label key={d.id} className="compact-run">
+          <div key={d.id} className="compact-run">
             <span title={d.name}>{d.name}</span>
             <div>
               <input
@@ -84,8 +77,24 @@ export default function CharacterCard({
                 }}
               />
               <small>/ {d.max}</small>
+              {canEdit && (
+                <Button
+                  aria-label={`${c.name} ${d.name} 全部完成`}
+                  disabled={busy || (c.runs[d.id] || 0) >= d.max}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() =>
+                    mutate(
+                      "character.complete",
+                      { id: c.id, dungeonId: d.id },
+                      "此關卡已全部完成",
+                    )
+                  }
+                >
+                  {(c.runs[d.id] || 0) >= d.max ? "已完成" : "全完成"}
+                </Button>
+              )}
             </div>
-          </label>
+          </div>
         ))}
         {!dungeons.length && <small>尚未設定副本</small>}
       </div>

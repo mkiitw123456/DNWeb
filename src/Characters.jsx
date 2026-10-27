@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UserRound, Check, Clock, CalendarDays, Trash2 } from "lucide-react";
+import { UserRound, Check, CalendarDays, Trash2 } from "lucide-react";
 import {
   Heading,
   Button,
@@ -9,6 +9,8 @@ import {
   FormActions,
   Empty,
 } from "./ui.jsx";
+import Groups from "./Groups.jsx";
+import ProfessionIcon from "./ProfessionIcon.jsx";
 import CharacterCard from "./CharacterCard.jsx";
 export default function Characters({ data, mutate, busy, ask }) {
   const [editing, setEditing] = useState(null),
@@ -27,7 +29,6 @@ export default function Characters({ data, mutate, busy, ask }) {
       name: "",
       hp: 0,
       attack: 0,
-      fatigue: 700,
       ownerId,
       professionId: "",
     });
@@ -47,11 +48,8 @@ export default function Characters({ data, mutate, busy, ask }) {
         onAdd={() => add()}
         addLabel="新增角色"
       />
+      <Groups data={data} mutate={mutate} busy={busy} ask={ask} />
       <div className="compact-reset">
-        <span>
-          <Clock size={14} />
-          每日 09:00 疲勞恢復 700
-        </span>
         <span>
           <CalendarDays size={14} />
           每週六 09:00 副本重置
@@ -167,6 +165,23 @@ export default function Characters({ data, mutate, busy, ask }) {
                 ))}
               </select>
             </Field>
+            <div
+              className="profession-picker"
+              role="group"
+              aria-label="職業圖示選擇"
+            >
+              {data.professions.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  aria-label={p.name}
+                  aria-pressed={editing.professionId === p.id}
+                  onClick={() => setEditing({ ...editing, professionId: p.id })}
+                >
+                  <ProfessionIcon profession={p} />
+                </button>
+              ))}
+            </div>
             {!data.professions?.length && (
               <p className="hint">
                 請管理員先到「管理後台 → 職業清單」建立職業。
@@ -193,13 +208,12 @@ export default function Characters({ data, mutate, busy, ask }) {
             <div className="form-grid">
               {[
                 ["hp", "血量"],
-                ["fatigue", "疲勞值"],
                 ["attack", "攻擊力"],
               ].map(([key, label]) => (
                 <NumberField
                   key={key}
                   label={label}
-                  max={key === "fatigue" ? 700 : 1e12}
+                  max={1e12}
                   value={editing[key]}
                   onChange={(e) =>
                     setEditing({

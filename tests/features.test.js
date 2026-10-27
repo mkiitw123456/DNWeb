@@ -7,23 +7,36 @@ test("legacy state migration and profession CRUD preserve characters and enforce
   const s = initialState(),
     admin = s.users[0];
   delete s.professions;
+  delete s.professionIconsMigrated;
   reset(s);
-  assert.deepEqual(s.professions, []);
+  assert.equal(s.professions.length, 10);
   action(s, admin, "user.save", { username: "Member", password: "test" });
   const member = s.users[1];
   assert.throws(
     () =>
-      action(s, member, "profession.save", { name: "戰士", color: "#ff8800" }),
+      action(s, member, "profession.save", {
+        name: "戰士",
+        icon: "/icons/Swordsman.png",
+      }),
     { status: 403 },
   );
   assert.throws(() =>
-    action(s, admin, "profession.save", { name: "戰士", color: "red" }),
+    action(s, admin, "profession.save", {
+      name: "戰士",
+      icon: "https://untrusted.example/icon.png",
+    }),
   );
-  action(s, admin, "profession.save", { name: "戰士", color: "#FF8800" });
-  const profession = s.professions[0];
-  assert.equal(profession.color, "#ff8800");
+  action(s, admin, "profession.save", {
+    name: "戰士",
+    icon: "/icons/Swordsman.png",
+  });
+  const profession = s.professions.at(-1);
+  assert.equal(profession.icon, "/icons/Swordsman.png");
   assert.throws(() =>
-    action(s, admin, "profession.save", { name: "戰士", color: "#ffffff" }),
+    action(s, admin, "profession.save", {
+      name: "戰士",
+      icon: "/icons/Swordsman.png",
+    }),
   );
   action(s, member, "character.save", {
     name: "角色",
@@ -40,12 +53,12 @@ test("legacy state migration and profession CRUD preserve characters and enforce
   action(s, admin, "profession.save", {
     ...profession,
     name: "劍士",
-    color: "#00ffaa",
+    icon: "/icons/Mercenary.png",
   });
   const view = publicState(s, member);
   assert.equal(
-    view.professions.find((p) => p.id === c.professionId).color,
-    "#00ffaa",
+    view.professions.find((p) => p.id === c.professionId).icon,
+    "/icons/Mercenary.png",
   );
   assert.throws(
     () => action(s, member, "profession.delete", { id: profession.id }),
@@ -76,7 +89,11 @@ test("cost notes survive sale, edit, claiming and history; old records remain co
   const settlement = s.settlements[0];
   assert.equal(settlement.costNote, "手續費");
   assert.ok(settlement.completedAt);
-  action(s, u, "settlement.claim", { id: settlementId, userId: u.id, claimed: false });
+  action(s, u, "settlement.claim", {
+    id: settlementId,
+    userId: u.id,
+    claimed: false,
+  });
   action(s, u, "settlement.edit", {
     id: settlementId,
     name: "道具",

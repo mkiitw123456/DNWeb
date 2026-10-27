@@ -359,7 +359,7 @@ small {
   gap: 12px;
 }
 .compact-character {
-  border: 1px solid var(--profession-color);
+  border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: var(--radius);
   background: var(--surface);
@@ -407,7 +407,7 @@ small {
 }
 .compact-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 11px;
 }
 .compact-stats > div {
@@ -457,7 +457,7 @@ small {
   padding-bottom: 0;
 }
 .compact-dungeons.many-dungeons {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   column-gap: 16px;
 }
 .many-dungeons .compact-run {
@@ -1568,5 +1568,137 @@ legend {
   *::after {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+.group-panel {
+  background: var(--panel, #1c1d24);
+  border: 1px solid var(--border, #353642);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.group-panel h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.group-row p,
+.group-row > span {
+  flex: 1;
+  min-width: 140px;
+  overflow-wrap: anywhere;
+}
+.group-form {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  margin: 16px 0;
+}
+.group-form .field {
+  flex: 1;
+  margin: 0;
+}
+.group-panel details {
+  margin-top: 16px;
+}
+.group-members {
+  margin: 16px 0;
+}
+.profession-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+.profession-icon img {
+  object-fit: contain;
+}
+.profession-tooltip {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #090a10;
+  color: #fff;
+  padding: 6px 10px;
+  white-space: nowrap;
+  border-radius: 5px;
+  z-index: 20;
+  font-size: 12px;
+  pointer-events: none;
+}
+.profession-icon:hover .profession-tooltip,
+.profession-icon:focus .profession-tooltip {
+  display: block;
+}
+.profession-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+.profession-picker button {
+  padding: 6px;
+  border: 1px solid #454650;
+  border-radius: 8px;
+}
+.profession-picker button[aria-pressed="true"] {
+  border-color: #a18afa;
+  background: #403168;
+}
+.compact-run > div {
+  flex-wrap: wrap;
+}
+.compact-run button {
+  padding: 4px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.bounty-filters {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.bounty-filters .field {
+  min-width: 180px;
+}
+.bounty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+}
+.bounty-card {
+  border: 1px solid #353642;
+  background: #1c1d24;
+  border-radius: 12px;
+  padding: 20px;
+  overflow-wrap: anywhere;
+}
+.bounty-card h2 {
+  font-size: 19px;
+  margin: 14px 0;
+}
+.bounty-category {
+  color: #bca9ff;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .group-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .group-row {
+    gap: 8px;
   }
 }

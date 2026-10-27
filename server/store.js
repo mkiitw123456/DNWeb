@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { initialState } from "./domain.js";
+import { randomUUID } from "node:crypto";
 let queue = Promise.resolve(),
   db;
 async function firestore() {
@@ -14,13 +15,19 @@ async function firestore() {
   }
   return db;
 }
-export async function transact(fn) {
+export async function transact(fn, { backup = false } = {}) {
+  const backupId = backup
+    ? `before-account-cleanup-${Date.now()}-${randomUUID()}`
+    : null;
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const ref = (await firestore()).doc("dnweb/state");
     return ref.firestore.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const state = snap.exists ? snap.data() : initialState();
+      const original = backup ? structuredClone(state) : null;
       const result = await fn(state);
+      if (backup)
+        tx.create(ref.firestore.doc(`dnweb_backups/${backupId}`), original);
       tx.set(ref, state);
       return result;
     });
@@ -39,7 +46,10 @@ export async function transact(fn) {
       if (e.code !== "ENOENT") throw e;
       state = initialState();
     }
+    const original = backup ? JSON.stringify(state) : null;
     const result = await fn(state);
+    if (backup)
+      await writeFile(`${folder}/${backupId}.json`, original, { flag: "wx" });
     await writeFile(`${folder}/state.tmp`, JSON.stringify(state));
     await rename(`${folder}/state.tmp`, `${folder}/state.json`);
     return result;

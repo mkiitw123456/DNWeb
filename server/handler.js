@@ -183,22 +183,28 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
-    const result = await transact((s) => {
-      const u = s.users.find(
-        (x) => x.id === token.id && x.active && x.version === token.version,
-      );
-      if (!u) fail("登入已過期，請重新登入", 401);
-      reset(s);
-      if (type === "state") return { state: publicState(s, u), user: { ...u } };
-      const result = action(s, u, type, payload);
-      return {
-        state: publicState(s, u),
-        user: { ...u },
-        notificationId: ["listing.sell", "notification.retry"].includes(type)
-          ? result
-          : null,
-      };
-    });
+    const result = await transact(
+      (s) => {
+        const u = s.users.find(
+          (x) => x.id === token.id && x.active && x.version === token.version,
+        );
+        if (!u) fail("登入已過期，請重新登入", 401);
+        reset(s);
+        if (type === "state")
+          return { state: publicState(s, u), user: { ...u } };
+        const result = action(s, u, type, payload);
+        if (!s.users.some((x) => x.id === u.id))
+          return { state: null, user: null };
+        return {
+          state: publicState(s, u),
+          user: { ...u },
+          notificationId: ["listing.sell", "notification.retry"].includes(type)
+            ? result
+            : null,
+        };
+      },
+      { backup: type === "maintenance.cleanup" },
+    );
     if (result.notificationId) {
       await notify(result.notificationId);
       result.state = await transact((s) =>
@@ -208,7 +214,12 @@ export default async function handler(req, res) {
         ),
       );
     }
-    cookie(res, result.user);
+    if (result.user) cookie(res, result.user);
+    else
+      res.setHeader(
+        "Set-Cookie",
+        "dn_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+      );
     return res.status(200).json(result.state);
   } catch (e) {
     if (!e.status) console.error(e);

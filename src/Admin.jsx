@@ -15,16 +15,38 @@ export default function Admin({ data, mutate, busy, ask }) {
     [url, setUrl] = useState("");
   return (
     <>
-      <Heading
-        title="管理後台"
-        description="管理公會成員、副本上限與通知設定"
-      />
+      <Heading title="管理後台" description="管理公會成員、副本與職業圖示" />
+      {!data.accountCleanupCompleted && (
+        <section className="group-panel">
+          <h2>一次性帳號整理</h2>
+          <p>
+            將現有 MrAirWolf 設為管理員，刪除 Wolf、shomen、Avalon、Ricky
+            的帳號、角色、懸賞與其建立的群組及交易。其他人的歷史分帳保留金額並匿名化已刪除帳號。執行前自動備份資料。
+          </p>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              if (
+                await ask(
+                  "確定備份並刪除 Wolf、shomen、Avalon、Ricky 的資料，將現有 MrAirWolf 設為管理員？若目前使用的帳號被刪除，將立即登出。",
+                )
+              )
+                mutate(
+                  "maintenance.cleanup",
+                  { confirm: "MrAirWolf" },
+                  "帳號整理完成，請使用 MrAirWolf 登入",
+                );
+            }}
+          >
+            備份並執行帳號整理
+          </Button>
+        </section>
+      )}
       <div className="tabs">
         {[
           ["users", "成員帳號"],
           ["dungeons", "副本設定"],
           ["professions", "職業清單"],
-          ["webhook", "Discord 通知"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}

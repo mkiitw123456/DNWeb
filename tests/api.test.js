@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 let child, folder, adminCookie, memberCookie;
@@ -138,11 +138,11 @@ after(async () => {
 test("API login, member permissions, simultaneous sell/claim and durable data", async () => {
   assert.equal((await call("listing.sell", { id: "fake" })).status, 401);
   assert.equal(
-    (await call("login", { username: "Wolf", password: "wrong" })).status,
+    (await call("login", { username: "MrAirWolf", password: "wrong" })).status,
     401,
   );
   const login = await call("login", {
-    username: "Wolf",
+    username: "MrAirWolf",
     password: "test-password",
   });
   assert.equal(login.status, 200);
@@ -187,8 +187,12 @@ test("API login, member permissions, simultaneous sell/claim and durable data", 
   const memberView = await fetch(url, {
     headers: { cookie: memberCookie },
   }).then((r) => r.json());
-  assert.equal(memberView.characters.length, 2);
-  const otherCharacter = memberView.characters.find(
+  assert.equal(memberView.characters.length, 1);
+  assert.equal(memberView.characters[0].ownerId, member.id);
+  const adminView = await fetch(url, { headers: { cookie: adminCookie } }).then(
+    (r) => r.json(),
+  );
+  const otherCharacter = adminView.characters.find(
     (c) => c.ownerId === admin.id,
   );
   assert.equal(
@@ -286,5 +290,102 @@ test("API login, member permissions, simultaneous sell/claim and durable data", 
   assert.equal(
     (await fetch(url, { headers: { cookie: memberCookie } })).status,
     401,
+  );
+});
+
+test("group consent and privacy hold through API responses and concurrent invitations", async () => {
+  const a = await call("register", { username: "GroupA", password: "test" });
+  const b = await call("register", { username: "GroupB", password: "test" });
+  const c = await call("register", { username: "GroupC", password: "test" });
+  await call("character.save", { name: "SecretA", hp: 1, attack: 2 }, a.cookie);
+  const made = await call("group.create", { name: "API group" }, a.cookie);
+  const groupId = made.data.groups[0].id;
+  const attempts = await Promise.all(
+    [1, 2].map(() =>
+      call("group.invite", { groupId, username: "GroupB" }, a.cookie),
+    ),
+  );
+  assert.deepEqual(attempts.map((r) => r.status).sort(), [200, 409]);
+  const invited = await fetch(url, { headers: { cookie: b.cookie } }).then(
+    (r) => r.json(),
+  );
+  assert.equal(invited.characters.length, 0);
+  assert.equal(invited.invitations.length, 1);
+  const accepted = await call(
+    "group.respond",
+    { id: invited.invitations[0].id, accept: true },
+    b.cookie,
+  );
+  assert.equal(accepted.data.characters[0].name, "SecretA");
+  assert.equal(
+    (await fetch(url, { headers: { cookie: c.cookie } }).then((r) => r.json()))
+      .characters.length,
+    0,
+  );
+  await call("group.kick", { groupId, userId: b.data.me.id }, a.cookie);
+  assert.equal(
+    (await fetch(url, { headers: { cookie: b.cookie } }).then((r) => r.json()))
+      .characters.length,
+    0,
+  );
+});
+
+test("account cleanup backs up full data, promotes existing successor and signs out removed administrator", async () => {
+  const logged = await call("login", {
+    username: "MrAirWolf",
+    password: "test-password",
+  });
+  await call(
+    "user.save",
+    { ...logged.data.me, username: "Wolf" },
+    logged.cookie,
+  );
+  const successor = await call("register", {
+    username: "MrAirWolf",
+    password: "successor-password",
+  });
+  assert.equal(successor.data.me.admin, false);
+  assert.equal(
+    (
+      await call(
+        "maintenance.cleanup",
+        { confirm: "MrAirWolf" },
+        successor.cookie,
+      )
+    ).status,
+    403,
+  );
+  const cleaned = await call(
+    "maintenance.cleanup",
+    { confirm: "MrAirWolf" },
+    logged.cookie,
+  );
+  assert.equal(cleaned.status, 200);
+  assert.equal(cleaned.data, null);
+  assert.match(cleaned.setCookie, /Max-Age=0/);
+  const restored = await fetch(url, {
+    headers: { cookie: successor.cookie },
+  }).then((r) => r.json());
+  assert.equal(restored.me.admin, true);
+  assert.equal(
+    restored.users.some((u) => u.username === "Wolf"),
+    false,
+  );
+  assert.equal(
+    (await fetch(url, { headers: { cookie: logged.cookie } })).status,
+    401,
+  );
+  const backups = (await readdir(folder)).filter((name) =>
+    name.startsWith("before-account-cleanup-"),
+  );
+  assert.equal(backups.length, 1);
+  const backup = JSON.parse(await readFile(join(folder, backups[0]), "utf8"));
+  assert.equal(
+    backup.users.some((u) => u.username === "Wolf"),
+    true,
+  );
+  assert.equal(
+    backup.users.find((u) => u.username === "MrAirWolf").admin,
+    false,
   );
 });

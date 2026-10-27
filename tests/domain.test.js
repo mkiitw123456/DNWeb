@@ -12,7 +12,7 @@ import {
 process.env.INITIAL_ADMIN_PASSWORD = "test-password";
 const before = Date.parse("2026-10-03T08:59:59+08:00"),
   after = Date.parse("2026-10-03T09:00:00+08:00");
-test("Taipei 09:00 daily and Saturday weekly boundaries, including missed weeks", () => {
+test("Taipei Saturday 09:00 weekly boundaries and removal of fatigue, including missed weeks", () => {
   assert.equal(periods(after).day - periods(before).day, 1);
   assert.equal(periods(after).week - periods(before).week, 1);
   assert.equal(periods(after + 86400000).week, periods(after).week);
@@ -20,14 +20,14 @@ test("Taipei 09:00 daily and Saturday weekly boundaries, including missed weeks"
     characters: [{ ...periods(before), fatigue: 12, runs: { d: 3 } }],
   };
   reset(s, before);
-  assert.equal(s.characters[0].fatigue, 12);
+  assert.equal(s.characters[0].fatigue, undefined);
   reset(s, after);
-  assert.equal(s.characters[0].fatigue, 700);
+  assert.equal(s.characters[0].fatigue, undefined);
   assert.deepEqual(s.characters[0].runs, {});
   s.characters[0].fatigue = 100;
   s.characters[0].runs.d = 2;
   reset(s, after + 1000);
-  assert.equal(s.characters[0].fatigue, 100);
+  assert.equal(s.characters[0].fatigue, undefined);
   reset(s, after + 86400000);
   assert.equal(s.characters[0].runs.d, 2);
   reset(s, after + 21 * 86400000);

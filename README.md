@@ -1,104 +1,82 @@
 # DNWeb
 
-繁體中文公會管理網站，提供角色資訊、交易所、結算與管理後台。React + Vite 前端，Node API；本機使用 JSON，Vercel 使用 Firebase Firestore。
+繁體中文公會管理網站，React + Vite 前端、Node API。本機使用 JSON，Vercel 使用 Firebase Firestore。
 
 ## 本機啟動
 
-需要 Node.js 22.12 以上（本機已使用 Node 24 驗證）。
+需要 Node.js 22.12 以上。
 
 ```powershell
-cd F:\DNWeb
-npm install
-# 目前這台電腦的 .env 已建立；新電腦才需要複製：
-# Copy-Item .env.example .env
+cd D:\DNWeb
+npm ci
+Copy-Item .env.example .env
+# 編輯 .env，設定 INITIAL_ADMIN_PASSWORD 與 SESSION_SECRET
 npm run dev
 ```
 
-開啟 http://127.0.0.1:5173 。初始管理員名稱是 `Wolf`，初始密碼取自 `.env` 的 `INITIAL_ADMIN_PASSWORD`。本機已設定為需求指定的密碼；密碼與服務帳戶不會提交 Git。
+開啟 http://127.0.0.1:5173 。全新資料庫的初始管理員為 `MrAirWolf`，密碼來自 `INITIAL_ADMIN_PASSWORD`。既有資料庫不會依名稱自動提升權限或變更密碼。
 
-本機資料存放 `.local/state.json`，重新啟動不會消失。備份請在停止伺服器後複製 `.local`。本機 JSON 僅支援單一伺服器程序；正式部署必須使用 Firebase，Vercel 未設定 Firebase 時會明確回報錯誤。
+## 帳號與登入
 
-## 操作
+登入頁可自行註冊帳號及密碼，完成後立即登入，新帳號固定為一般成員。帳號不分大小寫、最多 30 字；密碼最多 128 字，使用 scrypt 雜湊。
 
-- 登入頁可按「註冊帳號」，輸入帳號（最多 30 字）與密碼（最多 128 字）後直接註冊並登入，無須管理員核准。新帳號固定為一般成員，帳號不分大小寫且不可重複。
-- 同一瀏覽器以 HttpOnly Cookie 持續保留登入，伺服器不設定登入到期時間；Cookie 設為 400 天並在有效請求時續期。關閉後重新開啟會自動登入；主動登出、瀏覽器清除或到期移除 Cookie，或管理員停用帳號／重設密碼後需重新登入。瀏覽器對 Cookie 保存期限有自己的限制，無法保證永久保存。
+登入使用 HttpOnly / SameSite=Lax Cookie，正式站加上 Secure。伺服器不設定新登入的到期時間；Cookie 為 400 天並隨有效請求續期。主動登出、瀏覽器移除 Cookie、管理員停用帳號或重設密碼後需要重新登入。
 
-- 管理後台：建立／編輯成員帳號、重設密碼、停用帳號、設定 Discord ID、新增／修改／刪除副本與每週上限。職業清單可自訂職業名稱與外框顏色（調色盤或十六進位色碼）；修改後所有對應角色同步更新。刪除職業會把對應角色改為未設定職業，不刪除角色。
-- 角色資訊：依成員分欄，每欄顯示緊湊角色卡。上方可複選成員、只看自己、全選或全不選。所有登入成員可以查看其他人的角色，只有本人與管理員可編輯。新增／編輯時可選擇職業，角色卡使用該職業的外框顏色。可修改名稱、血量、疲勞值、攻擊力；副本次數輸入後按 Enter 或離開欄位儲存。
-- 交易所：新增物品、售價、額外成本、成本備註（最多 300 字）、參與者與交易稅開關。建立者與管理員可以編輯、刪除待售品及確認售出。成本備註會一併保存到結算與歷史紀錄。
-- 結算：每位使用者可確認自己的領取；管理員可代領或撤銷領取。已領取名字變綠，全部領取後自動移到歷史紀錄。管理員可編輯／刪除結算；修改金額前需撤銷所有領取。
-- 停用成員後保留角色與歷史分帳，不會破壞既有紀錄。
-- 交易所與結算各自提供「與我有關／所有人」切換，預設與我有關，包含自己建立或參與分帳的交易。結算篩選同時適用待領取與歷史紀錄，數量依篩選更新。篩選不會擴大編輯或領取權限。
-- 既有資料會自動相容新欄位：未設定職業的角色顯示中性色外框，未填備註的舊交易正常顯示。
+## 角色、職業與副本
 
-### 重置與金額
+- 一般成員只能取得自己與同群組的角色資料，權限由伺服器過濾。未加入群組時只看自己；管理員可看所有成員、角色與群組。
+- 僅本人及管理員可編輯角色，同組可查看但不可代改。
+- 角色有名稱、血量、攻擊力與職業；疲勞欄位與每日恢復機制已移除。舊資料讀取時自動移除疲勞欄位。
+- 每個副本可輸入已完成次數，或按「全完成」直接填入伺服器設定的上限。
+- 台灣時間每週六 09:00 重置副本次數。讀取時補算，前端每 30 秒及切回視窗更新。
+- 職業預設為劍聖、傭兵、箭神、遊俠、元素使、魔導士、賢者、祭司、物蘿、魔蘿，使用 `public/icons/` 的 55×55 PNG。滑鼠停留或鍵盤聚焦顯示中文名稱。
+- `shared/professions.js` 是中英文及圖示對照表。舊有同名中文／英文職業會保留 ID 並補上圖示；其他自訂職業仍保留，可由管理員指定圖示。
 
-使用台灣時間（Asia/Taipei）：每日 09:00 疲勞恢復 700；週六 09:00 清空所有角色副本次數。伺服器每次讀取／操作先檢查時間，前端每 30 秒及視窗重新取得焦點時更新。不需要付費排程，無人在線也會在下次讀取時補算，並非必須在 09:00 有人打開網站。
+## 群組
 
-金額採整數金幣。交易稅 = 售價的 10%，無條件捨去至整數（可關閉）。可分配金額 = 售價 − 稅 − 額外成本，依參與者平均分配，每人無條件捨去至相同整數，餘額由賣家保留，不加進任何人的分帳。例如售價 1,001、成本 100、開稅、2 人：稅 100，可分 801，每人領 400，餘額 1 由賣家保留。伺服器重新計算，不信任前端試算。規則適用於新售出與重新編輯的結算，既有紀錄不自動重算。
+每人最多加入一個群組。可建立群組，建立者輸入對方的登入帳號送出邀請。伺服器檢查帳號是否存在、啟用，以及是否已在群組內。
 
-## Firebase + Vercel 部署
+邀請會顯示於登入後各頁上方，對方可接受或取消。接受一個邀請後會清除其他待接受邀請，避免同時加入多組。已送出邀請可在建立者的群組面板看到。
 
-1. 在 Firebase Console 建立專案，建立 **Cloud Firestore Standard / Native mode** 資料庫（預設資料庫）。
-2. 將 `firestore.rules` 貼到 Firestore 規則並發布。瀏覽器不直接連接資料庫；讀寫由伺服器 Admin SDK 執行，故規則禁止所有客戶端直接存取。
-3. Firebase「專案設定 → 服務帳戶 → 產生新的私密金鑰」，將完整 JSON 放到 Vercel 的 **環境變數** `FIREBASE_SERVICE_ACCOUNT_JSON`，不要放進 Git 或任何 `VITE_` 變數。
-4. Vercel 匯入此 Git 儲存庫，Framework 選 Vite，Build `npm run build`，Output `dist`，Node 24。
-5. 在 Vercel 設定以下伺服器環境變數後部署：
+建立者可踢出成員；成員可自行退出。建立者退出時會先確認，再解散群組並清除邀請；不刪除任何角色。管理員可在角色頁查看所有群組。
 
-| 變數                            | 用途                                                           |
-| ------------------------------- | -------------------------------------------------------------- |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase 服務帳戶完整 JSON                                     |
-| `INITIAL_ADMIN_PASSWORD`        | 首次初始化 Wolf 的密碼，填需求指定值；既有帳號不會被此變數覆蓋 |
-| `SESSION_SECRET`                | 長隨機字串，用於簽署登入 Cookie                                |
-| `DISCORD_WEBHOOK_URL`           | 選填，也可以登入管理後台再填                                   |
+## 懸賞
 
-產生 Session Secret：
+所有已登入成員都可看見全部懸賞，不受群組限制，也不要求發布者當下在線。可依副本關卡篩選、新增自訂名稱的懸賞。選擇分類後新增會預選該關卡。本人及管理員可編輯或刪除。仍有懸賞的關卡不可直接刪除，需先移動或刪除懸賞。
 
-```powershell
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+交易所、結算已從導覽及畫面移除；舊交易資料與後端程式暫時保留，方便未來恢復。一般成員的頁面資料不再附帶交易及結算。
 
-`api/app.js` 是 Vercel Node Function，前端透過同網域 `/api/app` 存取。修改環境變數後需重新部署。Preview 部署建議使用獨立 Firebase 測試專案，避免修改正式資料。
+## 正式資料的一次性帳號整理
 
-本機資料不會自動搬進 Firebase，首次部署會建立新的 Wolf 帳號、預設副本與空白資料清單。
+部署此版本後，以既有管理員登入「管理後台 → 一次性帳號整理」，確認後：
 
-### 儲存規模
+1. 確認資料庫有已啟用的 `MrAirWolf`；若沒有則停止，不刪除資料。
+2. 先備份整理前的完整資料，再提升現有 MrAirWolf 為管理員。
+3. 刪除 Wolf、shomen、Avalon、Ricky 的帳號、角色、懸賞、所建群組與交易，移除群組成員與邀請參照。
+4. 其他使用者擁有的歷史結算保留原金額，刪除帳號的分帳欄位改為匿名，避免破壞其他人的金額紀錄。
+5. 記錄已完成標記，避免重複執行。若執行者本身被刪除，立即清除登入 Cookie。
 
-此版本以小型公會為目標，使用 `dnweb/state` 單一 Firestore 文件與交易保持售出／領取一致性，避免重複結算。Firestore 單文件有 1 MiB 上限；成員、角色或長期交易歷史大量增加前，應改成分集合儲存及歷史分頁。前端每 30 秒同步一次，非即時推播。
+Firebase 備份位於 `dnweb_backups/before-account-cleanup-...`，與資料修改在同一 Firestore transaction 內提交。本機備份在 `.local/before-account-cleanup-....json`。備份含密碼雜湊等敏感資料，勿提交 Git。此功能只允許已登入管理員操作，不會因公開註冊使用了指定名稱就提升權限。
 
-## Discord
+## 部署與資料
 
-### Discord 直接領取
+Vercel：Framework Vite、Build `npm run build`、Output `dist`、Node 24。`api/app.js` 為網站 API。
 
-設定 `DISCORD_APPLICATION_ID`、`DISCORD_PUBLIC_KEY`、`DISCORD_BOT_TOKEN`、`DISCORD_GUILD_ID`、`DISCORD_CHANNEL_ID` 後，新售出通知改由機器人送出並附上「確認領取」按鈕。Token 只放在 Vercel 正式環境的 Secret/Sensitive 變數，勿提交 Git。機器人在指定頻道需要檢視頻道與傳送訊息權限，不需要管理員權限或 Message Content Intent。
+必要環境變數：
 
-Discord Developer Portal 的 Interactions Endpoint URL 設為 `https://你的網域/api/discord`。端點以原始請求驗證 Ed25519 簽章與五分鐘時效、檢查應用程式與公會，立即回覆私人延後回應，再以 Vercel `waitUntil` 處理 Firestore 領取並回覆結果。點擊者必須對應唯一且啟用的 DNWeb Discord ID，並且是該結算的參與者；訊息、頻道與結算版本也會比對。重複點擊不改變已領取時間，全員領完照常歸檔。網站最遲於下一次 30 秒更新或切回視窗時同步。
+- `FIREBASE_SERVICE_ACCOUNT_JSON`：原 Firebase 專案服務帳戶 JSON，僅伺服器使用。
+- `INITIAL_ADMIN_PASSWORD`：全新資料庫初始管理員密碼。
+- `SESSION_SECRET`：簽署 Cookie 的長隨機字串。
 
-既有 Webhook 通知不自動補按鈕或重送。未完整設定機器人時，保留原本 Webhook 通知。修改結算後，舊按鈕失效；重新發送的通知才可操作。設定 Discord ID 時會阻止重複綁定；舊資料若已有重複，按鈕會拒絕領取，需由管理員修正。
+Firestore 規則使用 `firestore.rules`，禁止瀏覽器直接讀寫。資料在 `dnweb/state` 單一文件，適合小型公會；接近單文件容量限制前需拆分集合及歷史分頁。請使用獨立測試資料庫驗證 Preview。
 
-### 原有 Webhook 通知
-
-管理後台 → Discord 通知，貼上 Webhook URL。管理員再為各帳號填入 Discord 使用者 ID（17–20 位數字）。物品賣出後會標記成員、列出金額與結算編號；未填 ID 的成員只顯示名稱。`allowed_mentions` 限制只標記指定使用者。
-
-售出會先可靠保存結算，再發送通知。通知失敗不會回滾交易，卡片顯示失敗並可重試；未設定 URL 時顯示未設定。成功紀錄不重送。若 Discord 已收到但回應中斷，手動重試可能產生重複通知，可用結算編號辨識。沒有背景通知工作程序，失敗後需手動重試。
+本機資料在 `.local/state.json`，僅支援單一伺服器程序；Vercel 未設定 Firebase 會回報錯誤。本機資料不會自動同步到正式站。既有 Discord 環境變數與端點保留供舊交易使用。
 
 ## 驗證
 
 ```powershell
 npm test
 npm run build
-npm audit
 ```
 
-測試包含台灣時間的每日／週六界線、跨週補算、分帳餘數、權限、重複售出、同時領取、歷史歸檔、密碼變更後工作階段失效、跨站操作阻擋及 Discord 模擬成功／失敗／重試。API 測試會在 5174 啟動隔離本機伺服器，使用獨立暫存資料。
-
-已用內建瀏覽器及 Playwright + Edge 驗證 1536×1024、390×844。Firebase 雲端與 Discord 真實投遞需實際憑證後驗證。
-
-密碼經 scrypt 雜湊，登入使用 HttpOnly Cookie；開放自行註冊，沒有電子郵件驗證、忘記密碼或複雜密碼政策，管理員仍可建立、停用帳號與重設密碼。
-
-## 官方參考
-
-- [Firebase Admin SDK](https://firebase.google.com/docs/admin/setup)
-- [Firestore transactions](https://firebase.google.com/docs/firestore/manage-data/transactions)
-- [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite)
-- [Vercel Node.js runtime](https://vercel.com/docs/functions/runtimes/node-js)
+測試含登入、註冊、群組權限隔離、邀請並行、踢人／退出、全球懸賞、職業轉換、副本全完成與週重置、帳號整理備份與舊帳號失效，以及既有交易／Discord 行為。

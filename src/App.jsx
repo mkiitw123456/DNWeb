@@ -1,16 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   UsersRound,
-  Scale,
-  ReceiptText,
+  Target,
   Settings,
   LogOut,
   ChevronRight,
 } from "lucide-react";
 import { Button, Field, FormErrorContext, Modal } from "./ui.jsx";
 import Characters from "./Characters.jsx";
-import Marketplace from "./Marketplace.jsx";
-import Settlements from "./Settlements.jsx";
+import Bounties from "./Bounties.jsx";
+import { Invitations } from "./Groups.jsx";
 import Admin from "./Admin.jsx";
 export default function App() {
   const [data, setData] = useState(null),
@@ -179,8 +178,7 @@ export default function App() {
     );
   const nav = [
     ["characters", "角色資訊", UsersRound],
-    ["market", "交易所", Scale],
-    ["settlements", "結算", ReceiptText],
+    ["bounties", "懸賞", Target],
   ];
   return (
     <FormErrorContext.Provider value={error}>
@@ -247,12 +245,11 @@ export default function App() {
               <button onClick={() => setError("")}>關閉</button>
             </div>
           )}
+          <Invitations {...shared} />
           {page === "characters" ? (
             <Characters {...shared} />
-          ) : page === "market" ? (
-            <Marketplace {...shared} />
-          ) : page === "settlements" ? (
-            <Settlements {...shared} />
+          ) : page === "bounties" ? (
+            <Bounties {...shared} />
           ) : data.me.admin ? (
             <Admin {...shared} />
           ) : null}
