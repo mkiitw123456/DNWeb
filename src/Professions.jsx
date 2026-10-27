@@ -69,7 +69,6 @@ export default function Professions({ data, mutate, busy, ask }) {
                   setEditing({ ...editing, icon: e.target.value })
                 }
               >
-                <option value="">無圖示</option>
                 {professionIcons.map((p) => (
                   <option key={p.id} value={p.icon}>
                     {p.name} · {p.english}

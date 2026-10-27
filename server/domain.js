@@ -6,7 +6,7 @@ import {
 } from "node:crypto";
 import { discordEnabled } from "./discord.js";
 import { professionIcons } from "../shared/professions.js";
-import { communityAction, groupOf } from "./community.js";
+import { communityAction, groupsOf } from "./community.js";
 import { cleanupAccounts } from "./account-cleanup.js";
 export const id = () => randomUUID();
 export function fail(message, status = 400) {
@@ -70,6 +70,8 @@ export function reset(state, now = Date.now()) {
   state.groups ??= [];
   state.invitations ??= [];
   state.bounties ??= [];
+  state.quantityTypes ??= [];
+  state.itemPosts ??= [];
   if (!state.professionIconsMigrated) {
     for (const preset of professionIcons) {
       const existing = state.professions.find(
@@ -83,8 +85,18 @@ export function reset(state, now = Date.now()) {
     }
     state.professionIconsMigrated = true;
   }
+  if (!state.iconlessProfessionsRemoved) {
+    const removed = new Set(
+      state.professions.filter((p) => !p.icon).map((p) => p.id),
+    );
+    state.professions = state.professions.filter((p) => p.icon);
+    for (const c of state.characters)
+      if (removed.has(c.professionId)) c.professionId = "";
+    state.iconlessProfessionsRemoved = true;
+  }
   const p = periods(now);
   for (const c of state.characters) {
+    c.quantities ??= {};
     delete c.fatigue;
     delete c.day;
     if (c.week !== p.week) {
@@ -114,6 +126,9 @@ export function initialState() {
     groups: [],
     invitations: [],
     bounties: [],
+    quantityTypes: [],
+    itemPosts: [],
+    iconlessProfessionsRemoved: true,
     dungeons: [
       { id: id(), name: "森林聖域", max: 7 },
       { id: id(), name: "黑龍巢穴", max: 3 },
@@ -152,8 +167,8 @@ export function split(price, cost, taxed, ids) {
   };
 }
 export function publicState(s, u) {
-  const ownGroup = groupOf(s, u.id);
-  const visibleIds = new Set(ownGroup?.memberIds || [u.id]);
+  const ownGroups = groupsOf(s, u.id);
+  const visibleIds = new Set([u.id, ...ownGroups.flatMap((g) => g.memberIds)]);
   const safeUser = ({ password, version, ...rest }) => rest;
   return {
     users: s.users
@@ -166,7 +181,7 @@ export function publicState(s, u) {
     characters: s.characters.filter(
       (c) => u.admin || visibleIds.has(c.ownerId),
     ),
-    groups: s.groups.filter((g) => u.admin || g.id === ownGroup?.id),
+    groups: s.groups.filter((g) => u.admin || g.memberIds.includes(u.id)),
     invitations: s.invitations
       .filter((i) => u.admin || i.toUserId === u.id || i.fromUserId === u.id)
       .map((i) => ({
@@ -185,6 +200,12 @@ export function publicState(s, u) {
     })),
     professions: s.professions || [],
     dungeons: s.dungeons,
+    quantityTypes: s.quantityTypes || [],
+    itemPosts: (s.itemPosts || []).map((item) => ({
+      ...item,
+      ownerName:
+        s.users.find((x) => x.id === item.ownerId)?.username || "已刪除帳號",
+    })),
     listings: u.admin ? s.listings : [],
     settlements: u.admin ? s.settlements : [],
     me:
@@ -207,6 +228,90 @@ export function action(s, u, type, p, now = Date.now()) {
   const admin = () => {
     if (!u.admin) fail("僅管理員可操作", 403);
   };
+  if (type === "maintenance.promoteOwner") {
+    admin();
+    const owner = s.users.find(
+      (x) => x.username.toLowerCase() === "mrairwolf" && x.active,
+    );
+    if (!owner) fail("找不到已啟用的 MrAirWolf 帳號", 404);
+    owner.admin = true;
+    return;
+  }
+  if (type === "quantityType.save") {
+    admin();
+    const old = p.id ? s.quantityTypes.find((x) => x.id === p.id) : null;
+    if (p.id && !old) fail("數量項目不存在", 404);
+    const name = text(p.name, "項目名稱", 40);
+    if (
+      s.quantityTypes.some(
+        (x) => x.id !== p.id && x.name.toLowerCase() === name.toLowerCase(),
+      )
+    )
+      fail("項目名稱已存在");
+    if (old) old.name = name;
+    else s.quantityTypes.push({ id: id(), name });
+    return;
+  }
+  if (type === "quantityType.delete") {
+    admin();
+    s.quantityTypes = s.quantityTypes.filter((x) => x.id !== p.id);
+    for (const c of s.characters) delete c.quantities[p.id];
+    return;
+  }
+  if (type === "character.quantity") {
+    const c = owned(
+      s.characters.find((x) => x.id === p.id),
+      u,
+    );
+    if (!s.quantityTypes.some((x) => x.id === p.typeId))
+      fail("數量項目不存在", 404);
+    c.quantities[p.typeId] = number(p.quantity, "數量");
+    return;
+  }
+  if (type === "itemPost.save") {
+    const old = p.id
+      ? owned(
+          s.itemPosts.find((x) => x.id === p.id),
+          u,
+        )
+      : null;
+    const name = text(p.name, "物品名稱", 80);
+    const description = text(p.description, "文字說明", 2000);
+    const imageUrl = text(p.imageUrl, "圖片網址", 2000);
+    let url;
+    try {
+      url = new URL(imageUrl);
+    } catch {
+      fail("請輸入有效的 HTTPS 圖片網址");
+    }
+    if (url.protocol !== "https:" || url.username || url.password)
+      fail("請使用 HTTPS 圖片網址");
+    if (["drive.google.com", "docs.google.com"].includes(url.hostname))
+      fail("Google 雲端硬碟分享頁不是圖片直連，請使用圖片的 HTTPS 直連網址");
+    if (p.status !== "available" && p.status !== "closed")
+      fail("物品狀態不正確");
+    const item = {
+      id: old?.id || id(),
+      ownerId: old?.ownerId || u.id,
+      name,
+      description,
+      imageUrl,
+      status: p.status,
+      createdAt: old?.createdAt || now,
+      updatedAt: now,
+    };
+    if (old) Object.assign(old, item);
+    else s.itemPosts.unshift(item);
+    return;
+  }
+  if (type === "itemPost.delete") {
+    owned(
+      s.itemPosts.find((x) => x.id === p.id),
+      u,
+    );
+    s.itemPosts = s.itemPosts.filter((x) => x.id !== p.id);
+    return;
+  }
   if (type === "maintenance.cleanup") {
     admin();
     if (p.confirm !== "MrAirWolf") fail("請輸入 MrAirWolf 確認帳號整理");
@@ -225,7 +330,7 @@ export function action(s, u, type, p, now = Date.now()) {
     )
       fail("職業名稱已存在");
     const icon = p.icon ?? old?.icon ?? "";
-    if (icon && !professionIcons.some((preset) => preset.icon === icon))
+    if (!professionIcons.some((preset) => preset.icon === icon))
       fail("請選擇有效的職業圖示");
     const item = { id: old?.id || id(), name, icon };
     if (old) Object.assign(old, item);
@@ -321,6 +426,7 @@ export function action(s, u, type, p, now = Date.now()) {
       hp: number(p.hp, "血量"),
       attack: number(p.attack, "攻擊力"),
       runs: old?.runs || {},
+      quantities: old?.quantities || {},
       week: periods(now).week,
     };
     if (old) Object.assign(old, item);

@@ -56,9 +56,8 @@ test("groups enforce server-side visibility, consent, membership and owner-only 
     publicState(s, b).users.find((u) => u.id === a.id).discordId,
     undefined,
   );
-  assert.throws(() => action(s, b, "group.create", { name: "second" }), {
-    status: 409,
-  });
+  action(s, b, "group.create", { name: "second" });
+  assert.equal(publicState(s, b).groups.length, 2);
   assert.throws(
     () =>
       action(s, b, "character.complete", {
@@ -69,7 +68,7 @@ test("groups enforce server-side visibility, consent, membership and owner-only 
   );
   action(s, a, "group.kick", { groupId: g.id, userId: b.id });
   assert.equal(publicState(s, b).characters.length, 1);
-  assert.equal(publicState(s, b).groups.length, 0);
+  assert.equal(publicState(s, b).groups.length, 1);
 });
 test("declining, leaving and owner disbanding remove invitations and visibility", () => {
   const { s, a, b, c } = fixture();
@@ -80,14 +79,14 @@ test("declining, leaving and owner disbanding remove invitations and visibility"
   assert.equal(s.invitations.length, 0);
   action(s, a, "group.invite", { groupId: g.id, username: b.username });
   action(s, b, "group.respond", { id: s.invitations[0].id, accept: true });
-  action(s, b, "group.leave", {});
+  action(s, b, "group.leave", { groupId: g.id });
   assert.deepEqual(g.memberIds, [a.id]);
   action(s, a, "group.invite", { groupId: g.id, username: c.username });
-  action(s, a, "group.leave", {});
+  action(s, a, "group.leave", { groupId: g.id });
   assert.equal(s.groups.length, 0);
   assert.equal(s.invitations.length, 0);
 });
-test("accepting one invitation clears other invitations and duplicate acceptance is rejected", () => {
+test("accepting invitations preserves other invitations and supports multiple groups", () => {
   const { s, a, b, c } = fixture();
   action(s, a, "group.create", { name: "A" });
   action(s, c, "group.create", { name: "C" });
@@ -100,7 +99,11 @@ test("accepting one invitation clears other invitations and duplicate acceptance
     );
   const old = s.invitations[1].id;
   action(s, b, "group.respond", { id: s.invitations[0].id, accept: true });
-  assert.equal(s.invitations.length, 0);
+  assert.equal(s.invitations.length, 1);
+  action(s, b, "group.respond", { id: old, accept: true });
+  assert.equal(publicState(s, b).groups.length, 2);
+  assert.equal(publicState(s, b).characters.length, 3);
+  assert.equal(publicState(s, a).characters.length, 2);
   assert.throws(
     () => action(s, b, "group.respond", { id: old, accept: true }),
     { status: 404 },

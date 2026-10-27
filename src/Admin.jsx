@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, SquarePen, Trash2 } from "lucide-react";
 import Professions from "./Professions.jsx";
+import QuantityTypes from "./QuantityTypes.jsx";
 import {
   Heading,
   Button,
@@ -16,6 +17,27 @@ export default function Admin({ data, mutate, busy, ask }) {
   return (
     <>
       <Heading title="管理後台" description="管理公會成員、副本與職業圖示" />
+      {data.users.some(
+        (u) => u.username.toLowerCase() === "mrairwolf" && !u.admin && u.active,
+      ) && (
+        <section className="group-panel">
+          <h2>管理員設定</h2>
+          <p>將現有 MrAirWolf 設為管理員，不刪除其他帳號或資料。</p>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              if (await ask("確定將現有 MrAirWolf 設為管理員？"))
+                mutate(
+                  "maintenance.promoteOwner",
+                  {},
+                  "MrAirWolf 已設為管理員",
+                );
+            }}
+          >
+            將 MrAirWolf 設為管理員
+          </Button>
+        </section>
+      )}
       {!data.accountCleanupCompleted && (
         <section className="group-panel">
           <h2>一次性帳號整理</h2>
@@ -47,6 +69,7 @@ export default function Admin({ data, mutate, busy, ask }) {
           ["users", "成員帳號"],
           ["dungeons", "副本設定"],
           ["professions", "職業清單"],
+          ["quantities", "數量項目"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -142,6 +165,8 @@ export default function Admin({ data, mutate, busy, ask }) {
             </div>
           ))}
         </section>
+      ) : tab === "quantities" ? (
+        <QuantityTypes data={data} mutate={mutate} busy={busy} ask={ask} />
       ) : tab === "professions" ? (
         <Professions data={data} mutate={mutate} busy={busy} ask={ask} />
       ) : (

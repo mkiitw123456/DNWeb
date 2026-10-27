@@ -1,11 +1,10 @@
 import { fail, id, text } from "./domain.js";
 
-export const groupOf = (s, userId) =>
-  s.groups.find((g) => g.memberIds.includes(userId));
+export const groupsOf = (s, userId) =>
+  s.groups.filter((g) => g.memberIds.includes(userId));
 
 export function communityAction(s, u, type, p, now) {
   if (type === "group.create") {
-    if (groupOf(s, u.id)) fail("請先離開目前群組", 409);
     const name = text(p.name, "群組名稱", 40);
     s.groups.push({
       id: id(),
@@ -14,7 +13,6 @@ export function communityAction(s, u, type, p, now) {
       memberIds: [u.id],
       createdAt: now,
     });
-    s.invitations = s.invitations.filter((i) => i.toUserId !== u.id);
   } else if (type === "group.invite") {
     const group = s.groups.find((g) => g.id === p.groupId);
     if (!group || group.ownerId !== u.id) fail("只有群組建立者可以邀請", 403);
@@ -23,7 +21,7 @@ export function communityAction(s, u, type, p, now) {
       (x) => x.active && x.username.toLowerCase() === username.toLowerCase(),
     );
     if (!target) fail("找不到這個帳號 ID", 404);
-    if (groupOf(s, target.id)) fail("此成員已加入群組，請先離開原群組", 409);
+    if (group.memberIds.includes(target.id)) fail("此成員已在這個群組內", 409);
     if (
       s.invitations.some(
         (i) => i.groupId === group.id && i.toUserId === target.id,
@@ -46,9 +44,9 @@ export function communityAction(s, u, type, p, now) {
     if (p.accept) {
       const group = s.groups.find((g) => g.id === invite.groupId);
       if (!group) fail("群組已不存在", 409);
-      if (groupOf(s, u.id)) fail("請先離開目前群組", 409);
+      if (group.memberIds.includes(u.id)) fail("你已在這個群組內", 409);
       group.memberIds.push(u.id);
-      s.invitations = s.invitations.filter((i) => i.toUserId !== u.id);
+      s.invitations = s.invitations.filter((i) => i.id !== invite.id);
     } else s.invitations = s.invitations.filter((i) => i.id !== invite.id);
   } else if (type === "group.kick") {
     const group = s.groups.find((g) => g.id === p.groupId);
@@ -58,7 +56,9 @@ export function communityAction(s, u, type, p, now) {
     if (!group.memberIds.includes(p.userId)) fail("此成員不在群組內", 404);
     group.memberIds = group.memberIds.filter((uid) => uid !== p.userId);
   } else if (type === "group.leave") {
-    const group = groupOf(s, u.id);
+    const group = s.groups.find(
+      (g) => g.id === p.groupId && g.memberIds.includes(u.id),
+    );
     if (!group) fail("你尚未加入群組", 404);
     if (group.ownerId === u.id) {
       s.groups = s.groups.filter((g) => g.id !== group.id);

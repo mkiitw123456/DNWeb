@@ -5,6 +5,7 @@ export default function CharacterCard({
   character: c,
   professions,
   dungeons,
+  quantityTypes,
   canEdit,
   busy,
   mutate,
@@ -98,6 +99,44 @@ export default function CharacterCard({
         ))}
         {!dungeons.length && <small>尚未設定副本</small>}
       </div>
+      {quantityTypes.length > 0 && (
+        <div className="compact-dungeons" aria-label="自訂數量">
+          {quantityTypes.map((t) => (
+            <div className="compact-run" key={t.id}>
+              <span title={t.name}>{t.name}</span>
+              <input
+                key={`${c.id}-${t.id}-${c.quantities?.[t.id] || 0}`}
+                aria-label={`${c.name} ${t.name} 數量`}
+                type="number"
+                min="0"
+                max="1000000000000"
+                step="1"
+                defaultValue={c.quantities?.[t.id] || 0}
+                readOnly={!canEdit}
+                disabled={busy}
+                onBlur={(e) => {
+                  if (!canEdit) return;
+                  const quantity = Number(e.target.value);
+                  if (
+                    e.target.value !== "" &&
+                    e.target.validity.valid &&
+                    quantity !== (c.quantities?.[t.id] || 0)
+                  )
+                    mutate("character.quantity", {
+                      id: c.id,
+                      typeId: t.id,
+                      quantity,
+                    });
+                  else e.target.value = c.quantities?.[t.id] || 0;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </article>
   );
 }

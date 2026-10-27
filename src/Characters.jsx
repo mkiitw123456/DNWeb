@@ -15,8 +15,12 @@ import CharacterCard from "./CharacterCard.jsx";
 export default function Characters({ data, mutate, busy, ask }) {
   const [editing, setEditing] = useState(null),
     [owners, setOwners] = useState(null);
+  const [groupFilter, setGroupFilter] = useState("");
+  const chosenGroup = data.groups.find((g) => g.id === groupFilter);
   const members = data.users.filter(
-    (u) => u.active || data.characters.some((c) => c.ownerId === u.id),
+    (u) =>
+      (!chosenGroup || chosenGroup.memberIds.includes(u.id)) &&
+      (u.active || data.characters.some((c) => c.ownerId === u.id)),
   );
   const groups = members
     .filter((u) => owners === null || owners.includes(u.id))
@@ -56,6 +60,22 @@ export default function Characters({ data, mutate, busy, ask }) {
         </span>
         <small>台灣時間</small>
       </div>
+      <Field label="角色群組篩選">
+        <select
+          value={chosenGroup?.id || ""}
+          onChange={(e) => {
+            setGroupFilter(e.target.value);
+            setOwners(null);
+          }}
+        >
+          <option value="">所有可見成員</option>
+          {data.groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+      </Field>
       <div className="member-filters" role="group" aria-label="顯示成員">
         <button
           className={owners === null ? "selected" : ""}
@@ -108,6 +128,7 @@ export default function Characters({ data, mutate, busy, ask }) {
                     character={c}
                     professions={data.professions || []}
                     dungeons={data.dungeons}
+                    quantityTypes={data.quantityTypes}
                     canEdit={data.me.admin || c.ownerId === data.me.id}
                     busy={busy}
                     mutate={mutate}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   UsersRound,
   Target,
+  Store,
   Settings,
   LogOut,
   ChevronRight,
@@ -9,6 +10,7 @@ import {
 import { Button, Field, FormErrorContext, Modal } from "./ui.jsx";
 import Characters from "./Characters.jsx";
 import Bounties from "./Bounties.jsx";
+import ItemBoard from "./ItemBoard.jsx";
 import { Invitations } from "./Groups.jsx";
 import Admin from "./Admin.jsx";
 export default function App() {
@@ -179,6 +181,7 @@ export default function App() {
   const nav = [
     ["characters", "角色資訊", UsersRound],
     ["bounties", "懸賞", Target],
+    ["items", "物品交流", Store],
   ];
   return (
     <FormErrorContext.Provider value={error}>
@@ -250,6 +253,8 @@ export default function App() {
             <Characters {...shared} />
           ) : page === "bounties" ? (
             <Bounties {...shared} />
+          ) : page === "items" ? (
+            <ItemBoard {...shared} />
           ) : data.me.admin ? (
             <Admin {...shared} />
           ) : null}

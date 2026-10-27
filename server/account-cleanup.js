@@ -16,6 +16,7 @@ export function cleanupAccounts(s) {
   s.users = s.users.filter((u) => !ids.has(u.id));
   s.characters = s.characters.filter((c) => !ids.has(c.ownerId));
   s.bounties = (s.bounties || []).filter((b) => !ids.has(b.ownerId));
+  s.itemPosts = (s.itemPosts || []).filter((p) => !ids.has(p.ownerId));
   s.groups = (s.groups || []).filter((g) => !ids.has(g.ownerId));
   for (const g of s.groups)
     g.memberIds = g.memberIds.filter((uid) => !ids.has(uid));

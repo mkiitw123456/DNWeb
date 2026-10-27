@@ -1702,3 +1702,48 @@ legend {
     gap: 8px;
   }
 }
+.item-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.item-toolbar .field:first-child {
+  flex: 1;
+  min-width: 180px;
+}
+.item-toolbar label input[type="checkbox"] {
+  width: auto;
+}
+.item-image {
+  width: 100%;
+  height: 200px;
+  object-fit: contain;
+  background: #121318;
+  border-radius: 8px;
+}
+.item-image-placeholder {
+  height: 200px;
+  display: grid;
+  place-items: center;
+  background: #121318;
+  color: #9698aa;
+  border-radius: 8px;
+}
+.item-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+.compact-run > input {
+  width: 100px;
+}
+@media (max-width: 600px) {
+  .item-toolbar {
+    align-items: stretch;
+  }
+  .item-toolbar > .field {
+    flex: 1 1 140px;
+  }
+}
