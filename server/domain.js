@@ -20,6 +20,24 @@ export function matches(password, value) {
     Buffer.from(digest, "hex"),
   );
 }
+export function register(s, payload) {
+  const username = text(payload.username, "帳號", 30);
+  if (s.users.some((u) => u.username.toLowerCase() === username.toLowerCase()))
+    fail("帳號已存在", 409);
+  text(payload.password, "密碼", 128);
+  if (payload.password.length > 128) fail("密碼最多 128 個字元");
+  const user = {
+    id: id(),
+    username,
+    password: hash(payload.password),
+    discordId: "",
+    admin: false,
+    active: true,
+    version: 0,
+  };
+  s.users.push(user);
+  return user;
+}
 export function text(value, label, max = 80) {
   if (typeof value !== "string" || !value.trim() || value.trim().length > max)
     fail(`${label}請填入 1–${max} 個字元`);

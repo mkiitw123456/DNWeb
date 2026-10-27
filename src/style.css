@@ -1158,6 +1158,10 @@ legend {
 .login section > small {
   display: block;
   text-align: center;
+  margin-top: 16px;
+}
+.login section > button {
+  width: 100%;
 }
 .error {
   color: #f5b4b9 !important;

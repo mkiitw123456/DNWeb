@@ -1,7 +1,17 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { transact } from "./store.js";
-import { action, fail, id, matches, publicState, reset } from "./domain.js";
+import {
+  action,
+  fail,
+  id,
+  matches,
+  publicState,
+  register,
+  reset,
+} from "./domain.js";
 import { DISCORD_API, discordEnabled, saleMessage } from "./discord.js";
+// Renew the browser cookie on activity; persistent sessions have no server expiry.
+const SESSION_SECONDS = 400 * 24 * 60 * 60;
 function signature(value) {
   if (!process.env.SESSION_SECRET) fail("請設定 SESSION_SECRET", 503);
   return createHmac("sha256", process.env.SESSION_SECRET)
@@ -24,7 +34,7 @@ function session(req) {
     return null;
   try {
     const data = JSON.parse(Buffer.from(value, "base64url"));
-    return data.exp > Date.now() ? data : null;
+    return data.persistent === true || data.exp > Date.now() ? data : null;
   } catch {
     return null;
   }
@@ -34,12 +44,12 @@ function cookie(res, user) {
     JSON.stringify({
       id: user.id,
       version: user.version,
-      exp: Date.now() + 7 * 86400000,
+      persistent: true,
     }),
   ).toString("base64url");
   res.setHeader(
     "Set-Cookie",
-    `dn_session=${value}.${signature(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${process.env.VERCEL ? "; Secure" : ""}`,
+    `dn_session=${value}.${signature(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_SECONDS}${process.env.VERCEL ? "; Secure" : ""}`,
   );
 }
 export async function notify(settlementId) {
@@ -140,6 +150,16 @@ export default async function handler(req, res) {
       );
       return res.status(200).json({ ok: true });
     }
+    if (type === "register") {
+      if (!process.env.SESSION_SECRET) fail("請設定 SESSION_SECRET", 503);
+      const result = await transact((s) => {
+        const user = register(s, payload);
+        reset(s);
+        return { user, state: publicState(s, user) };
+      });
+      cookie(res, result.user);
+      return res.status(200).json(result.state);
+    }
     if (type === "login") {
       if (
         typeof payload.username !== "string" ||
@@ -169,10 +189,11 @@ export default async function handler(req, res) {
       );
       if (!u) fail("登入已過期，請重新登入", 401);
       reset(s);
-      if (type === "state") return { state: publicState(s, u) };
+      if (type === "state") return { state: publicState(s, u), user: { ...u } };
       const result = action(s, u, type, payload);
       return {
         state: publicState(s, u),
+        user: { ...u },
         notificationId: ["listing.sell", "notification.retry"].includes(type)
           ? result
           : null,
@@ -187,6 +208,7 @@ export default async function handler(req, res) {
         ),
       );
     }
+    cookie(res, result.user);
     return res.status(200).json(result.state);
   } catch (e) {
     if (!e.status) console.error(e);

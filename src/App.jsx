@@ -22,6 +22,7 @@ export default function App() {
   const lock = useRef(false);
   const revision = useRef(0);
   const [confirmation, setConfirmation] = useState(null);
+  const [registering, setRegistering] = useState(false);
   const ask = (message) =>
     new Promise((resolve) => setConfirmation({ message, resolve }));
   const answer = (value) => {
@@ -108,27 +109,42 @@ export default function App() {
           <strong>DNWeb</strong>
         </div>
         <section>
-          <h1>歡迎回來</h1>
-          <p>登入，準備下一場冒險。</p>
+          <h1>{registering ? "建立帳號" : "歡迎回來"}</h1>
+          <p>
+            {registering
+              ? "輸入帳號與密碼，註冊後立即登入。"
+              : "登入，準備下一場冒險。"}
+          </p>
           <form
+            key={registering ? "register" : "login"}
             onSubmit={async (e) => {
               e.preventDefault();
               const form = new FormData(e.currentTarget);
-              if (await mutate("login", Object.fromEntries(form), "登入成功"))
+              if (
+                await mutate(
+                  registering ? "register" : "login",
+                  Object.fromEntries(form),
+                  registering ? "註冊成功，已登入" : "登入成功",
+                )
+              ) {
                 setPage("characters");
+                setRegistering(false);
+              }
             }}
           >
             <Field
               label="帳號"
               name="username"
               autoComplete="username"
+              maxLength={30}
               required
             />
             <Field
               label="密碼"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={registering ? "new-password" : "current-password"}
+              maxLength={128}
               required
             />
             {error && (
@@ -137,11 +153,27 @@ export default function App() {
               </p>
             )}
             <Button primary disabled={busy}>
-              {busy ? "登入中…" : "登入 DNWeb"}
+              {busy
+                ? registering
+                  ? "註冊中…"
+                  : "登入中…"
+                : registering
+                  ? "註冊並登入"
+                  : "登入 DNWeb"}
               <ChevronRight size={18} />
             </Button>
           </form>
-          <small>帳號由公會管理員建立</small>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setRegistering(!registering);
+              setError("");
+            }}
+          >
+            {registering ? "已有帳號？返回登入" : "註冊帳號"}
+          </Button>
+          <small>保持登入，下次開啟即可繼續使用。</small>
         </section>
       </main>
     );

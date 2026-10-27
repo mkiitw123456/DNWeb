@@ -19,6 +19,7 @@ async function call(type, payload, cookie) {
     status: response.status,
     data: await response.json(),
     cookie: response.headers.get("set-cookie")?.split(";")[0],
+    setCookie: response.headers.get("set-cookie"),
   };
 }
 before(async () => {
@@ -46,6 +47,88 @@ before(async () => {
     }
   }
   assert.ok(ready, "test server started");
+});
+
+test("public registration logs in, prevents duplicate accounts and persists a renewable session", async () => {
+  const registered = await call("register", {
+    username: " NewMember ",
+    password: " password with spaces ",
+    admin: true,
+    active: false,
+    discordId: "123456789012345678",
+  });
+  assert.equal(registered.status, 200);
+  const token = JSON.parse(
+    Buffer.from(registered.cookie.split("=")[1].split(".")[0], "base64url"),
+  );
+  assert.equal(token.persistent, true);
+  assert.equal(token.exp, undefined);
+  assert.equal(registered.data.me.username, "NewMember");
+  assert.equal(registered.data.me.admin, false);
+  assert.equal(registered.data.me.active, true);
+  assert.equal(registered.data.me.discordId, "");
+  assert.equal(JSON.stringify(registered.data).includes("password"), false);
+  assert.match(
+    registered.setCookie,
+    /HttpOnly; SameSite=Lax; Max-Age=34560000/,
+  );
+  const restored = await fetch(url, { headers: { cookie: registered.cookie } });
+  assert.equal(restored.status, 200);
+  assert.equal((await restored.json()).me.id, registered.data.me.id);
+  assert.match(restored.headers.get("set-cookie"), /Max-Age=34560000/);
+  assert.equal(
+    (
+      await call(
+        "dungeon.save",
+        { name: "forbidden", max: 1 },
+        registered.cookie,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call("login", {
+        username: "newmember",
+        password: " password with spaces ",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await call("register", { username: "NEWMEMBER", password: "other" }))
+      .status,
+    409,
+  );
+  const concurrent = await Promise.all(
+    [1, 2].map(() =>
+      call("register", { username: "ConcurrentMember", password: "valid" }),
+    ),
+  );
+  assert.deepEqual(concurrent.map((r) => r.status).sort(), [200, 409]);
+  for (const payload of [
+    { username: "", password: "valid" },
+    { username: "x".repeat(31), password: "valid" },
+    { username: "Invalid", password: "   " },
+    { username: "Invalid", password: "x".repeat(129) },
+    { username: "Invalid", password: 123 },
+  ])
+    assert.equal((await call("register", payload)).status, 400);
+  const crossSite = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      origin: "https://wrong.example",
+    },
+    body: JSON.stringify({
+      type: "register",
+      payload: { username: "CrossSite", password: "valid" },
+    }),
+  });
+  assert.equal(crossSite.status, 403);
+  const logout = await call("logout", {}, registered.cookie);
+  assert.match(logout.setCookie, /Max-Age=0/);
+  assert.equal((await fetch(url)).status, 401);
 });
 after(async () => {
   child?.kill();
@@ -152,7 +235,10 @@ test("API login, member permissions, simultaneous sell/claim and durable data", 
     settlement.payouts.reduce((n, p) => n + p.amount, 0),
     800,
   );
-  assert.deepEqual(settlement.payouts.map((p) => p.amount), [400, 400]);
+  assert.deepEqual(
+    settlement.payouts.map((p) => p.amount),
+    [400, 400],
+  );
   assert.equal(settlement.remainder, 1);
   assert.equal(settlement.net, 801);
   assert.equal(
