@@ -1,17 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  UsersRound,
-  Target,
-  Store,
-  Settings,
-  LogOut,
-  ChevronRight,
-} from "lucide-react";
+import { UsersRound, Settings, LogOut, ChevronRight } from "lucide-react";
 import { Button, Field, FormErrorContext, Modal } from "./ui.jsx";
 import Characters from "./Characters.jsx";
-import Bounties from "./Bounties.jsx";
-import ItemBoard from "./ItemBoard.jsx";
-import { Invitations } from "./Groups.jsx";
 import Admin from "./Admin.jsx";
 export default function App() {
   const [data, setData] = useState(null),
@@ -178,11 +168,7 @@ export default function App() {
         </section>
       </main>
     );
-  const nav = [
-    ["characters", "角色資訊", UsersRound],
-    ["bounties", "懸賞", Target],
-    ["items", "物品交流", Store],
-  ];
+  const nav = [["characters", "角色資訊", UsersRound]];
   return (
     <FormErrorContext.Provider value={error}>
       <div className="app">
@@ -248,14 +234,9 @@ export default function App() {
               <button onClick={() => setError("")}>關閉</button>
             </div>
           )}
-          <Invitations {...shared} />
           {page === "characters" ? (
             <Characters {...shared} />
-          ) : page === "bounties" ? (
-            <Bounties {...shared} />
-          ) : page === "items" ? (
-            <ItemBoard {...shared} />
-          ) : data.me.admin ? (
+          ) : page === "admin" && data.me.admin ? (
             <Admin {...shared} />
           ) : null}
         </main>

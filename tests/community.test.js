@@ -18,96 +18,55 @@ function fixture() {
     action(s, u, "character.save", { name: u.username, hp: 1, attack: 2 });
   return { s, admin, a, b, c };
 }
-test("groups enforce server-side visibility, consent, membership and owner-only invitations", () => {
+test("characters are private even for former group peers and administrators", () => {
   const { s, admin, a, b, c } = fixture();
+  s.groups.push({
+    id: "legacy",
+    ownerId: a.id,
+    memberIds: [a.id, b.id],
+    name: "Old group",
+  });
+  s.invitations.push({
+    id: "invite",
+    groupId: "legacy",
+    fromUserId: a.id,
+    toUserId: c.id,
+  });
+  action(s, admin, "character.save", {
+    name: "Admin character",
+    hp: 1,
+    attack: 1,
+  });
+  for (const user of [a, b, c, admin]) {
+    const view = publicState(s, user);
+    assert.deepEqual(
+      view.characters.map((x) => x.ownerId),
+      [user.id],
+    );
+    assert.deepEqual(view.groups, []);
+    assert.deepEqual(view.invitations, []);
+  }
   assert.deepEqual(
-    publicState(s, a).characters.map((x) => x.ownerId),
+    publicState(s, a).users.map((x) => x.id),
     [a.id],
   );
-  action(s, a, "group.create", { name: "一起冒險" });
-  const g = s.groups[0];
-  assert.throws(
-    () => action(s, b, "group.invite", { groupId: g.id, username: c.username }),
-    { status: 403 },
-  );
-  assert.throws(
-    () => action(s, a, "group.invite", { groupId: g.id, username: "missing" }),
-    { status: 404 },
-  );
-  action(s, a, "group.invite", { groupId: g.id, username: " bOB " });
-  const invite = s.invitations[0];
-  assert.equal(publicState(s, b).invitations[0].groupName, g.name);
-  assert.equal(publicState(s, c).invitations.length, 0);
-  assert.equal(publicState(s, b).characters.length, 1);
-  assert.throws(
-    () => action(s, c, "group.respond", { id: invite.id, accept: true }),
-    { status: 404 },
-  );
-  assert.throws(
-    () => action(s, a, "group.invite", { groupId: g.id, username: b.username }),
-    { status: 409 },
-  );
-  action(s, b, "group.respond", { id: invite.id, accept: true });
-  assert.equal(publicState(s, a).characters.length, 2);
-  assert.equal(publicState(s, b).characters.length, 2);
-  assert.equal(publicState(s, c).characters.length, 1);
-  assert.equal(publicState(s, admin).characters.length, 3);
-  assert.equal(
-    publicState(s, b).users.find((u) => u.id === a.id).discordId,
-    undefined,
-  );
-  action(s, b, "group.create", { name: "second" });
-  assert.equal(publicState(s, b).groups.length, 2);
-  assert.throws(
-    () =>
-      action(s, b, "character.complete", {
-        id: s.characters[0].id,
-        dungeonId: s.dungeons[0].id,
-      }),
-    { status: 403 },
-  );
-  action(s, a, "group.kick", { groupId: g.id, userId: b.id });
-  assert.equal(publicState(s, b).characters.length, 1);
-  assert.equal(publicState(s, b).groups.length, 1);
+  assert.equal(publicState(s, admin).users.length, 4);
+  assert.equal(s.groups.length, 1);
 });
-test("declining, leaving and owner disbanding remove invitations and visibility", () => {
-  const { s, a, b, c } = fixture();
-  action(s, a, "group.create", { name: "G" });
-  const g = s.groups[0];
-  action(s, a, "group.invite", { groupId: g.id, username: b.username });
-  action(s, b, "group.respond", { id: s.invitations[0].id, accept: false });
-  assert.equal(s.invitations.length, 0);
-  action(s, a, "group.invite", { groupId: g.id, username: b.username });
-  action(s, b, "group.respond", { id: s.invitations[0].id, accept: true });
-  action(s, b, "group.leave", { groupId: g.id });
-  assert.deepEqual(g.memberIds, [a.id]);
-  action(s, a, "group.invite", { groupId: g.id, username: c.username });
-  action(s, a, "group.leave", { groupId: g.id });
-  assert.equal(s.groups.length, 0);
-  assert.equal(s.invitations.length, 0);
+test("all retired group actions reject even administrator requests", () => {
+  const { s, a, admin } = fixture();
+  for (const user of [a, admin])
+    for (const type of ["create", "invite", "respond", "kick", "leave"])
+      assert.throws(() => action(s, user, `group.${type}`, {}), {
+        status: 410,
+      });
 });
-test("accepting invitations preserves other invitations and supports multiple groups", () => {
-  const { s, a, b, c } = fixture();
-  action(s, a, "group.create", { name: "A" });
-  action(s, c, "group.create", { name: "C" });
-  for (const g of s.groups)
-    action(
-      s,
-      s.users.find((u) => u.id === g.ownerId),
-      "group.invite",
-      { groupId: g.id, username: b.username },
-    );
-  const old = s.invitations[1].id;
-  action(s, b, "group.respond", { id: s.invitations[0].id, accept: true });
-  assert.equal(s.invitations.length, 1);
-  action(s, b, "group.respond", { id: old, accept: true });
-  assert.equal(publicState(s, b).groups.length, 2);
-  assert.equal(publicState(s, b).characters.length, 3);
-  assert.equal(publicState(s, a).characters.length, 2);
-  assert.throws(
-    () => action(s, b, "group.respond", { id: old, accept: true }),
-    { status: 404 },
-  );
+test("onboarding completion belongs to the authenticated user and is idempotent", () => {
+  const { s, a, b } = fixture();
+  action(s, a, "onboarding.complete", { userId: b.id });
+  action(s, a, "onboarding.complete", {});
+  assert.equal(publicState(s, a).me.onboardingCompleted, true);
+  assert.equal(publicState(s, b).me.onboardingCompleted, undefined);
 });
 test("bounties are global but edits are restricted; dungeon deletion cannot orphan a bounty", () => {
   const { s, admin, a, b } = fixture();
@@ -174,7 +133,12 @@ test("account cleanup is admin-only, one-time and preserves other members and su
   for (const username of ["Wolf", "shomen", "Avalon", "Ricky"]) {
     const u = register(s, { username, password: "test" });
     action(s, u, "character.save", { name: username, hp: 1, attack: 1 });
-    action(s, u, "group.create", { name: username });
+    s.groups.push({
+      id: username,
+      name: username,
+      ownerId: u.id,
+      memberIds: [u.id],
+    });
     action(s, u, "bounty.save", {
       name: username,
       dungeonId: s.dungeons[0].id,

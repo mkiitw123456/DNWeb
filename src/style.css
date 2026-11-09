@@ -1747,3 +1747,73 @@ legend {
     flex: 1 1 140px;
   }
 }
+
+.personal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.personal-toolbar .compact-reset {
+  margin: 0;
+}
+.personal-character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.onboarding {
+  border: 1px solid #494063;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  background: linear-gradient(120deg, #252135, #1b1d27);
+}
+.onboarding-heading h2 {
+  margin: 8px 0;
+  font-size: 22px;
+}
+.onboarding p {
+  color: #b6b4c4;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.onboarding .eyebrow {
+  color: #b8a0ff;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  padding-left: 22px;
+  margin: 24px 0;
+}
+.onboarding-steps li::marker {
+  color: #b8a0ff;
+  font-weight: 700;
+}
+.onboarding-steps strong {
+  font-size: 15px;
+}
+.onboarding-steps p {
+  margin-bottom: 0;
+}
+.onboarding-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .onboarding-steps {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .onboarding {
+    padding: 20px;
+  }
+}

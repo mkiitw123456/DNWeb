@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UserRound, Check, CalendarDays, Trash2 } from "lucide-react";
+import { BookOpen, CalendarDays, Trash2 } from "lucide-react";
 import {
   Heading,
   Button,
@@ -9,150 +9,120 @@ import {
   FormActions,
   Empty,
 } from "./ui.jsx";
-import Groups from "./Groups.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
 import CharacterCard from "./CharacterCard.jsx";
 export default function Characters({ data, mutate, busy, ask }) {
-  const [editing, setEditing] = useState(null),
-    [owners, setOwners] = useState(null);
-  const [groupFilter, setGroupFilter] = useState("");
-  const chosenGroup = data.groups.find((g) => g.id === groupFilter);
-  const members = data.users.filter(
-    (u) =>
-      (!chosenGroup || chosenGroup.memberIds.includes(u.id)) &&
-      (u.active || data.characters.some((c) => c.ownerId === u.id)),
-  );
-  const groups = members
-    .filter((u) => owners === null || owners.includes(u.id))
-    .map((u) => ({
-      ...u,
-      characters: data.characters.filter((c) => c.ownerId === u.id),
-    }));
-  const add = (ownerId = data.me.id) =>
+  const [editing, setEditing] = useState(null);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const characters = data.characters.filter((c) => c.ownerId === data.me.id);
+  const showGuide =
+    guideOpen || (!characters.length && !data.me.onboardingCompleted);
+  const add = () =>
     setEditing({
       name: "",
       hp: 0,
       attack: 0,
-      ownerId,
+      ownerId: data.me.id,
       professionId: "",
     });
-  const toggle = (id) =>
-    setOwners((current) =>
-      current === null
-        ? [id]
-        : current.includes(id)
-          ? current.filter((x) => x !== id)
-          : [...current, id],
-    );
   return (
     <div className="characters-page">
       <Heading
         title="角色資訊"
-        description="依成員查看角色戰力與副本進度"
-        onAdd={() => add()}
+        description="管理自己的角色戰力與副本進度"
+        onAdd={add}
         addLabel="新增角色"
       />
-      <Groups data={data} mutate={mutate} busy={busy} ask={ask} />
-      <div className="compact-reset">
-        <span>
-          <CalendarDays size={14} />
-          每週六 09:00 副本重置
-        </span>
-        <small>台灣時間</small>
+      <div className="personal-toolbar">
+        <div className="compact-reset">
+          <span>
+            <CalendarDays size={14} />
+            每週六 09:00 副本重置
+          </span>
+          <small>台灣時間</small>
+        </div>
+        <Button onClick={() => setGuideOpen(true)}>
+          <BookOpen size={16} />
+          使用指南
+        </Button>
       </div>
-      <Field label="角色群組篩選">
-        <select
-          value={chosenGroup?.id || ""}
-          onChange={(e) => {
-            setGroupFilter(e.target.value);
-            setOwners(null);
-          }}
-        >
-          <option value="">所有可見成員</option>
-          {data.groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <div className="member-filters" role="group" aria-label="顯示成員">
-        <button
-          className={owners === null ? "selected" : ""}
-          aria-pressed={owners === null}
-          onClick={() => setOwners(null)}
-        >
-          所有成員
-        </button>
-        <button onClick={() => setOwners([data.me.id])}>只看自己</button>
-        <button onClick={() => setOwners([])}>全不選</button>
-        <span className="filter-divider" />
-        {members.map((u) => (
-          <button
-            key={u.id}
-            aria-pressed={owners === null || owners.includes(u.id)}
-            className={
-              owners === null || owners.includes(u.id) ? "selected" : ""
-            }
-            onClick={() => toggle(u.id)}
-          >
-            {(owners === null || owners.includes(u.id)) && <Check size={13} />}{" "}
-            {u.username}
-          </button>
-        ))}
-      </div>
-      <div className="roster-summary">
-        {groups.length} 位成員 ·{" "}
-        {groups.reduce((n, u) => n + u.characters.length, 0)} 個角色{" "}
-        <span>可複選成員</span>
-      </div>
-      {groups.length ? (
-        <div className="member-columns">
-          {groups.map((u) => (
-            <section
-              className="member-column"
-              key={u.id}
-              aria-label={u.username + " 的角色"}
+      {showGuide && (
+        <section className="onboarding" aria-label="新手使用指南">
+          <div className="onboarding-heading">
+            <span className="eyebrow">開始你的冒險</span>
+            <h2>從第一個角色開始</h2>
+            <p>
+              建立角色後，就能在這裡記錄戰力與每週副本進度。這裡只會顯示你自己的角色。
+            </p>
+          </div>
+          <ol className="onboarding-steps">
+            <li>
+              <strong>建立角色</strong>
+              <p>
+                點「新增角色」，輸入角色名稱，選擇職業。卡片會顯示對應的職業圖示與外框顏色。
+              </p>
+            </li>
+            <li>
+              <strong>填寫角色資訊</strong>
+              <p>
+                輸入血量、攻擊力並儲存。之後可從角色卡片的編輯按鈕隨時調整，也能建立多個角色。
+              </p>
+            </li>
+            <li>
+              <strong>更新副本進度</strong>
+              <p>
+                在卡片填寫已完成場次與數量項目，離開輸入框即可儲存。副本場次會在每週六早上
+                9 點自動重置。
+              </p>
+            </li>
+          </ol>
+          <div className="onboarding-actions">
+            <Button primary onClick={add}>
+              {characters.length ? "新增角色" : "建立第一個角色"}
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={async () => {
+                if (
+                  await mutate(
+                    "onboarding.complete",
+                    {},
+                    "可隨時從使用指南重新查看",
+                  )
+                )
+                  setGuideOpen(false);
+              }}
             >
-              <header className="member-column-header">
-                <span className="member-icon">
-                  <UserRound size={16} />
-                </span>
-                <h2>{u.username}</h2>
-                <small>{u.characters.length} 角</small>
-              </header>
-              <div className="member-character-list">
-                {u.characters.map((c) => (
-                  <CharacterCard
-                    key={c.id}
-                    character={c}
-                    professions={data.professions || []}
-                    dungeons={data.dungeons}
-                    quantityTypes={data.quantityTypes}
-                    canEdit={data.me.admin || c.ownerId === data.me.id}
-                    busy={busy}
-                    mutate={mutate}
-                    onEdit={() => setEditing({ ...c })}
-                  />
-                ))}
-                {!u.characters.length && (
-                  <div className="member-empty">
-                    <p>尚未建立角色</p>
-                    {(data.me.admin || u.id === data.me.id) && (
-                      <Button onClick={() => add(u.id)}>新增角色</Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
+              我知道了
+            </Button>
+          </div>
+        </section>
+      )}
+      <div className="roster-summary">
+        我的角色 · {characters.length} 個角色
+      </div>
+      {characters.length ? (
+        <div className="personal-character-grid">
+          {characters.map((c) => (
+            <CharacterCard
+              key={c.id}
+              character={c}
+              professions={data.professions || []}
+              dungeons={data.dungeons}
+              quantityTypes={data.quantityTypes}
+              canEdit={true}
+              busy={busy}
+              mutate={mutate}
+              onEdit={() => setEditing({ ...c })}
+            />
           ))}
         </div>
-      ) : (
+      ) : !showGuide ? (
         <Empty
-          title="尚未選擇成員"
-          description="點選上方成員名稱，即可查看角色資訊。"
+          title="尚未建立角色"
+          description="點選右上方「新增角色」，開始記錄你的角色資訊。"
         />
-      )}
+      ) : null}
       {editing && (
         <Modal
           title={editing.id ? "編輯角色" : "新增角色"}
@@ -207,24 +177,6 @@ export default function Characters({ data, mutate, busy, ask }) {
               <p className="hint">
                 請管理員先到「管理後台 → 職業清單」建立職業。
               </p>
-            )}
-            {data.me.admin && (
-              <Field label="所屬成員">
-                <select
-                  value={editing.ownerId}
-                  onChange={(e) =>
-                    setEditing({ ...editing, ownerId: e.target.value })
-                  }
-                >
-                  {data.users
-                    .filter((u) => u.active || u.id === editing.ownerId)
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.username}
-                      </option>
-                    ))}
-                </select>
-              </Field>
             )}
             <div className="form-grid">
               {[

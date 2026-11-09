@@ -15,24 +15,15 @@ function fixture() {
     b = register(s, { username: "B", password: "test" });
   return { s, admin, a, b };
 }
-test("overlapping groups preserve access until the last common membership is removed", () => {
+test("multiple legacy groups never expose another member's characters", () => {
   const { s, a, b } = fixture();
   action(s, a, "character.save", { name: "A", hp: 0, attack: 0 });
-  action(s, a, "group.create", { name: "one" });
-  action(s, a, "group.create", { name: "two" });
-  for (const g of s.groups) {
-    action(s, a, "group.invite", { groupId: g.id, username: b.username });
-    action(s, b, "group.respond", { id: s.invitations[0].id, accept: true });
-  }
-  assert.equal(publicState(s, b).characters.length, 1);
-  action(s, b, "group.leave", { groupId: s.groups[0].id });
-  assert.equal(publicState(s, b).characters.length, 1);
-  assert.throws(() => action(s, b, "group.leave", { groupId: "unknown" }), {
-    status: 404,
-  });
-  action(s, a, "group.kick", { groupId: s.groups[1].id, userId: b.id });
+  for (const id of ["one", "two"])
+    s.groups.push({ id, name: id, ownerId: a.id, memberIds: [a.id, b.id] });
   assert.equal(publicState(s, b).characters.length, 0);
+  assert.equal(publicState(s, a).characters.length, 1);
 });
+
 test("quantities are admin-defined, owner-editable, persistent across weekly reset and removed with type", () => {
   const { s, admin, a, b } = fixture();
   assert.throws(() => action(s, a, "quantityType.save", { name: "入場券" }), {

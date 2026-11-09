@@ -293,41 +293,31 @@ test("API login, member permissions, simultaneous sell/claim and durable data", 
   );
 });
 
-test("group consent and privacy hold through API responses and concurrent invitations", async () => {
+test("retired groups cannot reveal characters and onboarding persists per account", async () => {
   const a = await call("register", { username: "GroupA", password: "test" });
   const b = await call("register", { username: "GroupB", password: "test" });
-  const c = await call("register", { username: "GroupC", password: "test" });
   await call("character.save", { name: "SecretA", hp: 1, attack: 2 }, a.cookie);
-  const made = await call("group.create", { name: "API group" }, a.cookie);
-  const groupId = made.data.groups[0].id;
-  const attempts = await Promise.all(
-    [1, 2].map(() =>
-      call("group.invite", { groupId, username: "GroupB" }, a.cookie),
-    ),
-  );
-  assert.deepEqual(attempts.map((r) => r.status).sort(), [200, 409]);
-  const invited = await fetch(url, { headers: { cookie: b.cookie } }).then(
-    (r) => r.json(),
-  );
-  assert.equal(invited.characters.length, 0);
-  assert.equal(invited.invitations.length, 1);
-  const accepted = await call(
-    "group.respond",
-    { id: invited.invitations[0].id, accept: true },
-    b.cookie,
-  );
-  assert.equal(accepted.data.characters[0].name, "SecretA");
   assert.equal(
-    (await fetch(url, { headers: { cookie: c.cookie } }).then((r) => r.json()))
-      .characters.length,
-    0,
+    (await call("group.create", { name: "API group" }, a.cookie)).status,
+    410,
   );
-  await call("group.kick", { groupId, userId: b.data.me.id }, a.cookie);
-  assert.equal(
-    (await fetch(url, { headers: { cookie: b.cookie } }).then((r) => r.json()))
-      .characters.length,
-    0,
+  const done = await call(
+    "onboarding.complete",
+    { userId: b.data.me.id },
+    a.cookie,
   );
+  assert.equal(done.status, 200);
+  const own = await fetch(url, { headers: { cookie: a.cookie } }).then((r) =>
+    r.json(),
+  );
+  const other = await fetch(url, { headers: { cookie: b.cookie } }).then((r) =>
+    r.json(),
+  );
+  assert.equal(own.me.onboardingCompleted, true);
+  assert.equal(other.me.onboardingCompleted, undefined);
+  assert.equal(other.characters.length, 0);
+  assert.deepEqual(other.groups, []);
+  assert.deepEqual(other.invitations, []);
 });
 
 test("account cleanup backs up full data, promotes existing successor and signs out removed administrator", async () => {

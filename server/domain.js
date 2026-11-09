@@ -6,7 +6,7 @@ import {
 } from "node:crypto";
 import { discordEnabled } from "./discord.js";
 import { professionIcons } from "../shared/professions.js";
-import { communityAction, groupsOf } from "./community.js";
+import { communityAction } from "./community.js";
 import { cleanupAccounts } from "./account-cleanup.js";
 export const id = () => randomUUID();
 export function fail(message, status = 400) {
@@ -167,32 +167,12 @@ export function split(price, cost, taxed, ids) {
   };
 }
 export function publicState(s, u) {
-  const ownGroups = groupsOf(s, u.id);
-  const visibleIds = new Set([u.id, ...ownGroups.flatMap((g) => g.memberIds)]);
   const safeUser = ({ password, version, ...rest }) => rest;
   return {
-    users: s.users
-      .filter((x) => u.admin || visibleIds.has(x.id))
-      .map((x) =>
-        u.admin || x.id === u.id
-          ? safeUser(x)
-          : { id: x.id, username: x.username, active: x.active },
-      ),
-    characters: s.characters.filter(
-      (c) => u.admin || visibleIds.has(c.ownerId),
-    ),
-    groups: s.groups.filter((g) => u.admin || g.memberIds.includes(u.id)),
-    invitations: s.invitations
-      .filter((i) => u.admin || i.toUserId === u.id || i.fromUserId === u.id)
-      .map((i) => ({
-        ...i,
-        groupName:
-          s.groups.find((g) => g.id === i.groupId)?.name || "已刪除群組",
-        fromName:
-          s.users.find((x) => x.id === i.fromUserId)?.username || "未知成員",
-        toName:
-          s.users.find((x) => x.id === i.toUserId)?.username || "未知成員",
-      })),
+    users: s.users.filter((x) => u.admin || x.id === u.id).map(safeUser),
+    characters: s.characters.filter((c) => c.ownerId === u.id),
+    groups: [],
+    invitations: [],
     bounties: s.bounties.map((b) => ({
       ...b,
       ownerName:
@@ -224,6 +204,11 @@ function owned(item, user, field = "ownerId") {
 }
 export function action(s, u, type, p, now = Date.now()) {
   reset(s, now);
+  if (type.startsWith("group.")) fail("群組功能已停用", 410);
+  if (type === "onboarding.complete") {
+    s.users.find((x) => x.id === u.id).onboardingCompleted = true;
+    return;
+  }
   if (communityAction(s, u, type, p, now)) return;
   const admin = () => {
     if (!u.admin) fail("僅管理員可操作", 403);
