@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { UsersRound, Settings, LogOut, ChevronRight } from "lucide-react";
+import {
+  CalendarDays,
+  UsersRound,
+  Settings,
+  LogOut,
+  ChevronRight,
+} from "lucide-react";
 import { Button, Field, FormErrorContext, Modal } from "./ui.jsx";
 import Characters from "./Characters.jsx";
 import Admin from "./Admin.jsx";
+import Raids from "./Raids.jsx";
 export default function App() {
   const [data, setData] = useState(null),
     [loading, setLoading] = useState(true),
@@ -168,7 +175,10 @@ export default function App() {
         </section>
       </main>
     );
-  const nav = [["characters", "角色資訊", UsersRound]];
+  const nav = [
+    ["characters", "角色資訊", UsersRound],
+    ["raids", "出團排班", CalendarDays],
+  ];
   return (
     <FormErrorContext.Provider value={error}>
       <div className="app">
@@ -236,6 +246,8 @@ export default function App() {
           )}
           {page === "characters" ? (
             <Characters {...shared} />
+          ) : page === "raids" ? (
+            <Raids {...shared} />
           ) : page === "admin" && data.me.admin ? (
             <Admin {...shared} />
           ) : null}

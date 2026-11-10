@@ -25,7 +25,12 @@ export default function Professions({ data, mutate, busy, ask }) {
           <ProfessionIcon profession={p} />
           <strong>{p.name}</strong>
           <span className="muted">
-            {data.characters.filter((c) => c.professionId === p.id).length} 角
+            {
+              (data.roster || data.characters).filter(
+                (c) => c.professionId === p.id,
+              ).length
+            }{" "}
+            角
           </span>
           <Button
             onClick={() => setEditing({ ...p })}
@@ -76,6 +81,18 @@ export default function Professions({ data, mutate, busy, ask }) {
                 ))}
               </select>
             </Field>
+            <Field
+              label="Discord 職業貼圖代碼（選填）"
+              placeholder="<:sword:123456789012345678>"
+              value={editing.discordEmoji || ""}
+              onChange={(e) =>
+                setEditing({ ...editing, discordEmoji: e.target.value })
+              }
+            />
+            <p className="hint">
+              填入完整的 &lt;:名稱:ID&gt; 代碼；動態貼圖可用
+              &lt;a:名稱:ID&gt;。未設定時，出團通知會顯示職業名稱。
+            </p>
             <ProfessionIcon profession={editing} />
             <FormActions busy={busy} onClose={() => setEditing(null)} />
           </form>

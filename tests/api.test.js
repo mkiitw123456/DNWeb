@@ -320,6 +320,84 @@ test("retired groups cannot reveal characters and onboarding persists per accoun
   assert.deepEqual(other.invitations, []);
 });
 
+test("raid API enforces delegation, persists templates and records creation logs", async () => {
+  const owner = await call("login", {
+    username: "MrAirWolf",
+    password: "test-password",
+  });
+  const a = await call("register", {
+    username: "RaidMember",
+    password: "test",
+  });
+  const b = await call("register", {
+    username: "RaidDelegate",
+    password: "test",
+  });
+  const created = await call(
+    "character.save",
+    { name: "RaidHero", hp: 1, attack: 1 },
+    a.cookie,
+  );
+  const draft = {
+    startsAt: new Date(Date.now() + 3600000).toISOString(),
+    dungeonId: owner.data.dungeons[0].id,
+    slots: [created.data.characters[0].id, ...Array(7).fill(null)],
+  };
+  assert.equal((await call("raid.save", draft, a.cookie)).status, 403);
+  assert.equal(
+    (await call("user.role", { id: b.data.me.id, admin: true }, owner.cookie))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await call("user.role", { id: a.data.me.id, admin: true }, b.cookie))
+      .status,
+    403,
+  );
+  const made = await call("raid.save", draft, b.cookie);
+  assert.equal(made.status, 200);
+  const r = made.data.raids[0];
+  assert.equal(
+    (
+      await call(
+        "raidTemplate.save",
+        { raidId: r.id, revision: 1, name: "API team" },
+        b.cookie,
+      )
+    ).status,
+    200,
+  );
+  const notified = await call(
+    "raid.notify",
+    { id: r.id, revision: 1 },
+    b.cookie,
+  );
+  assert.equal(notified.status, 200);
+  assert.equal(notified.data.raids[0].notification, "unconfigured");
+  const view = await fetch(url, { headers: { cookie: a.cookie } }).then((r) =>
+    r.json(),
+  );
+  assert.equal(view.raids.length, 1);
+  assert.equal(view.roster.length, 0);
+  assert.deepEqual(view.raidTemplates, []);
+  const adminView = await fetch(url, {
+    headers: { cookie: owner.cookie },
+  }).then((r) => r.json());
+  assert.equal(adminView.raidTemplates.length, 1);
+  assert.ok(
+    adminView.deliveries.some(
+      (e) => e.summary.includes("建立角色") && e.summary.includes("RaidHero"),
+    ),
+  );
+  assert.ok(
+    adminView.deliveries.some(
+      (e) => e.summary.includes("建立帳號") && e.summary.includes("RaidMember"),
+    ),
+  );
+  await call("user.role", { id: b.data.me.id, admin: false }, owner.cookie);
+  assert.equal((await call("raid.save", draft, b.cookie)).status, 403);
+});
+
 test("account cleanup backs up full data, promotes existing successor and signs out removed administrator", async () => {
   const logged = await call("login", {
     username: "MrAirWolf",

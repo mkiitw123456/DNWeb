@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, SquarePen, Trash2 } from "lucide-react";
 import Professions from "./Professions.jsx";
+import DiscordSettings from "./DiscordSettings.jsx";
 import QuantityTypes from "./QuantityTypes.jsx";
 import {
   Heading,
@@ -17,59 +18,13 @@ export default function Admin({ data, mutate, busy, ask }) {
   return (
     <>
       <Heading title="管理後台" description="管理公會成員、副本與職業圖示" />
-      {data.users.some(
-        (u) => u.username.toLowerCase() === "mrairwolf" && !u.admin && u.active,
-      ) && (
-        <section className="group-panel">
-          <h2>管理員設定</h2>
-          <p>將現有 MrAirWolf 設為管理員，不刪除其他帳號或資料。</p>
-          <Button
-            disabled={busy}
-            onClick={async () => {
-              if (await ask("確定將現有 MrAirWolf 設為管理員？"))
-                mutate(
-                  "maintenance.promoteOwner",
-                  {},
-                  "MrAirWolf 已設為管理員",
-                );
-            }}
-          >
-            將 MrAirWolf 設為管理員
-          </Button>
-        </section>
-      )}
-      {!data.accountCleanupCompleted && (
-        <section className="group-panel">
-          <h2>一次性帳號整理</h2>
-          <p>
-            將現有 MrAirWolf 設為管理員，刪除 Wolf、shomen、Avalon、Ricky
-            的帳號、角色、懸賞與其建立的群組及交易。其他人的歷史分帳保留金額並匿名化已刪除帳號。執行前自動備份資料。
-          </p>
-          <Button
-            disabled={busy}
-            onClick={async () => {
-              if (
-                await ask(
-                  "確定備份並刪除 Wolf、shomen、Avalon、Ricky 的資料，將現有 MrAirWolf 設為管理員？若目前使用的帳號被刪除，將立即登出。",
-                )
-              )
-                mutate(
-                  "maintenance.cleanup",
-                  { confirm: "MrAirWolf" },
-                  "帳號整理完成，請使用 MrAirWolf 登入",
-                );
-            }}
-          >
-            備份並執行帳號整理
-          </Button>
-        </section>
-      )}
       <div className="tabs">
         {[
           ["users", "成員帳號"],
           ["dungeons", "副本設定"],
           ["professions", "職業清單"],
           ["quantities", "數量項目"],
+          ["discord", "Discord 通知"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -119,12 +74,32 @@ export default function Admin({ data, mutate, busy, ask }) {
                   {u.admin ? "管理員" : u.active ? "使用中" : "已停用"}
                 </span>
                 <Button
+                  disabled={u.admin && !data.canDelegate}
                   aria-label={`編輯帳號 ${u.username}`}
                   onClick={() => setEditing({ ...u, password: "" })}
                 >
                   <SquarePen size={16} />
                   編輯
                 </Button>
+                {data.canDelegate && u.id !== data.me.id && u.active && (
+                  <Button
+                    disabled={busy}
+                    onClick={async () => {
+                      if (
+                        await ask(
+                          `確定${u.admin ? "撤銷" : "授予"} ${u.username} 的管理員權限？`,
+                        )
+                      )
+                        mutate(
+                          "user.role",
+                          { id: u.id, admin: !u.admin },
+                          "管理員權限已更新",
+                        );
+                    }}
+                  >
+                    {u.admin ? "撤銷管理員" : "設為管理員"}
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -165,6 +140,8 @@ export default function Admin({ data, mutate, busy, ask }) {
             </div>
           ))}
         </section>
+      ) : tab === "discord" ? (
+        <DiscordSettings data={data} mutate={mutate} busy={busy} />
       ) : tab === "quantities" ? (
         <QuantityTypes data={data} mutate={mutate} busy={busy} ask={ask} />
       ) : tab === "professions" ? (

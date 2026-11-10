@@ -1,3 +1,5 @@
+import { audit } from "./scheduling.js";
+import { deliverEvents } from "./deliveries.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { transact } from "./store.js";
 import {
@@ -155,8 +157,10 @@ export default async function handler(req, res) {
       const result = await transact((s) => {
         const user = register(s, payload);
         reset(s);
-        return { user, state: publicState(s, user) };
+        const eventId = audit(s, user, "register", { username: user.username });
+        return { user, state: publicState(s, user), eventId };
       });
+      if (result.eventId) await deliverEvents([result.eventId]);
       cookie(res, result.user);
       return res.status(200).json(result.state);
     }
@@ -192,12 +196,19 @@ export default async function handler(req, res) {
         reset(s);
         if (type === "state")
           return { state: publicState(s, u), user: { ...u } };
+        const previousEvents = new Set(s.deliveries.map((e) => e.id));
         const result = action(s, u, type, payload);
+        audit(s, u, type, payload);
+        const eventIds = s.deliveries
+          .filter((e) => !previousEvents.has(e.id))
+          .map((e) => e.id);
+        if (type === "delivery.retry") eventIds.push(payload.id);
         if (!s.users.some((x) => x.id === u.id))
           return { state: null, user: null };
         return {
           state: publicState(s, u),
           user: { ...u },
+          eventIds,
           notificationId: ["listing.sell", "notification.retry"].includes(type)
             ? result
             : null,
@@ -205,6 +216,15 @@ export default async function handler(req, res) {
       },
       { backup: type === "maintenance.cleanup" },
     );
+    if (result.eventIds?.length) {
+      await deliverEvents(result.eventIds);
+      result.state = await transact((s) =>
+        publicState(
+          s,
+          s.users.find((x) => x.id === token.id),
+        ),
+      );
+    }
     if (result.notificationId) {
       await notify(result.notificationId);
       result.state = await transact((s) =>

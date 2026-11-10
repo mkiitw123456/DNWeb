@@ -7,6 +7,7 @@ import {
 import { discordEnabled } from "./discord.js";
 import { professionIcons } from "../shared/professions.js";
 import { communityAction } from "./community.js";
+import { isOwner, raidView, schedulingAction } from "./scheduling.js";
 import { cleanupAccounts } from "./account-cleanup.js";
 export const id = () => randomUUID();
 export function fail(message, status = 400) {
@@ -66,6 +67,10 @@ export function periods(now = Date.now()) {
   return { day, week: Math.floor((day - 2) / 7) };
 }
 export function reset(state, now = Date.now()) {
+  state.raids ??= [];
+  state.raidTemplates ??= [];
+  state.deliveries ??= [];
+  state.discordWebhooks ??= {};
   state.professions ??= [];
   state.groups ??= [];
   state.invitations ??= [];
@@ -108,10 +113,15 @@ export function reset(state, now = Date.now()) {
 export function initialState() {
   if (!process.env.INITIAL_ADMIN_PASSWORD)
     fail("請設定 INITIAL_ADMIN_PASSWORD", 503);
+  const founderId = id();
   return {
+    adminOwnerId: founderId,
+    raids: [],
+    deliveries: [],
+    discordWebhooks: {},
     users: [
       {
-        id: id(),
+        id: founderId,
         username: "MrAirWolf",
         password: hash(process.env.INITIAL_ADMIN_PASSWORD),
         discordId: "",
@@ -171,6 +181,38 @@ export function publicState(s, u) {
   return {
     users: s.users.filter((x) => u.admin || x.id === u.id).map(safeUser),
     characters: s.characters.filter((c) => c.ownerId === u.id),
+    raids: (s.raids || []).map((r) => raidView(s, r)),
+    raidTemplates: u.admin ? s.raidTemplates || [] : [],
+    roster: u.admin
+      ? s.characters
+          .filter((c) => s.users.some((x) => x.id === c.ownerId && x.active))
+          .map(({ id, name, ownerId, professionId }) => ({
+            id,
+            name,
+            ownerId,
+            professionId,
+          }))
+      : [],
+    canDelegate: isOwner(s, u),
+    discordSettings: u.admin
+      ? {
+          logConfigured: !!s.discordWebhooks?.log,
+          raidConfigured: !!s.discordWebhooks?.raid,
+        }
+      : null,
+    deliveries: u.admin
+      ? (s.deliveries || [])
+          .slice(-30)
+          .reverse()
+          .map(({ id, channel, status, createdAt, attemptAt, message }) => ({
+            id,
+            channel,
+            status,
+            createdAt,
+            attemptAt: attemptAt || null,
+            summary: message.content.split("\n")[0],
+          }))
+      : [],
     groups: [],
     invitations: [],
     bounties: s.bounties.map((b) => ({
@@ -209,12 +251,13 @@ export function action(s, u, type, p, now = Date.now()) {
     s.users.find((x) => x.id === u.id).onboardingCompleted = true;
     return;
   }
+  if (schedulingAction(s, u, type, p, now)) return;
   if (communityAction(s, u, type, p, now)) return;
   const admin = () => {
     if (!u.admin) fail("僅管理員可操作", 403);
   };
   if (type === "maintenance.promoteOwner") {
-    admin();
+    if (!isOwner(s, u)) fail("只有主要管理員可以操作", 403);
     const owner = s.users.find(
       (x) => x.username.toLowerCase() === "mrairwolf" && x.active,
     );
@@ -298,9 +341,13 @@ export function action(s, u, type, p, now = Date.now()) {
     return;
   }
   if (type === "maintenance.cleanup") {
-    admin();
+    if (!isOwner(s, u)) fail("只有主要管理員可以操作", 403);
     if (p.confirm !== "MrAirWolf") fail("請輸入 MrAirWolf 確認帳號整理");
     cleanupAccounts(s);
+    s.adminOwnerId =
+      s.users.find(
+        (x) => x.username.toLowerCase() === "mrairwolf" && x.admin && x.active,
+      )?.id || s.adminOwnerId;
     return;
   }
   if (type === "profession.save") {
@@ -317,7 +364,16 @@ export function action(s, u, type, p, now = Date.now()) {
     const icon = p.icon ?? old?.icon ?? "";
     if (!professionIcons.some((preset) => preset.icon === icon))
       fail("請選擇有效的職業圖示");
-    const item = { id: old?.id || id(), name, icon };
+    const discordEmoji = p.discordEmoji ?? old?.discordEmoji ?? "";
+    if (
+      typeof discordEmoji !== "string" ||
+      (discordEmoji &&
+        !/^<a?:[A-Za-z0-9_]{2,32}:\d{17,20}>$/.test(discordEmoji))
+    )
+      fail(
+        "請填入完整 Discord 貼圖代碼，例如 <:sword:123456789012345678>，或留白",
+      );
+    const item = { id: old?.id || id(), name, icon, discordEmoji };
     if (old) Object.assign(old, item);
     else s.professions.push(item);
     return;
@@ -333,6 +389,10 @@ export function action(s, u, type, p, now = Date.now()) {
     admin();
     const old = p.id ? s.users.find((x) => x.id === p.id) : null;
     if (p.id && !old) fail("找不到帳號");
+    if (old?.admin && !isOwner(s, u))
+      fail("只有主要管理員可以修改管理員帳號", 403);
+    if (p.admin !== undefined && p.admin !== (old?.admin || false))
+      fail("請透過管理員權限設定變更權限", 403);
     const username = text(p.username, "帳號", 30);
     if (
       s.users.some(
