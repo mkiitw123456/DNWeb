@@ -1818,12 +1818,12 @@ legend {
   }
 }
 /* Scheduling and numeric status */
-.compact-run.zero-runs > span,
-.compact-run.zero-runs input {
+.compact-run.completed-runs > span,
+.compact-run.completed-runs input {
   color: #ff737f;
 }
-.compact-run:not(.zero-runs) > span,
-.compact-run:not(.zero-runs) input {
+.compact-run:not(.completed-runs) > span,
+.compact-run:not(.completed-runs) input {
   color: #f0f0f5;
 }
 .raid-calendar {

@@ -47,7 +47,7 @@ export default function CharacterCard({
         {dungeons.map((d) => (
           <div
             key={d.id}
-            className={`compact-run ${(c.runs[d.id] || 0) === 0 ? "zero-runs" : ""}`}
+            className={`compact-run ${(c.runs[d.id] || 0) >= d.max ? "completed-runs" : ""}`}
           >
             <span title={d.name}>{d.name}</span>
             <div>
