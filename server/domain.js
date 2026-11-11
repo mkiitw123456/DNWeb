@@ -364,7 +364,9 @@ export function action(s, u, type, p, now = Date.now()) {
     const icon = p.icon ?? old?.icon ?? "";
     if (!professionIcons.some((preset) => preset.icon === icon))
       fail("請選擇有效的職業圖示");
-    const discordEmoji = p.discordEmoji ?? old?.discordEmoji ?? "";
+    const rawEmoji = p.discordEmoji ?? old?.discordEmoji ?? "";
+    const discordEmoji =
+      typeof rawEmoji === "string" ? rawEmoji.trim() : rawEmoji;
     if (
       typeof discordEmoji !== "string" ||
       (discordEmoji &&

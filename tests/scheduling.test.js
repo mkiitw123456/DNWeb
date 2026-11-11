@@ -253,3 +253,21 @@ test("templates preserve eight positions without date, remain admin-only, and ne
   assert.equal(s.raidTemplates.length, 0);
   assert.equal(s.raids.length, 2);
 });
+
+test("profession emoji paste trims surrounding spaces and newlines without accepting malformed codes", () => {
+  const { s, owner } = fixture();
+  const p = s.professions[0];
+  action(s, owner, "profession.save", {
+    ...p,
+    discordEmoji: " \n<:Swordsman:1570037315982721054> \t",
+  });
+  assert.equal(p.discordEmoji, "<:Swordsman:1570037315982721054>");
+  action(s, owner, "profession.save", { ...p, discordEmoji: "   " });
+  assert.equal(p.discordEmoji, "");
+  assert.throws(() =>
+    action(s, owner, "profession.save", { ...p, discordEmoji: 123 }),
+  );
+  assert.throws(() =>
+    action(s, owner, "profession.save", { ...p, discordEmoji: ":Swordsman:" }),
+  );
+});
