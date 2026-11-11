@@ -1,3 +1,4 @@
+import { emojiNamePattern, fetchGuildEmojis } from "./emojis.js";
 import { audit } from "./scheduling.js";
 import { deliverEvents } from "./deliveries.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -187,6 +188,22 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
+    let emojiCatalog = null;
+    if (
+      type === "profession.save" &&
+      typeof payload.discordEmoji === "string" &&
+      emojiNamePattern.test(payload.discordEmoji.trim())
+    ) {
+      const guildId = await transact((s) => {
+        const user = s.users.find(
+          (x) => x.id === token.id && x.active && x.version === token.version,
+        );
+        if (!user) fail("登入已過期，請重新登入", 401);
+        if (!user.admin) fail("僅管理員可操作", 403);
+        return s.discordEmojiGuildId || process.env.DISCORD_GUILD_ID;
+      });
+      emojiCatalog = await fetchGuildEmojis(guildId);
+    }
     const result = await transact(
       (s) => {
         const u = s.users.find(
@@ -197,6 +214,7 @@ export default async function handler(req, res) {
         if (type === "state")
           return { state: publicState(s, u), user: { ...u } };
         const previousEvents = new Set(s.deliveries.map((e) => e.id));
+        if (emojiCatalog) s.discordEmojis = emojiCatalog;
         const result = action(s, u, type, payload);
         audit(s, u, type, payload);
         const eventIds = s.deliveries

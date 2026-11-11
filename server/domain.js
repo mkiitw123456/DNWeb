@@ -1,3 +1,4 @@
+import { emojiNamePattern } from "./emojis.js";
 import {
   randomUUID,
   randomBytes,
@@ -365,16 +366,30 @@ export function action(s, u, type, p, now = Date.now()) {
     if (!professionIcons.some((preset) => preset.icon === icon))
       fail("請選擇有效的職業圖示");
     const rawEmoji = p.discordEmoji ?? old?.discordEmoji ?? "";
-    const discordEmoji =
+    let discordEmoji =
       typeof rawEmoji === "string" ? rawEmoji.trim() : rawEmoji;
+    const shortName =
+      typeof discordEmoji === "string" &&
+      discordEmoji.match(emojiNamePattern)?.[1];
+    if (shortName) {
+      const matches = (s.discordEmojis || []).filter(
+        (e) => e.name === shortName,
+      );
+      if (matches.length !== 1)
+        fail(
+          matches.length
+            ? "有多個同名貼圖，請使用完整代碼指定"
+            : `找不到 :${shortName}:，請確認名稱與大小寫，並已將機器人加入貼圖所在伺服器`,
+        );
+      const emoji = matches[0];
+      discordEmoji = `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}>`;
+    }
     if (
       typeof discordEmoji !== "string" ||
       (discordEmoji &&
         !/^<a?:[A-Za-z0-9_]{2,32}:\d{17,20}>$/.test(discordEmoji))
     )
-      fail(
-        "請填入完整 Discord 貼圖代碼，例如 <:sword:123456789012345678>，或留白",
-      );
+      fail("請填入 :Swordsman: 這類表情名稱，或完整貼圖代碼；留白可清除");
     const item = { id: old?.id || id(), name, icon, discordEmoji };
     if (old) Object.assign(old, item);
     else s.professions.push(item);

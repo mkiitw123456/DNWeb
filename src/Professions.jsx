@@ -33,7 +33,13 @@ export default function Professions({ data, mutate, busy, ask }) {
             角
           </span>
           <Button
-            onClick={() => setEditing({ ...p })}
+            onClick={() =>
+              setEditing({
+                ...p,
+                discordEmoji:
+                  p.discordEmoji?.replace(/^<a?:([^:]+):\d+>$/, ":$1:") || "",
+              })
+            }
             aria-label={`編輯職業 ${p.name}`}
           >
             編輯
@@ -83,15 +89,15 @@ export default function Professions({ data, mutate, busy, ask }) {
             </Field>
             <Field
               label="Discord 職業貼圖代碼（選填）"
-              placeholder="<:sword:123456789012345678>"
+              placeholder=":Swordsman:"
               value={editing.discordEmoji || ""}
               onChange={(e) =>
                 setEditing({ ...editing, discordEmoji: e.target.value })
               }
             />
             <p className="hint">
-              填入完整的 &lt;:名稱:ID&gt; 代碼；動態貼圖可用
-              &lt;a:名稱:ID&gt;。未設定時，出團通知會顯示職業名稱。
+              直接填 Discord 表情名稱，例如 :Swordsman:，儲存時會自動取得貼圖
+              ID。名稱須符合大小寫；機器人需已加入放置貼圖的伺服器。也可貼上完整代碼，留白可清除。
             </p>
             <ProfessionIcon profession={editing} />
             <FormActions busy={busy} onClose={() => setEditing(null)} />

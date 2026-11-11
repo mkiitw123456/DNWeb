@@ -271,3 +271,32 @@ test("profession emoji paste trims surrounding spaces and newlines without accep
     action(s, owner, "profession.save", { ...p, discordEmoji: ":Swordsman:" }),
   );
 });
+test("short Discord emoji names resolve exact names, animated codes and whitespace", () => {
+  const { s, owner } = fixture(),
+    p = s.professions[0];
+  s.discordEmojis = [
+    { name: "Swordsman", id: "1570037315982721054", animated: false },
+    { name: "Animated", id: "1570037315982721055", animated: true },
+  ];
+  action(s, owner, "profession.save", { ...p, discordEmoji: " :Swordsman: " });
+  assert.equal(p.discordEmoji, "<:Swordsman:1570037315982721054>");
+  action(s, owner, "profession.save", { ...p, discordEmoji: ":Animated:" });
+  assert.equal(p.discordEmoji, "<a:Animated:1570037315982721055>");
+  assert.throws(
+    () =>
+      action(s, owner, "profession.save", {
+        ...p,
+        discordEmoji: ":swordsman:",
+      }),
+    /找不到/,
+  );
+  s.discordEmojis.push({ ...s.discordEmojis[0], id: "1570037315982721056" });
+  assert.throws(
+    () =>
+      action(s, owner, "profession.save", {
+        ...p,
+        discordEmoji: ":Swordsman:",
+      }),
+    /同名/,
+  );
+});
