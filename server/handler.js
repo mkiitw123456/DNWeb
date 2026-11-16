@@ -1,3 +1,5 @@
+import { waitUntil } from "@vercel/functions";
+import { activityAction, activityView } from "./activities.js";
 import { emojiNamePattern, fetchGuildEmojis } from "./emojis.js";
 import { audit } from "./scheduling.js";
 import { deliverEvents } from "./deliveries.js";
@@ -159,9 +161,24 @@ export default async function handler(req, res) {
         const user = register(s, payload);
         reset(s);
         const eventId = audit(s, user, "register", { username: user.username });
-        return { user, state: publicState(s, user), eventId };
+        return {
+          user,
+          state: publicState(s, user),
+          eventId,
+          members: s.users.map(({ id, username, active }) => ({
+            id,
+            username,
+            active,
+          })),
+        };
       });
-      if (result.eventId) await deliverEvents([result.eventId]);
+      if (result.eventId) {
+        const delivery = deliverEvents([result.eventId]).catch((e) =>
+          console.error("Registration notification failed", e),
+        );
+        if (process.env.VERCEL) waitUntil(delivery);
+      }
+      result.state.activity = await activityView(result.user, result.members);
       cookie(res, result.user);
       return res.status(200).json(result.state);
     }
@@ -180,14 +197,42 @@ export default async function handler(req, res) {
         );
         if (!u || !matches(payload.password, u.password)) return null;
         reset(s);
-        return { user: u, state: publicState(s, u) };
+        return {
+          user: u,
+          state: publicState(s, u),
+          members: s.users.map(({ id, username, active }) => ({
+            id,
+            username,
+            active,
+          })),
+        };
       });
       if (!result) fail("帳號或密碼錯誤", 401);
+      result.state.activity = await activityView(result.user, result.members);
       cookie(res, result.user);
       return res.status(200).json(result.state);
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
+    if (type.startsWith("activity.")) {
+      const auth = await transact((s) => {
+        const user = s.users.find(
+          (x) => x.id === token.id && x.active && x.version === token.version,
+        );
+        if (!user) fail("登入已過期，請重新登入", 401);
+        return {
+          user,
+          users: s.users.map(({ id, username, active }) => ({
+            id,
+            username,
+            active,
+          })),
+        };
+      });
+      const result = await activityAction(auth.user, auth.users, type, payload);
+      cookie(res, auth.user);
+      return res.status(200).json(result);
+    }
     let emojiCatalog = null;
     if (
       type === "profession.save" &&
@@ -212,7 +257,15 @@ export default async function handler(req, res) {
         if (!u) fail("登入已過期，請重新登入", 401);
         reset(s);
         if (type === "state")
-          return { state: publicState(s, u), user: { ...u } };
+          return {
+            state: publicState(s, u),
+            user: { ...u },
+            members: s.users.map(({ id, username, active }) => ({
+              id,
+              username,
+              active,
+            })),
+          };
         const previousEvents = new Set(s.deliveries.map((e) => e.id));
         if (emojiCatalog) s.discordEmojis = emojiCatalog;
         const result = action(s, u, type, payload);
@@ -252,6 +305,8 @@ export default async function handler(req, res) {
         ),
       );
     }
+    if (type === "state" && req.url?.includes("bootstrap=1"))
+      result.state.activity = await activityView(result.user, result.members);
     if (result.user) cookie(res, result.user);
     else
       res.setHeader(

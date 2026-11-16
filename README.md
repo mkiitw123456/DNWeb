@@ -2,6 +2,22 @@
 
 繁體中文公會管理網站，React + Vite 前端、Node API。本機使用 JSON，Vercel 使用 Firebase Firestore。
 
+## 活動大廳（第一階段）
+
+登入或註冊後預設進入「冒險大廳」。提供每日抽籤、快問快答、隨機事件、遊戲暱稱、個人歷史與本週榜單。沿用既有帳號 ID，不以暱稱辨識身分，多角色不會重複領分。
+
+- 活動採 `Asia/Taipei`，每日 00:00 重置參與次數、週一 00:00 開始新週；角色副本仍維持原本週六 09:00 重置。
+- 預設每種活動每日一次、參與 5 分，快問快答答對另加 2 分。可於「冒險大廳 → 活動管理」修改每日上限、分數、開關、名稱、說明、題庫與 Discord 連結。
+- 每筆提交使用唯一識別碼，後端在 transaction 內驗證日期、規則版本、次數與答案；重送同一筆只計分一次。答案不會事先提供給一般成員。
+- 管理員可查詢日期區間、成員摘要、活動次數與明細，匯出 CSV，以及輸入理由調整積分。調整保留操作者、前後分數，不增加參與次數。報表最多 366 天／5,000 筆，超過時明確要求縮小範圍，不截斷匯出。
+- 個人歷史每頁 50 筆；榜單最多顯示 50 位使用中成員。暱稱可重複，但帳號與紀錄獨立。
+- 首次恢復登入合併大廳資料為一個請求，並延後載入角色、管理與排班頁面的程式。網路暫時中斷時提供重試，不要求重新輸入帳密。不要變更正式站的 `SESSION_SECRET`，否則既有 Cookie 將失效。
+- 「出團排班」仍隱藏；`src/App.jsx` 的 `SHOW_RAID_SCHEDULING` 可恢復入口，排班程式與資料保留。現在角色資料僅本人可見，群組功能已停用；下方較早的群組／懸賞說明屬於歷史版本。
+
+活動資料使用同一 Firebase 專案的 `guild_activity` 集合，與既有 `dnweb/state` 分離。包含 `config`、`config/versions/vN`、`member_<id>`、`day_<hash>`、`week_<日期>`、`receipt_<hash>` 文件，明細分別在 `guild_activity/records/ledger` 與 `guild_activity/member_<id>/history` 子集合。所有讀寫透過後端 Admin SDK，前端沒有 Firebase 憑證；歷史查詢僅使用 `createdAt` 的預設單欄位索引。沿用現有 `FIREBASE_SERVICE_ACCOUNT_JSON`，不需要建立新 Firebase 專案或清除資料。首次參與／儲存時自動建立新文件。
+
+本機活動資料另存於 `.local/activities.json`（或 `LOCAL_DATA_DIR`）。備份與移轉時須一起保留活動集合／此檔案；既有帳號整理的 `dnweb/state` 備份不包含活動紀錄。網站不讀取 Discord 訊息，第一階段只提供公會連結；稱號、共同目標及 Discord Bot 互動屬於後續階段。
+
 ## 本機啟動
 
 需要 Node.js 22.12 以上。

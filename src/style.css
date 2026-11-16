@@ -1,6 +1,12 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap");
 :root {
-  font-family: "Inter", "Noto Sans TC", sans-serif;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    "Microsoft JhengHei",
+    "Noto Sans TC",
+    sans-serif;
   color: #ececf2;
   background: #14151a;
   font-synthesis: none;

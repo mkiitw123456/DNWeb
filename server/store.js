@@ -3,7 +3,7 @@ import { initialState } from "./domain.js";
 import { randomUUID } from "node:crypto";
 let queue = Promise.resolve(),
   db;
-async function firestore() {
+export async function firestore() {
   if (!db) {
     const { initializeApp, cert, getApps } = await import("firebase-admin/app");
     const { getFirestore } = await import("firebase-admin/firestore");
@@ -25,10 +25,11 @@ export async function transact(fn, { backup = false } = {}) {
       const snap = await tx.get(ref);
       const state = snap.exists ? snap.data() : initialState();
       const original = backup ? structuredClone(state) : null;
+      const before = JSON.stringify(state);
       const result = await fn(state);
       if (backup)
         tx.create(ref.firestore.doc(`dnweb_backups/${backupId}`), original);
-      tx.set(ref, state);
+      if (!snap.exists || JSON.stringify(state) !== before) tx.set(ref, state);
       return result;
     });
   }

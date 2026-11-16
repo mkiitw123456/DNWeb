@@ -1,19 +1,31 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { apiRequest, initialSession } from "./api.js";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  lazy,
+  Suspense,
+} from "react";
 import {
   CalendarDays,
+  Compass,
   UsersRound,
   Settings,
   LogOut,
   ChevronRight,
 } from "lucide-react";
 import { Button, Field, FormErrorContext, Modal } from "./ui.jsx";
-import Characters from "./Characters.jsx";
-import Admin from "./Admin.jsx";
-import Raids from "./Raids.jsx";
+const Characters = lazy(() => import("./Characters.jsx"));
+const Admin = lazy(() => import("./Admin.jsx"));
+const Raids = lazy(() => import("./Raids.jsx"));
+import Lobby from "./Lobby.jsx";
+// Re-enable this flag to restore the retained raid scheduling page.
+const SHOW_RAID_SCHEDULING = false;
 export default function App() {
   const [data, setData] = useState(null),
     [loading, setLoading] = useState(true),
-    [page, setPage] = useState("characters"),
+    [page, setPage] = useState("lobby"),
     [error, setError] = useState(""),
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false);
@@ -21,41 +33,32 @@ export default function App() {
   const revision = useRef(0);
   const [confirmation, setConfirmation] = useState(null);
   const [registering, setRegistering] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const ask = (message) =>
     new Promise((resolve) => setConfirmation({ message, resolve }));
   const answer = (value) => {
     confirmation.resolve(value);
     setConfirmation(null);
   };
-  const request = useCallback(async (type, payload) => {
-    const response = await fetch(
-      "/api/app",
-      type
-        ? {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type, payload }),
-          }
-        : {},
-    );
-    const result = await response.json();
-    if (!response.ok) {
-      throw Object.assign(new Error(result.error), { status: response.status });
-    }
-    return result;
-  }, []);
+  const request = apiRequest;
   useEffect(() => {
     let live = true;
-    const refresh = () => {
+    const refresh = (initial = false) => {
       if (lock.current) return;
       const current = ++revision.current;
-      request()
+      (initial === true ? initialSession : request())
         .then((d) => {
-          if (live && current === revision.current) setData(d);
+          if (live && current === revision.current) {
+            setData(d);
+            setSessionChecked(true);
+          }
         })
         .catch((e) => {
           if (live && current === revision.current) {
-            if (e.status === 401) setData(null);
+            if (e.status === 401) {
+              setData(null);
+              setSessionChecked(true);
+            }
             if (e.message !== "請先登入") setError(e.message);
           }
         })
@@ -63,7 +66,7 @@ export default function App() {
           if (live) setLoading(false);
         });
     };
-    refresh();
+    refresh(true);
     const timer = setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
     return () => {
@@ -97,8 +100,49 @@ export default function App() {
       setBusy(false);
     }
   }
+  const onUnauthorized = useCallback(() => setData(null), []);
+  const onActivityChange = useCallback((activity) => {
+    // An activity mutation may complete while an older shell refresh is in flight.
+    revision.current++;
+    setData((current) => (current ? { ...current, activity } : current));
+  }, []);
   const shared = { data, mutate, busy, ask };
-  if (loading) return <div className="loading">正在開啟 DNWeb…</div>;
+  if (loading)
+    return (
+      <div className="session-loading">
+        <div className="brand">
+          <span>DN</span>
+          <strong>DNWeb</strong>
+        </div>
+        <h1>冒險大廳</h1>
+        <p>正在安全恢復登入，準備今天的小冒險…</p>
+      </div>
+    );
+  if (!data && !sessionChecked)
+    return (
+      <div className="session-loading">
+        <h1>暫時無法恢復連線</h1>
+        <p>{error || "請檢查網路連線後再試一次。"}</p>
+        <Button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              setData(await request());
+              setSessionChecked(true);
+            } catch (e) {
+              if (e.status === 401) setSessionChecked(true);
+              else setError(e.message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "重新連線中…" : "重新連線"}
+        </Button>
+      </div>
+    );
   if (!data)
     return (
       <main className="login">
@@ -125,7 +169,7 @@ export default function App() {
                   registering ? "註冊成功，已登入" : "登入成功",
                 )
               ) {
-                setPage("characters");
+                setPage("lobby");
                 setRegistering(false);
               }
             }}
@@ -176,8 +220,9 @@ export default function App() {
       </main>
     );
   const nav = [
+    ["lobby", "冒險大廳", Compass],
     ["characters", "角色資訊", UsersRound],
-    ["raids", "出團排班", CalendarDays],
+    ...(SHOW_RAID_SCHEDULING ? [["raids", "出團排班", CalendarDays]] : []),
   ];
   return (
     <FormErrorContext.Provider value={error}>
@@ -220,14 +265,22 @@ export default function App() {
               </div>
               <button
                 aria-label="登出"
+                disabled={busy}
                 onClick={async () => {
+                  if (lock.current) return;
+                  lock.current = true;
+                  revision.current++;
+                  setBusy(true);
                   try {
                     await request("logout");
-                    setPage("characters");
+                    setPage("lobby");
                     setData(null);
                     setError("");
                   } catch (e) {
                     setError(e.message);
+                  } finally {
+                    lock.current = false;
+                    setBusy(false);
                   }
                 }}
               >
@@ -244,13 +297,22 @@ export default function App() {
               <button onClick={() => setError("")}>關閉</button>
             </div>
           )}
-          {page === "characters" ? (
-            <Characters {...shared} />
-          ) : page === "raids" ? (
-            <Raids {...shared} />
-          ) : page === "admin" && data.me.admin ? (
-            <Admin {...shared} />
-          ) : null}
+          <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
+            {page === "lobby" ? (
+              <Lobby
+                data={data}
+                request={request}
+                onUnauthorized={onUnauthorized}
+                onActivityChange={onActivityChange}
+              />
+            ) : page === "characters" ? (
+              <Characters {...shared} />
+            ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
+              <Raids {...shared} />
+            ) : page === "admin" && data.me.admin ? (
+              <Admin {...shared} />
+            ) : null}
+          </Suspense>
         </main>
         {confirmation && (
           <Modal title="確認操作" onClose={() => answer(false)}>
