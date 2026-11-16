@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 export const themeDefaults = {
-  background: "#151819",
-  surface: "#202526",
-  sidebar: "#101314",
-  border: "#3b4546",
-  accent: "#82b3a2",
+  background: "#14151a",
+  surface: "#1b1c23",
+  sidebar: "#101115",
+  border: "#30313c",
+  accent: "#8b7cf8",
   gradient: false,
-  gradientEnd: "#263b3b",
+  gradientEnd: "#29233d",
   angle: 135,
 };
 const presets = {
-  岩灰: themeDefaults,
+  經典紫: themeDefaults,
   深海: {
     ...themeDefaults,
     background: "#101b25",
@@ -68,8 +68,8 @@ export function applyTheme(value) {
     accent: t.accent,
     "accent-soft": t.accent + "20",
     hover: t.accent + "18",
-    text: light(t.background) ? "#202523" : "#edf0ed",
-    muted: light(t.background) ? "#575f59" : "#aab6b0",
+    text: light(t.background) ? "#202523" : "#ececf2",
+    muted: light(t.background) ? "#575f59" : "#a0a2b0",
     "button-text": light(t.accent) ? "#101714" : "#ffffff",
     "page-background": t.gradient
       ? `linear-gradient(${t.angle}deg,${t.background},${t.gradientEnd})`

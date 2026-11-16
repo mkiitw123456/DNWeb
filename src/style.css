@@ -2111,3 +2111,10 @@ legend {
 .raid-calendar + .raid-templates {
   margin-top: 20px;
 }
+
+.brand > .brand-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}

@@ -135,8 +135,14 @@ export default function App() {
     return (
       <div className="session-loading">
         <div className="brand">
-          <span>DN</span>
-          <strong>DNWeb</strong>
+          <img
+            className="brand-logo"
+            src="/ddstar-logo.png"
+            alt="DDStar 公會標誌"
+            width="40"
+            height="40"
+          />
+          <strong>DDStar</strong>
         </div>
         <h1>冒險大廳</h1>
         <p>正在安全恢復登入，準備今天的小冒險…</p>
@@ -171,8 +177,14 @@ export default function App() {
     return (
       <main className="login">
         <div className="login-brand brand">
-          <span>DN</span>
-          <strong>DNWeb</strong>
+          <img
+            className="brand-logo"
+            src="/ddstar-logo.png"
+            alt="DDStar 公會標誌"
+            width="40"
+            height="40"
+          />
+          <strong>DDStar</strong>
         </div>
         <section>
           <h1>{registering ? "建立帳號" : "歡迎回來"}</h1>
@@ -225,7 +237,7 @@ export default function App() {
                   : "登入中…"
                 : registering
                   ? "註冊並登入"
-                  : "登入 DNWeb"}
+                  : "登入 DDStar"}
               <ChevronRight size={18} />
             </Button>
           </form>
@@ -253,8 +265,14 @@ export default function App() {
       <div className="app">
         <aside className="sidebar">
           <div className="brand">
-            <span>DN</span>
-            <strong>DNWeb</strong>
+            <img
+              className="brand-logo"
+              src="/ddstar-logo.png"
+              alt="DDStar 公會標誌"
+              width="40"
+              height="40"
+            />
+            <strong>DDStar</strong>
           </div>
           <nav aria-label="主要導覽">
             {nav.map(([id, label, Icon]) => (
