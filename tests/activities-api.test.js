@@ -105,8 +105,11 @@ test("HTTP submissions ignore spoofed owner and points; concurrent requests rema
     { memberId: admin.body.me.id },
     member.cookie,
   );
-  assert.equal(myHistory.body.rows.length, 1);
-  assert.equal(myHistory.body.rows[0].memberId, member.body.me.id);
+  assert.equal(myHistory.status, 410);
+  assert.equal(
+    (await call("activity.state", {}, member.cookie)).body.member.count,
+    1,
+  );
   assert.equal(
     (
       await call(

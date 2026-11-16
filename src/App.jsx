@@ -1,3 +1,7 @@
+import ThemeSettings, { applyTheme, loadTheme } from "./ThemeSettings.jsx";
+import DiscordSetup from "./DiscordSetup.jsx";
+import GuidedTour from "./GuidedTour.jsx";
+import "./personalization.css";
 import { apiRequest, initialSession } from "./api.js";
 import {
   useState,
@@ -33,6 +37,12 @@ export default function App() {
   const revision = useRef(0);
   const [confirmation, setConfirmation] = useState(null);
   const [registering, setRegistering] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false),
+    [discordOpen, setDiscordOpen] = useState(false),
+    [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    applyTheme(loadTheme(data?.me.id || "guest"));
+  }, [data?.me.id]);
   const [sessionChecked, setSessionChecked] = useState(false);
   const ask = (message) =>
     new Promise((resolve) => setConfirmation({ message, resolve }));
@@ -106,7 +116,21 @@ export default function App() {
     revision.current++;
     setData((current) => (current ? { ...current, activity } : current));
   }, []);
-  const shared = { data, mutate, busy, ask };
+  const shared = {
+    data,
+    mutate,
+    busy,
+    ask,
+    request,
+    onUnauthorized,
+    onActivityChange,
+  };
+  const discordNeeded =
+    data &&
+    !data.me.discordSetupDone &&
+    !data.me.discordId &&
+    !data.me.discordPendingId;
+  const tourNeeded = data && !data.me.tourCompleted;
   if (loading)
     return (
       <div className="session-loading">
@@ -246,6 +270,13 @@ export default function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
+            <div className="personal-preferences" data-tour="preferences">
+              <button onClick={() => setThemeOpen(true)}>外觀設定</button>
+              <button onClick={() => setDiscordOpen(true)}>
+                Discord 身分{data.me.discordPendingId ? " · 待確認" : ""}
+              </button>
+              <button onClick={() => setTourOpen(true)}>新手導覽</button>
+            </div>
             {data.me.admin && (
               <button
                 className={page === "admin" ? "active" : ""}
@@ -297,23 +328,50 @@ export default function App() {
               <button onClick={() => setError("")}>關閉</button>
             </div>
           )}
-          <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
-            {page === "lobby" ? (
-              <Lobby
-                data={data}
-                request={request}
-                onUnauthorized={onUnauthorized}
-                onActivityChange={onActivityChange}
-              />
-            ) : page === "characters" ? (
-              <Characters {...shared} />
-            ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
-              <Raids {...shared} />
-            ) : page === "admin" && data.me.admin ? (
-              <Admin {...shared} />
-            ) : null}
-          </Suspense>
+          <div key={page} className="view-transition">
+            <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
+              {page === "lobby" ? (
+                <Lobby
+                  data={data}
+                  request={request}
+                  onUnauthorized={onUnauthorized}
+                  onActivityChange={onActivityChange}
+                />
+              ) : page === "characters" ? (
+                <Characters {...shared} />
+              ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
+                <Raids {...shared} />
+              ) : page === "admin" && data.me.admin ? (
+                <Admin {...shared} />
+              ) : null}
+            </Suspense>
+          </div>
         </main>
+        {themeOpen && (
+          <ThemeSettings
+            userId={data.me.id}
+            onClose={() => setThemeOpen(false)}
+          />
+        )}
+        {(discordOpen || discordNeeded) && (
+          <DiscordSetup {...shared} onClose={() => setDiscordOpen(false)} />
+        )}
+        {!discordOpen && !discordNeeded && (tourOpen || tourNeeded) && (
+          <GuidedTour
+            setPage={setPage}
+            busy={busy}
+            onFinish={async () => {
+              if (
+                await mutate(
+                  "onboarding.tourComplete",
+                  {},
+                  "可隨時重新開啟導覽",
+                )
+              )
+                setTourOpen(false);
+            }}
+          />
+        )}
         {confirmation && (
           <Modal title="確認操作" onClose={() => answer(false)}>
             <p>{confirmation.message}</p>

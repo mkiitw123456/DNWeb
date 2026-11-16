@@ -1,3 +1,9 @@
+import {
+  cleanupDeploymentTest,
+  drainUserDeletions,
+  compactActivityHistory,
+} from "./activity-maintenance.js";
+import { searchDiscordMembers } from "./discord-members.js";
 import { waitUntil } from "@vercel/functions";
 import { activityAction, activityView } from "./activities.js";
 import { emojiNamePattern, fetchGuildEmojis } from "./emojis.js";
@@ -134,6 +140,12 @@ export async function notify(settlementId) {
     }
   });
 }
+function background(job) {
+  const safe = job.catch((e) =>
+    console.error("Background maintenance failed", e.message),
+  );
+  if (process.env.VERCEL) waitUntil(safe);
+}
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -148,7 +160,22 @@ export default async function handler(req, res) {
       typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const type = req.method === "GET" ? "state" : body.type;
     const payload = body.payload || {};
+    await cleanupDeploymentTest();
     if (type === "logout") {
+      const token = session(req);
+      if (token) {
+        const ids = await transact((s) => {
+          const u = s.users.find(
+            (x) => x.id === token.id && x.active && x.version === token.version,
+          );
+          if (!u) return [];
+          const prior = new Set((s.deliveries || []).map((x) => x.id));
+          audit(s, u, "logout", {});
+          return s.deliveries.filter((x) => !prior.has(x.id)).map((x) => x.id);
+        });
+        background(deliverEvents(ids));
+      }
+
       res.setHeader(
         "Set-Cookie",
         "dn_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
@@ -160,11 +187,16 @@ export default async function handler(req, res) {
       const result = await transact((s) => {
         const user = register(s, payload);
         reset(s);
+        const prior = new Set(s.deliveries.map((x) => x.id));
         const eventId = audit(s, user, "register", { username: user.username });
+        const eventIds = s.deliveries
+          .filter((x) => !prior.has(x.id))
+          .map((x) => x.id);
         return {
           user,
           state: publicState(s, user),
           eventId,
+          eventIds,
           members: s.users.map(({ id, username, active }) => ({
             id,
             username,
@@ -173,7 +205,7 @@ export default async function handler(req, res) {
         };
       });
       if (result.eventId) {
-        const delivery = deliverEvents([result.eventId]).catch((e) =>
+        const delivery = deliverEvents(result.eventIds).catch((e) =>
           console.error("Registration notification failed", e),
         );
         if (process.env.VERCEL) waitUntil(delivery);
@@ -197,7 +229,12 @@ export default async function handler(req, res) {
         );
         if (!u || !matches(payload.password, u.password)) return null;
         reset(s);
+        const prior = new Set(s.deliveries.map((x) => x.id));
+        audit(s, u, "login", {});
         return {
+          eventIds: s.deliveries
+            .filter((x) => !prior.has(x.id))
+            .map((x) => x.id),
           user: u,
           state: publicState(s, u),
           members: s.users.map(({ id, username, active }) => ({
@@ -208,13 +245,18 @@ export default async function handler(req, res) {
         };
       });
       if (!result) fail("帳號或密碼錯誤", 401);
+      background(deliverEvents(result.eventIds || []));
       result.state.activity = await activityView(result.user, result.members);
       cookie(res, result.user);
       return res.status(200).json(result.state);
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
-    if (type.startsWith("activity.")) {
+    if (
+      type.startsWith("activity.") ||
+      type === "discord.members" ||
+      type === "maintenance.retryDeletions"
+    ) {
       const auth = await transact((s) => {
         const user = s.users.find(
           (x) => x.id === token.id && x.active && x.version === token.version,
@@ -229,7 +271,29 @@ export default async function handler(req, res) {
           })),
         };
       });
+      if (type === "maintenance.retryDeletions") {
+        if (!auth.user.admin) fail("僅管理員可操作", 403);
+        await drainUserDeletions();
+        return res.status(200).json({ ok: true });
+      }
+      if (type === "discord.members")
+        return res.status(200).json(await searchDiscordMembers(payload.query));
       const result = await activityAction(auth.user, auth.users, type, payload);
+      if (
+        [
+          "activity.submit",
+          "activity.adjust",
+          "activity.config",
+          "activity.profile",
+        ].includes(type)
+      ) {
+        const ids = await transact((s) => {
+          const prior = new Set((s.deliveries || []).map((x) => x.id));
+          audit(s, auth.user, type, payload);
+          return s.deliveries.filter((x) => !prior.has(x.id)).map((x) => x.id);
+        });
+        background(deliverEvents(ids));
+      }
       cookie(res, auth.user);
       return res.status(200).json(result);
     }
@@ -287,6 +351,9 @@ export default async function handler(req, res) {
       },
       { backup: type === "maintenance.cleanup" },
     );
+    if (type === "user.delete") await drainUserDeletions();
+    if (type === "state")
+      background(Promise.all([drainUserDeletions(), compactActivityHistory()]));
     if (result.eventIds?.length) {
       await deliverEvents(result.eventIds);
       result.state = await transact((s) =>

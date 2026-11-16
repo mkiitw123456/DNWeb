@@ -1,3 +1,4 @@
+import { removeUser } from "./user-deletion.js";
 import { emojiNamePattern } from "./emojis.js";
 import {
   randomUUID,
@@ -71,6 +72,12 @@ export function reset(state, now = Date.now()) {
   state.raids ??= [];
   state.raidTemplates ??= [];
   state.deliveries ??= [];
+  state.deliveries = state.deliveries.filter(
+    (e, i, a) =>
+      i >= a.length - 30 ||
+      (["pending", "sending"].includes(e.status) &&
+        now - e.createdAt < 86400000),
+  );
   state.discordWebhooks ??= {};
   state.professions ??= [];
   state.groups ??= [];
@@ -195,8 +202,14 @@ export function publicState(s, u) {
           }))
       : [],
     canDelegate: isOwner(s, u),
+    adminOwnerId: s.adminOwnerId,
+    discordDirectoryConfigured: !!(
+      process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID
+    ),
+    pendingUserDeletions: u.admin ? (s.pendingUserDeletions || []).length : 0,
     discordSettings: u.admin
       ? {
+          importantConfigured: !!s.discordWebhooks?.important,
           logConfigured: !!s.discordWebhooks?.log,
           raidConfigured: !!s.discordWebhooks?.raid,
         }
@@ -248,6 +261,35 @@ function owned(item, user, field = "ownerId") {
 export function action(s, u, type, p, now = Date.now()) {
   reset(s, now);
   if (type.startsWith("group.")) fail("群組功能已停用", 410);
+  if (type === "user.delete") return removeUser(s, u, p);
+  if (type === "onboarding.tourComplete") {
+    u.tourCompleted = true;
+    return;
+  }
+  if (type === "onboarding.discordSkip") {
+    u.discordSetupDone = true;
+    return;
+  }
+  if (type === "profile.discordRequest") {
+    const discordId = text(p.discordId, "Discord ID", 20);
+    if (!/^\d{17,20}$/.test(discordId)) fail("Discord ID 應為 17–20 位數字");
+    if (s.users.some((x) => x.id !== u.id && x.discordId === discordId))
+      fail("此 Discord ID 已綁定其他帳號");
+    u.discordPendingId = discordId;
+    u.discordSetupDone = true;
+    return;
+  }
+  if (type === "user.discordApprove") {
+    if (!u.admin) fail("僅管理員可操作", 403);
+    const target = s.users.find((x) => x.id === p.id);
+    if (!target?.discordPendingId || target.discordPendingId !== p.discordId)
+      fail("申請已變更，請重新確認", 409);
+    if (s.users.some((x) => x.id !== target.id && x.discordId === p.discordId))
+      fail("此 Discord ID 已被綁定");
+    target.discordId = target.discordPendingId;
+    delete target.discordPendingId;
+    return;
+  }
   if (type === "onboarding.complete") {
     s.users.find((x) => x.id === u.id).onboardingCompleted = true;
     return;

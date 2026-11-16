@@ -62,7 +62,8 @@ export function schedulingAction(s, u, type, p, now) {
     return true;
   }
   if (type === "discordSettings.save") {
-    if (!["log", "raid"].includes(p.channel)) fail("通知類型不正確");
+    if (!["log", "important", "raid"].includes(p.channel))
+      fail("通知類型不正確");
     if (
       typeof p.url !== "string" ||
       (p.url &&
@@ -76,7 +77,8 @@ export function schedulingAction(s, u, type, p, now) {
   }
   if (type === "delivery.retry") {
     const event = s.deliveries.find((x) => x.id === p.id);
-    if (!event || event.channel !== "log") fail("找不到通知紀錄", 404);
+    if (!event || !["log", "important"].includes(event.channel))
+      fail("找不到通知紀錄", 404);
     if (
       !["failed", "unconfigured"].includes(event.status) &&
       !(
@@ -222,13 +224,26 @@ export function queueDelivery(
   // Keep a bounded audit history without removing in-flight notifications.
   s.deliveries = s.deliveries.filter(
     (e, i, a) =>
-      i >= a.length - 100 || ["pending", "sending"].includes(e.status),
+      i >= a.length - 30 ||
+      (["pending", "sending"].includes(e.status) &&
+        now - e.createdAt < 86400000),
   );
   return event.id;
 }
 export function audit(s, u, type, p, now = Date.now()) {
   const labels = {
     register: "建立帳號",
+    login: "登入網站",
+    logout: "登出網站",
+    "user.delete": "刪除帳號",
+    "user.discordApprove": "確認 Discord 身分",
+    "profile.discordRequest": "申請 Discord 綁定",
+    "activity.submit": "參與活動",
+    "activity.adjust": "調整活動積分",
+    "activity.config": "修改活動設定",
+    "activity.profile": "修改遊戲暱稱",
+    "onboarding.tourComplete": "完成新手導覽",
+    "onboarding.discordSkip": "稍後設定 Discord",
     "user.save": p.id ? "修改帳號" : "建立帳號",
     "character.save": p.id ? "修改角色" : "建立角色",
     "character.delete": "刪除角色",
@@ -248,7 +263,16 @@ export function audit(s, u, type, p, now = Date.now()) {
     "settlement.claim": "確認領取",
     "settlement.claimAll": "一次領取",
   };
-  if (!labels[type]) return null;
+  if (
+    [
+      "state",
+      "activity.state",
+      "activity.history",
+      "activity.report",
+      "discord.members",
+    ].includes(type)
+  )
+    return null;
   const name =
     p.name ||
     p.username ||
@@ -256,14 +280,34 @@ export function audit(s, u, type, p, now = Date.now()) {
     s.users.find((x) => x.id === p.id)?.username ||
     s.raids.find((r) => r.id === p.id)?.dungeonName ||
     "";
-  return queueDelivery(
+  const message = {
+    content: `【${labels[type] || type}】${escape(u.username)}${name ? " · " + escape(name) : ""}\n<t:${Math.floor(now / 1000)}:F>`,
+    allowed_mentions: { parse: [] },
+  };
+  const logId = queueDelivery(
     s,
     "log",
-    {
-      content: `【${labels[type]}】${escape(u.username)}${name ? " · " + escape(name) : ""}\n<t:${Math.floor(now / 1000)}:F>`,
-      allowed_mentions: { parse: [] },
-    },
-    {},
+    message,
+    { actorId: u.id, targetId: p.id || "" },
     now,
   );
+  if (
+    type === "register" ||
+    (u.admin &&
+      ![
+        "login",
+        "logout",
+        "activity.submit",
+        "activity.profile",
+        "profile.discordRequest",
+      ].includes(type))
+  )
+    queueDelivery(
+      s,
+      "important",
+      message,
+      { actorId: u.id, targetId: p.id || "" },
+      now,
+    );
+  return logId;
 }

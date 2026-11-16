@@ -12,8 +12,6 @@ import {
   Pencil,
 } from "lucide-react";
 import { Button, Field, Modal } from "./ui.jsx";
-import { lazy, Suspense } from "react";
-const ActivityAdmin = lazy(() => import("./ActivityAdmin.jsx"));
 import "./activities.css";
 const icons = { fortune: Sparkles, quiz: BookOpen, event: Map };
 export const taiwanTime = (n) =>
@@ -38,9 +36,7 @@ export default function Lobby({
     [selected, setSelected] = useState(null),
     [choice, setChoice] = useState(null),
     [result, setResult] = useState(null),
-    [profile, setProfile] = useState(false),
-    [history, setHistory] = useState({ rows: [], next: null }),
-    [historyLoaded, setHistoryLoaded] = useState(false);
+    [profile, setProfile] = useState(false);
   const lock = useRef(false),
     pending = useRef(null);
   const handleError = useCallback(
@@ -95,19 +91,6 @@ export default function Lobby({
       setBusy(false);
     }
   };
-  const loadHistory = async (more = false) => {
-    const r = await perform(
-      "activity.history",
-      more ? { before: history.next } : {},
-    );
-    if (r) {
-      setHistory((h) => ({
-        rows: more ? [...h.rows, ...r.rows] : r.rows,
-        next: r.next,
-      }));
-      setHistoryLoaded(true);
-    }
-  };
   const open = (a) => {
     pending.current = null;
     setError("");
@@ -128,16 +111,14 @@ export default function Lobby({
     if (r) {
       setResult(r);
       pending.current = null;
-      setHistoryLoaded(false);
       refresh().catch(handleError);
     }
   };
   if (!view)
     return (
-      <section className="lobby-loading" aria-busy={!error}>
-        <Compass size={42} />
+      <section className="lobby-loading">
         <h1>冒險大廳</h1>
-        <p>{error || "正在準備今日的冒險…"}</p>
+        <p>{error || "正在讀取活動…"}</p>
         {error && (
           <Button onClick={() => refresh().catch(handleError)}>重新載入</Button>
         )}
@@ -147,22 +128,23 @@ export default function Lobby({
     (a) => a.used >= a.dailyLimit,
   ).length;
   return (
-    <div className="guild-lobby">
+    <div className="guild-lobby compact-lobby">
       <header className="lobby-heading">
         <div>
-          <span className="lobby-eyebrow">GUILD ADVENTURES</span>
           <h1>冒險大廳</h1>
+          <p className="welcome-short">
+            {view.member.nickname || data.me.username}，歡迎回來。
+          </p>
         </div>
         <div className="lobby-date">
           {view.period.day}
-          <span>台灣時間 · 每日 00:00 更新</span>
+          <span>每日 00:00 更新 · 台灣時間</span>
         </div>
       </header>
-      <div className="tabs lobby-tabs">
+      <div className="tabs lobby-tabs" data-tour="lobby-tabs">
         {[
           ["lobby", "活動大廳"],
-          ["history", "我的冒險"],
-          ...(data.me.admin ? [["manage", "活動管理"]] : []),
+          ["summary", "我的冒險"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -171,7 +153,6 @@ export default function Lobby({
             onClick={() => {
               setTab(id);
               setError("");
-              if (id === "history" && !historyLoaded) loadHistory();
             }}
           >
             {label}
@@ -183,268 +164,182 @@ export default function Lobby({
           {error}
         </p>
       )}
-      {tab === "manage" ? (
-        <Suspense fallback={<p>正在開啟活動管理…</p>}>
-          <ActivityAdmin
-            request={request}
-            config={view.adminConfig}
-            users={data.users}
-            refresh={refresh}
-            onUnauthorized={onUnauthorized}
-          />
-        </Suspense>
-      ) : (
-        <>
-          {tab === "lobby" && (
-            <section className="lobby-welcome">
-              <div className="welcome-copy">
-                <span className="lobby-eyebrow">
-                  每一份參與，都讓公會更熱鬧
+      <div className="view-transition" key={tab}>
+        <section
+          className="adventure-stats"
+          data-tour="stats"
+          aria-label="我的活動統計"
+        >
+          <div>
+            <span>本週積分</span>
+            <strong>
+              {view.weekly}
+              <small> 分</small>
+            </strong>
+          </div>
+          <div>
+            <span>累積積分</span>
+            <strong>
+              {view.member.total}
+              <small> 分</small>
+            </strong>
+          </div>
+          <div>
+            <span>總參與次數</span>
+            <strong>
+              {view.member.count}
+              <small> 次</small>
+            </strong>
+          </div>
+          <div>
+            <span>遊戲暱稱</span>
+            <button
+              className="nickname-button"
+              onClick={() => setProfile(true)}
+            >
+              {view.member.nickname || data.me.username}
+              <Pencil size={14} />
+            </button>
+          </div>
+        </section>
+        {tab === "lobby" ? (
+          <div className="lobby-columns">
+            <section id="daily-activities" data-tour="activities">
+              <div className="lobby-section-title">
+                <h2>今日的小冒險</h2>
+                <span>
+                  {completed} / {view.activities.length} 已完成
                 </span>
-                <h2>
-                  嗨，{view.member.nickname || data.me.username}。<br />
-                  今天，也來一場小冒險。
-                </h2>
-                <p>
-                  不用等組隊，不必比裝備。幾分鐘的輕鬆時光，
-                  <br className="desktop-break" />
-                  和夥伴一起留下新的冒險故事。
-                </p>
-                <button
-                  className="welcome-link"
-                  onClick={() =>
-                    document
-                      .getElementById("daily-activities")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                >
-                  探索今日活動 <ArrowRight size={17} />
-                </button>
               </div>
-              <div className="welcome-emblem" aria-hidden="true">
-                <Compass strokeWidth={0.8} />
-                <span>YOUR NEXT ADVENTURE</span>
+              <div className="activity-list">
+                {view.activities.map((a) => {
+                  const Icon = icons[a.type],
+                    done = a.used >= a.dailyLimit;
+                  return (
+                    <article
+                      key={a.id}
+                      className={`activity-card activity-${a.type}`}
+                    >
+                      <div className="activity-icon">
+                        <Icon size={22} />
+                      </div>
+                      <div className="activity-body">
+                        <h3>{a.title}</h3>
+                        <p>{a.description}</p>
+                        <div className="activity-foot">
+                          <span>
+                            {a.duration} · 參與 +{a.points} 分
+                            {a.bonus ? `，答對 +${a.bonus}` : ""}
+                          </span>
+                          <Button
+                            disabled={done || busy}
+                            onClick={() => open(a)}
+                          >
+                            {done ? (
+                              <>
+                                <Check size={15} />
+                                今日已完成
+                              </>
+                            ) : (
+                              <>
+                                開始冒險
+                                <ArrowRight size={15} />
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <small className="activity-remaining">
+                          今日 {a.used} / {a.dailyLimit} 次
+                        </small>
+                      </div>
+                    </article>
+                  );
+                })}
+                {!view.activities.length && (
+                  <p className="muted">目前沒有開放的活動。</p>
+                )}
               </div>
             </section>
-          )}
-          <section className="adventure-stats" aria-label="我的活動統計">
-            <div>
-              <span>本週積分</span>
-              <strong>
-                {view.weekly}
-                <small> 分</small>
-              </strong>
-            </div>
-            <div>
-              <span>累積積分</span>
-              <strong>
-                {view.member.total}
-                <small> 分</small>
-              </strong>
-            </div>
-            <div>
-              <span>總參與次數</span>
-              <strong>
-                {view.member.count}
-                <small> 次</small>
-              </strong>
-            </div>
-            <div>
-              <span>冒險者</span>
-              <button
-                className="nickname-button"
-                onClick={() => setProfile(true)}
-              >
-                {view.member.nickname || data.me.username}
-                <Pencil size={14} />
-              </button>
-              <small>設定遊戲暱稱</small>
-            </div>
-          </section>
-          {tab === "lobby" ? (
-            <div className="lobby-columns">
-              <section id="daily-activities">
-                <div className="lobby-section-title">
-                  <h2>今日的小冒險</h2>
-                  <span>
-                    {completed} / {view.activities.length} 已完成
-                  </span>
-                </div>
-                <div className="activity-list">
-                  {view.activities.map((a) => {
-                    const Icon = icons[a.type];
-                    const done = a.used >= a.dailyLimit;
-                    return (
-                      <article
-                        key={a.id}
-                        className={`activity-card activity-${a.type}`}
-                      >
-                        <div className="activity-icon">
-                          <Icon size={25} />
-                        </div>
-                        <div className="activity-body">
-                          <span className="activity-duration">
-                            {a.duration} · 每日 {a.dailyLimit} 次
-                          </span>
-                          <h3>{a.title}</h3>
-                          <p>{a.description}</p>
-                          <div className="activity-foot">
-                            <span>
-                              參與 +{a.points} 分
-                              {a.bonus > 0 ? ` · 答對再 +${a.bonus} 分` : ""}
-                            </span>
-                            <Button
-                              disabled={done || busy}
-                              onClick={() => open(a)}
-                            >
-                              {done ? (
-                                <>
-                                  <Check size={15} />
-                                  今日已完成
-                                </>
-                              ) : (
-                                <>
-                                  開始冒險 <ArrowRight size={15} />
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                          <small className="activity-remaining">
-                            今日已參與 {a.used} 次
-                          </small>
-                        </div>
-                      </article>
-                    );
-                  })}
-                  {!view.activities.length && (
-                    <p className="muted">活動正在準備中，稍後再回來看看。</p>
-                  )}
-                </div>
-              </section>
-              <aside className="weekly-board">
-                <div className="lobby-section-title">
-                  <h2>
-                    <Trophy size={18} />
-                    本週冒險榜
-                  </h2>
-                </div>
-                <p className="board-subtitle">
-                  從 {view.period.week} 起 · 週一 00:00 換週
-                </p>
-                {view.leaderboard.length ? (
-                  <ol>
-                    {view.leaderboard.map((row) => (
-                      <li
-                        key={row.memberId}
-                        className={row.memberId === data.me.id ? "is-me" : ""}
-                      >
-                        <span className="rank">
-                          {row.rank.toString().padStart(2, "0")}
-                        </span>
-                        <div>
-                          <strong>
-                            {row.name}
-                            {row.memberId === data.me.id ? "（你）" : ""}
-                          </strong>
-                          <small>{row.count} 次參與</small>
-                        </div>
-                        <b>
-                          {row.points}
-                          <small> 分</small>
-                        </b>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <div className="board-empty">
-                    <Trophy size={32} />
-                    <p>本週的故事，等你開場。</p>
-                    <small>完成活動後就會出現在這裡。</small>
-                  </div>
-                )}
-                <p className="board-note">積分是參與的足跡，不是實力的排名。</p>
-              </aside>
-            </div>
-          ) : (
-            <section className="adventure-history">
+            <aside className="weekly-board" data-tour="leaderboard">
               <div className="lobby-section-title">
                 <h2>
-                  <History size={19} />
-                  我的冒險紀錄
+                  <Trophy size={18} />
+                  本週積分
                 </h2>
-                <Button disabled={busy} onClick={() => loadHistory()}>
-                  <RefreshCw size={14} />
-                  更新
-                </Button>
               </div>
-              <p className="muted">
-                完整保留參與與積分調整，換週不會刪除紀錄。
+              <p className="board-subtitle">
+                {view.period.week} 起 · 週一 00:00 換週
               </p>
-              {!historyLoaded ? (
-                <p>正在讀取紀錄…</p>
-              ) : !history.rows.length ? (
-                <p className="history-empty">
-                  還沒有冒險紀錄，從每日抽籤開始吧。
-                </p>
+              {view.leaderboard.length ? (
+                <ol>
+                  {view.leaderboard.map((row) => (
+                    <li
+                      key={row.memberId}
+                      className={row.memberId === data.me.id ? "is-me" : ""}
+                    >
+                      <span className="rank">{row.rank}</span>
+                      <div>
+                        <strong>
+                          {row.name}
+                          {row.memberId === data.me.id ? "（你）" : ""}
+                        </strong>
+                        <small>{row.count} 次參與</small>
+                      </div>
+                      <b>
+                        {row.points}
+                        <small> 分</small>
+                      </b>
+                    </li>
+                  ))}
+                </ol>
               ) : (
-                history.rows.map((r) => (
-                  <article className="history-row" key={r.id}>
-                    <span className="history-dot" />
-                    <div>
-                      <h3>{r.title}</h3>
-                      <p>{r.summary}</p>
-                      {r.resultDetails && (
-                        <details>
-                          <summary>查看結果</summary>
-                          <p className="preserve-lines">{r.resultDetails}</p>
-                        </details>
-                      )}
-                      <small>
-                        {taiwanTime(r.createdAt)} ·{" "}
-                        {r.kind === "adjustment" ? "管理員調整" : "活動參與"} ·
-                        規則 v{r.version}
-                      </small>
-                    </div>
-                    <strong className={r.delta < 0 ? "negative" : ""}>
-                      {r.delta > 0 ? "+" : ""}
-                      {r.delta}
-                    </strong>
-                  </article>
-                ))
+                <p className="muted">本週尚無參與紀錄。</p>
               )}
-              {history.next && (
-                <Button disabled={busy} onClick={() => loadHistory(true)}>
-                  載入更多
-                </Button>
-              )}
-            </section>
-          )}
-          <footer className="activity-notice">
-            <div>
-              <strong>把冒險延續到 Discord</strong>
-              <p>
-                分享今天的趣事，或向夥伴打聲招呼。本站僅記錄網站活動，不讀取
-                Discord 聊天內容。
-              </p>
-            </div>
-            {view.discordUrl ? (
-              <a
-                href={view.discordUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="discord-link"
-              >
-                前往公會 Discord <ArrowRight size={16} />
-              </a>
-            ) : (
-              <small>管理員可在活動管理設定公會連結</small>
-            )}
-          </footer>
-          <p className="activity-privacy">
-            你的暱稱、本週積分與參與次數會顯示於榜單；管理員可查看活動紀錄。積分僅供參考，不是出團或福利資格的唯一標準。
-          </p>
-        </>
-      )}
+              <p className="board-note">積分僅供活動參考。</p>
+            </aside>
+          </div>
+        ) : (
+          <section className="summary-panel">
+            <h2>本週概況</h2>
+            <dl>
+              <div>
+                <dt>本週參與</dt>
+                <dd>{view.weeklyCount} 次</dd>
+              </div>
+              <div>
+                <dt>今天已完成</dt>
+                <dd>
+                  {completed} / {view.activities.length} 項
+                </dd>
+              </div>
+              <div>
+                <dt>最近參與</dt>
+                <dd>
+                  {view.member.lastAt
+                    ? taiwanTime(view.member.lastAt)
+                    : "尚未參與"}
+                </dd>
+              </div>
+            </dl>
+            <p className="muted">
+              僅顯示積分與參與摘要，不再保存一份個人逐筆歷史。累積積分不會因換週而清除。
+            </p>
+          </section>
+        )}
+      </div>
+      <footer className="lobby-footer">
+        <small>成員可看本週榜單；管理員可查最近 35 天的活動明細。</small>
+        {view.discordUrl && (
+          <a
+            className="discord-link"
+            href={view.discordUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            公會 Discord <ArrowRight size={14} />
+          </a>
+        )}
+      </footer>
       {selected && (
         <Modal
           title={selected.title}
@@ -470,7 +365,7 @@ export default function Lobby({
               {result.resultDetails && (
                 <p className="preserve-lines">{result.resultDetails}</p>
               )}
-              <p className="muted">這次冒險已記錄到「我的冒險」。</p>
+              <p className="muted">積分已更新，可在「我的冒險」查看摘要。</p>
               <Button primary onClick={() => setSelected(null)}>
                 完成冒險
               </Button>

@@ -1,0 +1,69 @@
+import { fail, text } from "./domain.js";
+const API = "https://discord.com/api/v10";
+let cache = null,
+  loading = null;
+export async function searchDiscordMembers(
+  query,
+  fetcher = fetch,
+  now = Date.now(),
+) {
+  const q = text(query, "Discord 名稱", 80).toLocaleLowerCase();
+  if (q.length < 2) fail("請至少輸入兩個字元");
+  const token = process.env.DISCORD_BOT_TOKEN,
+    guild = process.env.DISCORD_GUILD_ID;
+  if (!token || !/^\d{17,20}$/.test(guild || ""))
+    fail("尚未設定 Discord 成員搜尋，可先手動填 ID 或稍後設定", 503);
+  if (!cache || cache.guild !== guild || now - cache.at > 300000) {
+    if (!loading)
+      loading = (async () => {
+        const members = [];
+        let after = "0";
+        for (let page = 0; page < 20; page++) {
+          const response = await fetcher(
+            `${API}/guilds/${guild}/members?limit=1000&after=${after}`,
+            {
+              headers: { Authorization: `Bot ${token}` },
+              signal: AbortSignal.timeout(8000),
+            },
+          );
+          if (!response.ok)
+            fail(
+              response.status === 429
+                ? "Discord 忙碌中，請稍後再試"
+                : "無法讀取伺服器成員，請管理員確認 Bot 與 Server Members Intent",
+              503,
+            );
+          const rows = await response.json();
+          if (!Array.isArray(rows)) fail("Discord 回應格式錯誤", 502);
+          members.push(
+            ...rows
+              .filter((m) => m.user && !m.user.bot)
+              .map((m) => ({
+                id: m.user.id,
+                username: m.user.username,
+                displayName: m.nick || m.user.global_name || m.user.username,
+                globalName: m.user.global_name || "",
+              })),
+          );
+          if (rows.length < 1000) {
+            cache = { guild, at: now, members };
+            return;
+          }
+          after = rows.at(-1).user.id;
+        }
+        fail("伺服器成員過多，請先使用手動 ID", 503);
+      })().finally(() => {
+        loading = null;
+      });
+    await loading;
+  }
+  const matches = cache.members.filter((m) =>
+    [m.username, m.displayName, m.globalName].some((n) =>
+      n.toLocaleLowerCase().includes(q),
+    ),
+  );
+  return {
+    members: matches.slice(0, 20).map(({ globalName, ...m }) => m),
+    more: matches.length > 20,
+  };
+}

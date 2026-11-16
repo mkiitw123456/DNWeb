@@ -272,21 +272,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
   )
     fail("僅管理員可操作", 403);
   if (type === "activity.state") return activityView(user, users, now);
-  if (type === "activity.history") {
-    const before =
-      p.before == null
-        ? Number.MAX_SAFE_INTEGER
-        : number(p.before, "分頁時間", Number.MAX_SAFE_INTEGER);
-    const rows = await activityQuery("ledger", {
-      memberId: user.id,
-      before,
-      limit: 51,
-    });
-    return {
-      rows: rows.slice(0, 50),
-      next: rows.length > 50 ? rows[49].createdAt : null,
-    };
-  }
+  if (type === "activity.history") fail("個人明細已停用，請查看積分摘要", 410);
   if (type === "activity.report") {
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(p.from || "") ||
@@ -301,9 +287,9 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
       activityPeriods(from).day !== p.from ||
       activityPeriods(before - 86400000).day !== p.to ||
       before <= from ||
-      before - from > 366 * 86400000
+      before - from > 35 * 86400000
     )
-      fail("日期範圍須介於 1–366 天");
+      fail("日期範圍須介於 1–35 天");
     const rows = await activityQuery("ledger", { from, before, limit: 5001 });
     if (rows.length > 5000) fail("紀錄超過 5,000 筆，請縮小日期範圍");
     const members = await activityTransaction(async (db) =>
@@ -317,147 +303,163 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
     );
     return { rows, members };
   }
-  return activityTransaction(async (db) => {
-    const config = (await db.get("config")) || defaultActivityConfig();
-    if (type === "activity.config") {
-      if (p.version !== config.version)
-        fail("設定已更新，請重新載入後再修改", 409);
-      const next = validateConfig(p, config);
-      db.set("config", next);
-      db.set(`config/versions/v${next.version}`, {
-        ...next,
-        operatorId: user.id,
-        createdAt: now,
-      });
-      if (config.version === 1) db.set("config/versions/v1", config);
-      return { ok: true };
-    }
-    const period = activityPeriods(now);
-    if (type === "activity.profile") {
-      const member =
-        (await db.get(`member_${user.id}`)) || defaultMember(user.id);
-      const nickname = text(p.nickname, "遊戲暱稱", 30);
-      const board = (await db.get(`week_${period.week}`)) || { members: {} };
-      db.set(`member_${user.id}`, { ...member, nickname });
-      if (board.members[user.id]) {
-        board.members[user.id].nickname = nickname;
-        db.set(`week_${period.week}`, board);
+  return activityTransaction(
+    async (db) => {
+      const config = (await db.get("config")) || defaultActivityConfig();
+      if (type === "activity.config") {
+        if (p.version !== config.version)
+          fail("設定已更新，請重新載入後再修改", 409);
+        const next = validateConfig(p, config);
+        db.set("config", next);
+        db.set(`config/versions/v${next.version}`, {
+          ...next,
+          operatorId: user.id,
+          createdAt: now,
+        });
+        if (config.version === 1) db.set("config/versions/v1", config);
+        return { ok: true };
       }
-      return { ok: true };
-    }
-    if (!["activity.submit", "activity.adjust"].includes(type))
-      fail("未知的活動操作", 404);
-    const submissionId = text(p.submissionId, "提交識別碼", 80);
-    if (!/^[a-zA-Z0-9-]{8,80}$/.test(submissionId)) fail("提交識別碼格式錯誤");
-    const receiptKey = `receipt_${keyOf(user.id, submissionId)}`;
-    const existing = await db.get(receiptKey);
-    const fingerprint = keyOf(type, p);
-    if (existing) {
-      if (existing.fingerprint !== fingerprint)
-        fail("同一提交識別碼不可用於不同操作", 409);
-      return existing.result;
-    }
-    const memberId = type === "activity.adjust" ? p.memberId : user.id;
-    if (!users.some((u) => u.id === memberId && u.active))
-      fail("找不到使用中的成員", 404);
-    const [savedMember, savedDay, savedBoard] = await Promise.all([
-      db.get(`member_${memberId}`),
-      db.get(`day_${keyOf(memberId, period.day)}`),
-      db.get(`week_${period.week}`),
-    ]);
-    const member = savedMember || defaultMember(memberId),
-      day = savedDay || { counts: {} },
-      board = savedBoard || { members: {} };
-    let delta,
-      summary,
-      activityId = null,
-      title = "管理員積分調整",
-      resultDetails = "",
-      reason = "",
-      contentId = null;
-    if (type === "activity.adjust") {
-      if (
-        !Number.isSafeInteger(p.delta) ||
-        p.delta === 0 ||
-        Math.abs(p.delta) > 10000
-      )
-        fail("調整積分須為 -10000 至 10000 的非零整數");
-      reason = text(p.reason, "調整原因", 300);
-      delta = p.delta;
-      summary = reason;
-    } else {
-      const a = config.activities.find(
-        (a) => a.id === p.activityId && a.enabled,
-      );
-      if (!a) fail("活動已關閉", 409);
-      if (p.version !== config.version || p.day !== period.day)
-        fail("活動內容或日期已更新，請重新開啟活動", 409);
-      const used = day.counts[a.id] || 0;
-      if (used >= a.dailyLimit) fail("今日已達參與上限，明天再來吧", 409);
-      activityId = a.id;
-      title = a.title;
-      delta = a.points;
-      if (a.type === "fortune")
-        summary = config.fortunes[randomInt(config.fortunes.length)];
-      else {
-        const content = selectContent(config, a, user.id, period.day, used);
-        contentId = content.id;
-        if (p.contentId !== content.id) fail("題目已更新，請重新開啟活動", 409);
-        const choice = number(p.choice, "選項", content.options.length - 1);
-        if (a.type === "quiz") {
-          const correct = choice === content.correct;
-          delta += correct ? a.bonus : 0;
-          summary = correct ? "答對了！" : "謝謝參與，下次再試試！";
-          resultDetails = `${content.question}\n正確答案：${content.options[content.correct]}\n${content.explanation}`;
-        } else {
-          summary = content.options[choice].result;
-          resultDetails = content.title;
+      const period = activityPeriods(now);
+      if (type === "activity.profile") {
+        const member =
+          (await db.get(`member_${user.id}`)) || defaultMember(user.id);
+        const nickname = text(p.nickname, "遊戲暱稱", 30);
+        const board = (await db.get(`week_${period.week}`)) || { members: {} };
+        db.set(`member_${user.id}`, { ...member, nickname });
+        if (board.members[user.id]) {
+          board.members[user.id].nickname = nickname;
+          db.set(`week_${period.week}`, board);
         }
+        return { ok: true };
       }
-      day.counts[a.id] = used + 1;
-    }
-    const previous = member.total;
-    member.total += delta;
-    member.count += type === "activity.submit" ? 1 : 0;
-    if (type === "activity.submit") member.lastAt = now;
-    // Monotonic timestamps ensure stable pagination when requests share a millisecond.
-    const createdAt = Math.max(now, (member.lastRecordAt || 0) + 1);
-    member.lastRecordAt = createdAt;
-    const weekMember = board.members[memberId] || {
-      memberId,
-      nickname: member.nickname,
-      points: 0,
-      count: 0,
-    };
-    weekMember.points += delta;
-    weekMember.count += type === "activity.submit" ? 1 : 0;
-    weekMember.nickname = member.nickname;
-    board.members[memberId] = weekMember;
-    const record = {
-      id: keyOf(user.id, submissionId),
-      memberId,
-      activityId,
-      title,
-      summary,
-      resultDetails,
-      delta,
-      before: previous,
-      after: member.total,
-      createdAt,
-      day: period.day,
-      week: period.week,
-      version: config.version,
-      contentId,
-      kind: type === "activity.submit" ? "participation" : "adjustment",
-      operatorId: user.id,
-      reason,
-    };
-    db.set(`member_${memberId}`, member);
-    db.set(`day_${keyOf(memberId, period.day)}`, day);
-    db.set(`week_${period.week}`, board);
-    db.set(`records/ledger/${record.id}`, record);
-    db.set(`member_${memberId}/history/${record.id}`, record);
-    db.set(receiptKey, { fingerprint, result: record });
-    return record;
-  });
+      if (!["activity.submit", "activity.adjust"].includes(type))
+        fail("未知的活動操作", 404);
+      const submissionId = text(p.submissionId, "提交識別碼", 80);
+      if (!/^[a-zA-Z0-9-]{8,80}$/.test(submissionId))
+        fail("提交識別碼格式錯誤");
+      const receiptKey = `receipt_${keyOf(user.id, submissionId)}`;
+      const existing = await db.get(receiptKey);
+      const fingerprint = keyOf(type, p);
+      if (existing) {
+        if (existing.fingerprint !== fingerprint)
+          fail("同一提交識別碼不可用於不同操作", 409);
+        return existing.result;
+      }
+      const memberId = type === "activity.adjust" ? p.memberId : user.id;
+      if (!users.some((u) => u.id === memberId && u.active))
+        fail("找不到使用中的成員", 404);
+      const [savedMember, savedDay, savedBoard] = await Promise.all([
+        db.get(`member_${memberId}`),
+        db.get(`day_${keyOf(memberId, period.day)}`),
+        db.get(`week_${period.week}`),
+      ]);
+      const member = savedMember || defaultMember(memberId),
+        day = savedDay || { counts: {} },
+        board = savedBoard || { members: {} };
+      let delta,
+        summary,
+        activityId = null,
+        title = "管理員積分調整",
+        resultDetails = "",
+        reason = "",
+        contentId = null;
+      if (type === "activity.adjust") {
+        if (
+          !Number.isSafeInteger(p.delta) ||
+          p.delta === 0 ||
+          Math.abs(p.delta) > 10000
+        )
+          fail("調整積分須為 -10000 至 10000 的非零整數");
+        reason = text(p.reason, "調整原因", 300);
+        delta = p.delta;
+        summary = reason;
+      } else {
+        const a = config.activities.find(
+          (a) => a.id === p.activityId && a.enabled,
+        );
+        if (!a) fail("活動已關閉", 409);
+        if (p.version !== config.version || p.day !== period.day)
+          fail("活動內容或日期已更新，請重新開啟活動", 409);
+        const used = day.counts[a.id] || 0;
+        if (used >= a.dailyLimit) fail("今日已達參與上限，明天再來吧", 409);
+        activityId = a.id;
+        title = a.title;
+        delta = a.points;
+        if (a.type === "fortune")
+          summary = config.fortunes[randomInt(config.fortunes.length)];
+        else {
+          const content = selectContent(config, a, user.id, period.day, used);
+          contentId = content.id;
+          if (p.contentId !== content.id)
+            fail("題目已更新，請重新開啟活動", 409);
+          const choice = number(p.choice, "選項", content.options.length - 1);
+          if (a.type === "quiz") {
+            const correct = choice === content.correct;
+            delta += correct ? a.bonus : 0;
+            summary = correct ? "答對了！" : "謝謝參與，下次再試試！";
+            resultDetails = `${content.question}\n正確答案：${content.options[content.correct]}\n${content.explanation}`;
+          } else {
+            summary = content.options[choice].result;
+            resultDetails = content.title;
+          }
+        }
+        day.counts[a.id] = used + 1;
+      }
+      const previous = member.total;
+      member.total += delta;
+      member.count += type === "activity.submit" ? 1 : 0;
+      if (type === "activity.submit") member.lastAt = now;
+      // Monotonic timestamps ensure stable pagination when requests share a millisecond.
+      const createdAt = Math.max(now, (member.lastRecordAt || 0) + 1);
+      member.lastRecordAt = createdAt;
+      const weekMember = board.members[memberId] || {
+        memberId,
+        nickname: member.nickname,
+        points: 0,
+        count: 0,
+      };
+      weekMember.points += delta;
+      weekMember.count += type === "activity.submit" ? 1 : 0;
+      weekMember.nickname = member.nickname;
+      board.members[memberId] = weekMember;
+      const record = {
+        id: keyOf(user.id, submissionId),
+        memberId,
+        activityId,
+        title,
+        summary,
+        resultDetails,
+        delta,
+        before: previous,
+        after: member.total,
+        createdAt,
+        day: period.day,
+        week: period.week,
+        version: config.version,
+        contentId,
+        kind: type === "activity.submit" ? "participation" : "adjustment",
+        operatorId: user.id,
+        reason,
+      };
+      db.set(`member_${memberId}`, member);
+      db.set(`day_${keyOf(memberId, period.day)}`, {
+        ...day,
+        memberId,
+        expiresAt: now + 35 * 86400000,
+      });
+      db.set(`week_${period.week}`, board);
+      db.set(`records/ledger/${record.id}`, record);
+
+      db.set(receiptKey, {
+        fingerprint,
+        result: record,
+        memberId,
+        ...(type === "activity.submit"
+          ? { expiresAt: now + 35 * 86400000 }
+          : {}),
+      });
+      return record;
+    },
+    { authenticatedUser: user },
+  );
 }

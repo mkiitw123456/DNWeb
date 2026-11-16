@@ -9,20 +9,29 @@ const statuses = {
   obsolete: "排班已變更",
 };
 export default function DiscordSettings({ data, mutate, busy }) {
-  const [urls, setUrls] = useState({ log: "", raid: "" });
+  const [urls, setUrls] = useState({ log: "", important: "", raid: "" });
   return (
     <section className="admin-panel">
       <h2>Discord 通知設定</h2>
       <p className="hint">
-        兩個頻道分開設定。網址僅存於伺服器，不會回傳到瀏覽器。舊交易通知維持原有設定。
+        三個頻道分開設定。網址僅存於伺服器，不會回傳到瀏覽器。舊交易通知維持原有設定。
       </p>
       <div className="discord-settings-grid">
         {[
-          ["log", "Log 紀錄", "新帳號、新角色、排班與其他資料操作紀錄"],
+          [
+            "log",
+            "Log 紀錄",
+            "所有成功的登入、登出、活動與資料變更；不記錄密碼、Webhook 或每次頁面讀取",
+          ],
+          [
+            "important",
+            "重大通知",
+            "新成員註冊及管理員修改資料、權限、活動設定等操作",
+          ],
           [
             "raid",
             "出團通知",
-            "按下卡片「於 DC 通知」時傳送，會標記已綁定 Discord ID 的參與者",
+            "暫時保留設定；排班入口目前隱藏，之後啟用時沿用",
           ],
         ].map(([key, label, description]) => (
           <form
@@ -65,34 +74,33 @@ export default function DiscordSettings({ data, mutate, busy }) {
         成員的 Discord ID 可在「成員帳號」設定；各職業的 Discord
         貼圖可在「職業清單」編輯。
       </p>
-      <h3>最近通知紀錄</h3>
-      {(data.deliveries || []).map((e) => (
-        <div className="delivery-row" key={e.id}>
-          <div>
-            <strong>{e.channel === "raid" ? "出團通知" : "Log"}</strong>
-            <small>{e.summary}</small>
+      <p className="hint">
+        伺服器僅保留最近 30
+        筆通知狀態供失敗重試，不會無限累積；不再顯示逐筆紀錄。
+      </p>
+      {(data.deliveries || [])
+        .filter(
+          (e) =>
+            ["failed", "unconfigured"].includes(e.status) &&
+            ["log", "important"].includes(e.channel),
+        )
+        .slice(-5)
+        .map((e) => (
+          <div className="delivery-row" key={e.id}>
+            <span>
+              {e.channel === "important" ? "重大通知" : "Log"}：
+              {statuses[e.status]}
+            </span>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                mutate("delivery.retry", { id: e.id }, "已重試通知")
+              }
+            >
+              重試失敗通知
+            </Button>
           </div>
-          <span>{statuses[e.status]}</span>
-          {e.channel === "log" &&
-            (["failed", "unconfigured"].includes(e.status) ||
-              (["pending", "sending"].includes(e.status) &&
-                Date.now() - (e.attemptAt || e.createdAt) > 60000)) && (
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  mutate(
-                    "delivery.retry",
-                    { id: e.id },
-                    "已重試，請查看通知狀態",
-                  )
-                }
-              >
-                重試
-              </Button>
-            )}
-        </div>
-      ))}
-      {!data.deliveries?.length && <p className="muted">尚無通知紀錄</p>}
+        ))}
     </section>
   );
 }

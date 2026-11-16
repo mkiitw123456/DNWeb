@@ -12,11 +12,25 @@ function documentPath(key) {
   return `guild_activity/${key}`;
 }
 // Independent documents keep growing activity history out of dnweb/state.
-export async function activityTransaction(fn) {
+export async function activityTransaction(fn, { authenticatedUser } = {}) {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     return db.runTransaction(async (tx) => {
       const writes = [];
+      if (authenticatedUser) {
+        const main = await tx.get(db.doc("dnweb/state"));
+        if (
+          !main
+            .data()
+            ?.users?.some(
+              (u) =>
+                u.id === authenticatedUser.id &&
+                u.active &&
+                u.version === authenticatedUser.version,
+            )
+        )
+          throw Object.assign(new Error("請重新登入"), { status: 401 });
+      }
       const result = await fn({
         get: async (key) =>
           (await tx.get(db.doc(documentPath(key)))).data() ?? null,
@@ -42,6 +56,12 @@ export async function activityTransaction(fn) {
     }
     let dirty = false;
     const result = await fn({
+      entries: () => Object.entries(structuredClone(state)),
+      delete: (key) => {
+        documentPath(key);
+        delete state[key];
+        dirty = true;
+      },
       get: async (key) => {
         documentPath(key);
         return structuredClone(state[key] ?? null);

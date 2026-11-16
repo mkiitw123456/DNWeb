@@ -1,0 +1,424 @@
+/* Personal colors are set on :root and stored per account in this browser only. */
+body {
+  background: var(--page-background, var(--canvas));
+  color: var(--text, #edf0ed);
+  background-attachment: fixed;
+}
+.app .main {
+  background: transparent;
+  color: var(--text);
+}
+.app .sidebar {
+  background: var(--sidebar);
+  color: var(--text);
+}
+.app button.primary,
+dialog button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--button-text, #101714);
+}
+.app .brand > span {
+  background: var(--accent);
+  color: var(--button-text);
+}
+.app .sidebar button.active,
+.app .tabs button.active {
+  color: var(--accent);
+}
+.app .tabs button.active {
+  border-bottom-color: var(--accent);
+}
+.app input,
+.app select,
+.app textarea,
+dialog input,
+dialog select,
+dialog textarea {
+  background: var(--canvas);
+  border-color: var(--border);
+  color: var(--text);
+}
+.app .activity-card,
+.app .weekly-board,
+.app .activity-rule,
+.app .quiz-editor,
+.app .adjustment-form,
+.app .admin-panel,
+dialog {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.app .weekly-board li.is-me,
+.app .activity-options button.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.app .activity-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.app .activity-foot > span,
+.app .rank,
+.app .discord-link {
+  color: var(--accent);
+}
+.app .weekly-board li {
+  border-bottom-color: var(--border);
+}
+.app .nickname-button,
+.app .activity-body h3,
+.app .weekly-board strong,
+.app .weekly-board b {
+  color: var(--text);
+}
+.app .compact-lobby .lobby-heading {
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+.app .compact-lobby .lobby-heading h1 {
+  font-size: 25px;
+  letter-spacing: 0;
+  margin: 0;
+}
+.welcome-short {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.app .compact-lobby .lobby-tabs {
+  margin-bottom: 0;
+}
+.app .compact-lobby .adventure-stats {
+  padding: 18px 0;
+  margin: 0;
+  gap: 0;
+}
+.app .compact-lobby .adventure-stats strong {
+  font-size: 25px;
+}
+.app .compact-lobby .adventure-stats > div {
+  padding: 0 20px;
+}
+.app .compact-lobby .adventure-stats > div:first-child {
+  padding-left: 0;
+}
+.app .compact-lobby .adventure-stats span {
+  margin-bottom: 6px;
+}
+.app .compact-lobby .lobby-columns {
+  margin-top: 22px;
+  gap: 24px;
+}
+.app .compact-lobby .activity-card {
+  padding: 18px 20px;
+  gap: 16px;
+  border-radius: 7px;
+}
+.app .compact-lobby .activity-body h3 {
+  margin-top: 0;
+  font-size: 16px;
+}
+.app .compact-lobby .activity-body p {
+  margin-bottom: 10px;
+}
+.app .compact-lobby .activity-remaining {
+  margin-top: 7px;
+}
+.app .compact-lobby .weekly-board {
+  border-radius: 7px;
+  padding: 20px;
+}
+.lobby-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid var(--border);
+  padding: 18px 0;
+  margin-top: 25px;
+  align-items: center;
+}
+.lobby-footer small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.summary-panel {
+  padding: 24px 0;
+}
+.summary-panel h2 {
+  font-size: 18px;
+}
+.summary-panel dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  padding: 20px 0;
+}
+.summary-panel dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.summary-panel dd {
+  margin: 10px 0;
+  font-size: 20px;
+}
+.summary-panel p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.personal-preferences {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.app .personal-preferences button {
+  font-size: 11px;
+  padding: 6px 8px;
+  min-height: 30px;
+  width: auto;
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+}
+.theme-grid input[type="color"] {
+  width: 100%;
+  height: 40px;
+  padding: 3px;
+  cursor: pointer;
+}
+.theme-presets {
+  display: flex;
+  gap: 10px;
+}
+.theme-grid .field {
+  margin: 0;
+}
+.discord-member-results {
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow-y: auto;
+  margin: 16px 0;
+}
+.discord-member-results button {
+  display: block;
+  text-align: left;
+  width: 100%;
+  padding: 12px;
+}
+.discord-member-results small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.view-transition {
+  animation: page-in 180ms ease-out both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.app button:not(:disabled):active {
+  transform: translateY(1px);
+}
+.tour-dialog[open] {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+  box-shadow: none;
+}
+.tour-dialog::backdrop {
+  background: transparent;
+}
+.tour-shade {
+  position: absolute;
+  inset: 0;
+}
+.tour-highlight {
+  position: fixed;
+  pointer-events: none;
+  background: transparent;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px #000b;
+  z-index: 1;
+  transition:
+    top 0.15s,
+    left 0.15s,
+    width 0.15s,
+    height 0.15s;
+}
+.tour-panel {
+  position: fixed;
+  z-index: 2;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 10px 40px #0005;
+}
+.tour-panel h2 {
+  font-size: 18px;
+  margin: 9px 0;
+}
+.tour-panel > small {
+  font-size: 11px;
+  color: var(--accent);
+}
+.tour-panel p {
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 10px 0 18px;
+}
+.tour-panel .form-actions {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tour-panel button {
+  font-size: 12px;
+  padding: 7px 10px;
+}
+@media (max-width: 760px) {
+  .app .compact-lobby .lobby-heading h1 {
+    font-size: 22px;
+  }
+  .app .compact-lobby .adventure-stats {
+    gap: 16px 0;
+    padding: 16px 0;
+  }
+  .app .compact-lobby .adventure-stats > div:nth-child(3) {
+    padding-left: 0;
+  }
+  .app .compact-lobby .adventure-stats strong {
+    font-size: 22px;
+  }
+  .app .compact-lobby .lobby-columns {
+    margin-top: 20px;
+  }
+  .app .compact-lobby .activity-card {
+    padding: 16px 13px;
+    gap: 12px;
+  }
+  .app .compact-lobby .activity-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .app .compact-lobby .activity-body p {
+    font-size: 12px;
+  }
+  .lobby-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .summary-panel dl {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .summary-panel dd {
+    font-size: 18px;
+  }
+  .app .sidebar .personal-preferences {
+    display: flex;
+    position: static;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    gap: 0;
+  }
+  .app .personal-preferences button {
+    font-size: 10px;
+    padding: 4px 6px;
+    min-height: 25px;
+  }
+  .app .sidebar-bottom {
+    flex-wrap: wrap;
+  }
+  .app .admin-row {
+    flex-wrap: wrap;
+  }
+  .app .admin-row > div {
+    min-width: 100px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-transition {
+    animation: none;
+  }
+  .tour-highlight {
+    transition: none;
+  }
+  .app button {
+    transition: none;
+    transform: none !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+.tour-dialog::backdrop {
+  backdrop-filter: none;
+}
+@media (max-width: 700px) {
+  .app .sidebar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .app .sidebar .brand {
+    grid-row: 1;
+    grid-column: 1;
+    min-width: 0;
+  }
+  .app .sidebar .brand > span {
+    flex-shrink: 0;
+  }
+  .app .sidebar .sidebar-bottom {
+    display: contents;
+  }
+  .app .sidebar .user {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: end;
+  }
+  .app .sidebar .personal-preferences {
+    grid-row: 3;
+    grid-column: 1/-1;
+    padding-right: 40px;
+    gap: 5px;
+  }
+  .app .sidebar .sidebar-bottom > button {
+    grid-row: 3;
+    grid-column: 2;
+    justify-self: end;
+    margin: 0;
+  }
+  .app .sidebar .personal-preferences button {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+}

@@ -15,8 +15,7 @@ export default function Characters({ data, mutate, busy, ask }) {
   const [editing, setEditing] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const characters = data.characters.filter((c) => c.ownerId === data.me.id);
-  const showGuide =
-    guideOpen || (!characters.length && !data.me.onboardingCompleted);
+  const showGuide = guideOpen;
   const add = () =>
     setEditing({
       name: "",

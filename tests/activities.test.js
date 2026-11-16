@@ -114,15 +114,11 @@ test("parallel different submission IDs cannot bypass daily limits; other member
     now,
   );
   assert.equal(otherResult.delta, 5);
-  const history = await activityAction(
-    member,
-    users,
-    "activity.history",
-    {},
-    now,
+  await assert.rejects(
+    () => activityAction(member, users, "activity.history", {}, now),
+    { status: 410 },
   );
-  assert.ok(history.rows.every((x) => x.memberId === member.id));
-  assert.equal(history.rows.length, 2);
+  assert.equal((await view(member)).member.count, 2);
 });
 test("quiz is scored by server, returns explanation after submission, and rejects stale days", async () => {
   const p = await payload("quiz");

@@ -378,8 +378,9 @@ export default function ActivityAdmin({
         <>
           <h2>網站活動參與報表</h2>
           <p className="muted">
-            這份報表只包含網站活動，不代表完整的遊戲或 Discord 貢獻。最多查詢
-            366 天、5,000 筆紀錄。
+            明細保留 35
+            天，累積積分永久保留。這份報表只包含網站活動，不代表完整的遊戲或
+            Discord 貢獻。最多查詢 366 天、5,000 筆紀錄。
           </p>
           <form
             className="report-filters"
