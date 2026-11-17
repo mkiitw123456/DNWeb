@@ -88,7 +88,12 @@ export default function ActivityAdmin({
     }));
   };
   const save = async () => {
-    const r = await run("activity.config", draft);
+    const r = await run("activity.config", {
+      ...draft,
+      quizCategories: (draft.quizCategories ?? allCategories).filter((c) =>
+        allCategories.includes(c),
+      ),
+    });
     if (r) {
       try {
         const v = await refresh();
@@ -165,8 +170,8 @@ export default function ActivityAdmin({
                 </Button>
               </div>
               <p className="muted">
-                台灣時間每日 00:00 重置，週一 00:00 換週。規則版本 v
-                {draft.version}
+                一般活動每日 00:00、快問快答每日 09:00 重置；活動週榜於週一
+                00:00 換週。規則版本 v{draft.version}
                 ；歷史積分不會隨設定變動。
               </p>
               <div className="activity-rule-grid">
@@ -337,6 +342,34 @@ export default function ActivityAdmin({
               </div>
               <p className="muted">
                 可維護 1–100 題；答案與解析只會在成員提交後回傳。
+              </p>
+              <fieldset className="quiz-categories quiz-availability">
+                <legend>每日出題的開放分類</legend>
+                {allCategories.map((c) => (
+                  <label key={c}>
+                    <input
+                      type="checkbox"
+                      checked={(draft.quizCategories ?? allCategories).includes(
+                        c,
+                      )}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          quizCategories: e.target.checked
+                            ? [...(d.quizCategories ?? allCategories), c]
+                            : (d.quizCategories ?? allCategories).filter(
+                                (x) => x !== c,
+                              ),
+                        }))
+                      }
+                    />
+                    {c || "未分類"}
+                  </label>
+                ))}
+              </fieldset>
+              <p className="muted">
+                儲存後，所有人每天從勾選的分類隨機出題；台灣時間每日 09:00
+                更新題目與答題次數，分數繼續累積。同一日重新整理不會換題。以下篩選僅影響管理畫面。
               </p>
               <fieldset className="quiz-categories">
                 <legend>篩選分類（未勾選時顯示全部）</legend>

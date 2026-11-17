@@ -29,7 +29,7 @@ const steps = [
     page: "lobby",
     target: '[data-tour="preferences"]',
     title: "調成自己喜歡的樣子",
-    text: "外觀設定可以調整背景、按鈕、外框與漸層，配色只保存在這台瀏覽器。也可隨時重看這份導覽。",
+    text: "點「設定」可調整外觀、設定 Discord 身分或重新開啟導覽。配色只保存在這台瀏覽器。",
   },
 ];
 export default function GuidedTour({ setPage, onFinish, busy }) {

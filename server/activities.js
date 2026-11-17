@@ -7,6 +7,12 @@ export function activityPeriods(now = Date.now()) {
   shifted.setUTCDate(shifted.getUTCDate() - ((shifted.getUTCDay() + 6) % 7));
   return { day, week: shifted.toISOString().slice(0, 10) };
 }
+export function quizPeriods(now = Date.now()) {
+  return {
+    ...activityPeriods(now),
+    day: activityPeriods(now - 9 * 3600000).day,
+  };
+}
 export const defaultActivityConfig = () => ({
   version: 1,
   discordUrl: "",
@@ -147,7 +153,15 @@ async function ensureQuizStats(db, member, now) {
   return member;
 }
 function selectContent(config, activity, memberId, day, used) {
-  const list = activity.type === "quiz" ? config.questions : config.events;
+  const list =
+    activity.type === "quiz"
+      ? config.questions.filter(
+          (q) =>
+            !config.quizCategories ||
+            config.quizCategories.includes(q.category),
+        )
+      : config.events;
+  if (!list.length) fail("目前沒有開放的快問快答題目，請聯絡管理員", 409);
   return list[
     parseInt(
       keyOf(memberId, activity.id, day, used, config.version).slice(0, 8),
@@ -157,7 +171,13 @@ function selectContent(config, activity, memberId, day, used) {
 }
 function visibleActivity(config, a, memberId, period, dayCounts) {
   const used = dayCounts[a.id] || 0;
-  const result = { ...a, used, version: config.version };
+  const result = {
+    ...a,
+    used,
+    version: config.version,
+    day: period.day,
+    resetHour: a.type === "quiz" ? 9 : 0,
+  };
   if (a.type === "fortune")
     result.content = {
       intro: config.fortuneIntro || defaultActivityConfig().fortuneIntro,
@@ -186,12 +206,14 @@ export async function activityView(user, users, now = Date.now()) {
   const period = activityPeriods(now);
   return activityTransaction(
     async (db) => {
-      const [storedConfig, storedMember, today, board] = await Promise.all([
-        db.get("config"),
-        db.get(`member_${user.id}`),
-        db.get(`day_${keyOf(user.id, period.day)}`),
-        db.get(`week_${period.week}`),
-      ]);
+      const [storedConfig, storedMember, today, board, quizToday] =
+        await Promise.all([
+          db.get("config"),
+          db.get(`member_${user.id}`),
+          db.get(`day_${keyOf(user.id, period.day)}`),
+          db.get(`week_${period.week}`),
+          db.get(`day_${keyOf(user.id, quizPeriods(now).day)}`),
+        ]);
       const config = storedConfig || defaultActivityConfig();
       const member = await ensureQuizStats(
         db,
@@ -216,7 +238,13 @@ export async function activityView(user, users, now = Date.now()) {
         activities: config.activities
           .filter((x) => x.enabled)
           .map((a) =>
-            visibleActivity(config, a, user.id, period, today?.counts || {}),
+            visibleActivity(
+              config,
+              a,
+              user.id,
+              a.type === "quiz" ? quizPeriods(now) : period,
+              (a.type === "quiz" ? quizToday : today)?.counts || {},
+            ),
           ),
         discordUrl: config.discordUrl,
         leaderboard: rows.slice(0, 50).map((x, i) => ({
@@ -271,6 +299,16 @@ function validateConfig(input, previous) {
       category: text(q.category, "分類", 40),
     };
   });
+  const availableCategories = [...new Set(questions.map((q) => q.category))];
+  const selectedCategories =
+    input.quizCategories ?? previous.quizCategories ?? availableCategories;
+  if (
+    !Array.isArray(selectedCategories) ||
+    !selectedCategories.length ||
+    selectedCategories.some((c) => !availableCategories.includes(c))
+  )
+    fail("請至少選擇一個有題目的開放分類；刪除或更名分類後請重新選擇");
+  const quizCategories = [...new Set(selectedCategories)];
   const discordUrl =
     typeof input.discordUrl === "string" ? input.discordUrl.trim() : "";
   if (
@@ -285,6 +323,7 @@ function validateConfig(input, previous) {
     fail("籤文需要 1–100 則");
   return {
     ...previous,
+    quizCategories,
     fortunes: fortunes.map((x) => text(x, "籤文結果", 500)),
     fortuneIntro: text(
       input.fortuneIntro ??
@@ -388,7 +427,13 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         if (config.version === 1) db.set("config/versions/v1", config);
         return { ok: true };
       }
-      const period = activityPeriods(now);
+      const period =
+        type === "activity.submit" &&
+        config.activities.some(
+          (a) => a.id === p.activityId && a.type === "quiz",
+        )
+          ? quizPeriods(now)
+          : activityPeriods(now);
       if (type === "activity.profile") {
         const member =
           (await db.get(`member_${user.id}`)) || defaultMember(user.id);

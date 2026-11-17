@@ -1,3 +1,5 @@
+import StarLoading from "./StarLoading.jsx";
+import SettingsPanel from "./SettingsPanel.jsx";
 import ThemeSettings, { applyTheme, loadTheme } from "./ThemeSettings.jsx";
 import DiscordSetup from "./DiscordSetup.jsx";
 import GuidedTour from "./GuidedTour.jsx";
@@ -16,6 +18,7 @@ import {
   Compass,
   UsersRound,
   Settings,
+  ShieldCheck,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -131,27 +134,7 @@ export default function App() {
     !data.me.discordId &&
     !data.me.discordPendingId;
   const tourNeeded = data && !data.me.tourCompleted;
-  if (loading)
-    return (
-      <div
-        className="session-loading startup-splash"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="brand">
-          <img
-            className="brand-logo"
-            src="/ddstar-logo-blue.png"
-            alt="DDStar 公會標誌"
-            width="40"
-            height="40"
-          />
-          <strong>DDStar</strong>
-        </div>
-        <h1>冒險大廳</h1>
-        <p>正在安全恢復登入，準備今天的小冒險…</p>
-      </div>
-    );
+  if (loading) return <StarLoading />;
   if (!data && !sessionChecked)
     return (
       <div className="session-loading">
@@ -179,11 +162,21 @@ export default function App() {
     );
   if (!data)
     return (
-      <main className="login session-enter">
+      <main className="login session-enter" aria-busy={busy}>
+        {busy && (
+          <StarLoading
+            overlay
+            message={
+              registering
+                ? "正在建立你的冒險者帳號…"
+                : "正在登入，星光為你引路…"
+            }
+          />
+        )}
         <div className="login-brand brand">
           <img
             className="brand-logo"
-            src="/ddstar-logo-blue.png"
+            src="/ddstar-logo-blue-v2.png"
             alt="DDStar 公會標誌"
             width="40"
             height="40"
@@ -271,7 +264,7 @@ export default function App() {
           <div className="brand">
             <img
               className="brand-logo"
-              src="/ddstar-logo-blue.png"
+              src="/ddstar-logo-blue-v2.png"
               alt="DDStar 公會標誌"
               width="40"
               height="40"
@@ -293,11 +286,14 @@ export default function App() {
           </nav>
           <div className="sidebar-bottom">
             <div className="personal-preferences" data-tour="preferences">
-              <button onClick={() => setThemeOpen(true)}>外觀設定</button>
-              <button onClick={() => setDiscordOpen(true)}>
-                Discord 身分{data.me.discordPendingId ? " · 待確認" : ""}
+              <button
+                className={page === "settings" ? "active" : ""}
+                aria-current={page === "settings" ? "page" : undefined}
+                onClick={() => setPage("settings")}
+              >
+                <Settings size={19} />
+                設定
               </button>
-              <button onClick={() => setTourOpen(true)}>新手導覽</button>
             </div>
             {data.me.admin && (
               <button
@@ -306,7 +302,7 @@ export default function App() {
                 aria-label="管理後台"
                 onClick={() => setPage("admin")}
               >
-                <Settings size={19} strokeWidth={1.7} />
+                <ShieldCheck size={19} strokeWidth={1.7} />
                 管理後台
               </button>
             )}
@@ -358,6 +354,13 @@ export default function App() {
                   request={request}
                   onUnauthorized={onUnauthorized}
                   onActivityChange={onActivityChange}
+                />
+              ) : page === "settings" ? (
+                <SettingsPanel
+                  me={data.me}
+                  onTheme={() => setThemeOpen(true)}
+                  onDiscord={() => setDiscordOpen(true)}
+                  onTour={() => setTourOpen(true)}
                 />
               ) : page === "characters" ? (
                 <Characters {...shared} />

@@ -103,7 +103,7 @@ export default function Lobby({
       pending.current = {
         submissionId: crypto.randomUUID(),
         activityId: selected.id,
-        day: view.period.day,
+        day: selected.day || view.period.day,
         version: selected.version,
         ...(selected.content ? { contentId: selected.content.id, choice } : {}),
       };
@@ -138,7 +138,7 @@ export default function Lobby({
         </div>
         <div className="lobby-date">
           {view.period.day}
-          <span>每日 00:00 更新 · 台灣時間</span>
+          <span>一般活動 00:00 · 快問快答 09:00 更新（台灣時間）</span>
         </div>
       </header>
       <div className="tabs lobby-tabs" data-tour="lobby-tabs">
@@ -249,7 +249,8 @@ export default function Lobby({
                           </Button>
                         </div>
                         <small className="activity-remaining">
-                          今日 {a.used} / {a.dailyLimit} 次
+                          本日 {a.used} / {a.dailyLimit} 次 ·{" "}
+                          {a.type === "quiz" ? "每日 09:00" : "每日 00:00"} 更新
                         </small>
                       </div>
                     </article>
