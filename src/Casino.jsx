@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { wheelProgress } from "./wheel-motion.js";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 import { notify } from "./FeedbackHost.jsx";
 import "./casino.css";
@@ -18,7 +19,7 @@ const colors = [
   "#a26062",
   "#6c7c42",
 ];
-function Wheel({ room, now }) {
+const Wheel = memo(function Wheel({ room, clockOffset, onComplete }) {
   const ref = useRef();
   const members =
     room.status === "drawn"
@@ -33,29 +34,57 @@ function Wheel({ room, now }) {
         )
         .join(",")
     : "var(--surface), var(--surface)";
+  const winner = members.findIndex((e) => e.userId === room.winnerId);
+  const {
+    turns,
+    duration,
+    offset: landing,
+    acceleration,
+    cruise = 0.12,
+    startsAt: animationStart,
+  } = room.spin || {};
   useEffect(() => {
-    if (!room.spin || !ref.current) return;
-    const winner = members.findIndex((e) => e.userId === room.winnerId);
-    const total =
-      room.spin.turns * 360 + 360 - ((winner + room.spin.offset) * 360) / count;
-    const offset = now - Date.now();
+    if (!duration || !ref.current || count === 0 || winner < 0) return;
+    const element = ref.current;
+    const total = turns * 360 + 360 - ((winner + landing) * 360) / count;
+    // Capture server alignment once. Polling and system-clock corrections must
+    // never seek or restart an animation already in progress.
+    const elapsedAtStart =
+      Date.now() + clockOffset.current - (animationStart ?? room.settledAt);
+    const start = performance.now();
     let frame;
-    function animate() {
+    element.classList.add("is-spinning");
+    function animate(timestamp) {
       const t = Math.max(
         0,
-        Math.min(
-          1,
-          (Date.now() + offset - room.settledAt) / room.spin.duration,
-        ),
+        Math.min(1, (elapsedAtStart + timestamp - start) / duration),
       );
-      const a = room.spin.acceleration;
-      const progress = t < a ? (t * t) / a : 1 - (1 - t) ** 2 / (1 - a);
-      ref.current.style.transform = `rotate(${total * progress}deg)`;
+      element.style.transform = `rotate(${total * wheelProgress(t, acceleration, cruise)}deg)`;
       if (t < 1) frame = requestAnimationFrame(animate);
+      else {
+        element.classList.remove("is-spinning");
+        onComplete(room.id + ":" + room.settledAt);
+      }
     }
-    animate();
-    return () => cancelAnimationFrame(frame);
-  }, [room.id, room.settledAt, room.winnerId, now, count]);
+    animate(start);
+    return () => {
+      cancelAnimationFrame(frame);
+      element.classList.remove("is-spinning");
+    };
+  }, [
+    room.id,
+    room.settledAt,
+    winner,
+    count,
+    turns,
+    duration,
+    landing,
+    acceleration,
+    cruise,
+    animationStart,
+    clockOffset,
+    onComplete,
+  ]);
   return (
     <div
       className="prize-wheel-wrap"
@@ -92,7 +121,7 @@ function Wheel({ room, now }) {
       </span>
     </div>
   );
-}
+});
 export default function Casino({ me, request, onUnauthorized }) {
   const [tab, setTab] = useState("pool"),
     [state, setState] = useState(null),
@@ -103,6 +132,7 @@ export default function Casino({ me, request, onUnauthorized }) {
   const [title, setTitle] = useState(""),
     [startsAt, setStartsAt] = useState("");
   const [clock, setClock] = useState(Date.now());
+  const [completedDraw, setCompletedDraw] = useState(null);
   const offset = useRef(0),
     sequence = useRef(0),
     lock = useRef(false);
@@ -174,14 +204,15 @@ export default function Casino({ me, request, onUnauthorized }) {
   const now = clock + offset.current;
   const rooms = state?.rooms || [],
     room = rooms.find((r) => r.id === selected);
-  const drawing = room?.spin && now < room.settledAt + room.spin.duration;
+  const drawing =
+    room?.spin && completedDraw !== room.id + ":" + room.settledAt;
   const ownEntry = room?.entries.find((e) => e.userId === me.id);
   const status = (r) =>
     r.status === "open"
       ? "開放報名"
       : r.status === "cancelled"
         ? "已取消"
-        : now < r.settledAt + r.spin.duration
+        : now < (r.spin.startsAt ?? r.settledAt) + r.spin.duration
           ? "開獎中"
           : "已結算";
   if (!linked)
@@ -248,7 +279,8 @@ export default function Casino({ me, request, onUnauthorized }) {
                 tab === "history"
                   ? r.status !== "open"
                   : r.status === "open" ||
-                    (r.spin && now < r.settledAt + r.spin.duration),
+                    (r.spin &&
+                      now < (r.spin.startsAt ?? r.settledAt) + r.spin.duration),
               )
               .map((r) => (
                 <article className="prize-card" key={r.id}>
@@ -271,7 +303,8 @@ export default function Casino({ me, request, onUnauthorized }) {
               tab === "history"
                 ? r.status !== "open"
                 : r.status === "open" ||
-                  (r.spin && now < r.settledAt + r.spin.duration),
+                  (r.spin &&
+                    now < (r.spin.startsAt ?? r.settledAt) + r.spin.duration),
             ) && (
               <p className="muted">
                 目前沒有{tab === "history" ? "歷史紀錄" : "開放中的獎池"}。
@@ -335,12 +368,18 @@ export default function Casino({ me, request, onUnauthorized }) {
           ) : (
             <div className="prize-room">
               <div>
-                <Wheel room={room} now={now} />
+                <Wheel
+                  room={room}
+                  clockOffset={offset}
+                  onComplete={setCompletedDraw}
+                />
                 <p className="prize-result" role="status">
                   {room.status === "cancelled"
                     ? "沒有合格參加者，抽獎取消"
                     : drawing
-                      ? "開獎中…"
+                      ? now < (room.spin.startsAt ?? room.settledAt)
+                        ? "準備開獎…"
+                        : "開獎中…"
                       : room.winnerId
                         ? `得獎者：${room.eligible.find((e) => e.userId === room.winnerId)?.name}`
                         : now >= room.startsAt

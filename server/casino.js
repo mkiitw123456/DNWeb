@@ -33,14 +33,16 @@ export function settleCasino(s, now = Date.now()) {
     if (r.status === "drawn") {
       r.winnerId = r.eligible[randomInt(r.eligible.length)].userId;
       r.spin = {
+        startsAt: now + 3000,
         turns: randomInt(7, 13),
         duration: randomInt(8500, 12501),
         acceleration: randomInt(18, 30) / 100,
+        cruise: randomInt(8, 17) / 100,
         offset: randomInt(25, 76) / 100,
       };
       const winner = s.users.find((u) => u.id === r.winnerId);
       // Send the result after the shared animation has finished.
-      r.notifyAt = now + r.spin.duration;
+      r.notifyAt = r.spin.startsAt + r.spin.duration;
       r.resultMention = winner.discordId;
     } else {
       notice(

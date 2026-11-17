@@ -143,3 +143,7 @@ dialog:has(.prize-room) {
   background: #fff;
   box-shadow: 0 0 10px #ffffff70;
 }
+
+.prize-wheel.is-spinning {
+  will-change: transform;
+}
