@@ -1,3 +1,4 @@
+import { useFeedback } from "./FeedbackHost.jsx";
 import { useEffect, useState } from "react";
 import { Button, Field } from "./ui.jsx";
 export default function QuizScores({ request, onUnauthorized }) {
@@ -5,6 +6,7 @@ export default function QuizScores({ request, onUnauthorized }) {
     [query, setQuery] = useState(""),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0);
+  useFeedback(error);
   useEffect(() => {
     let live = true;
     setError("");

@@ -1,3 +1,4 @@
+import { notify, useFeedback } from "./FeedbackHost.jsx";
 import StarLoading from "./StarLoading.jsx";
 import SettingsPanel from "./SettingsPanel.jsx";
 import ThemeSettings, { applyTheme, loadTheme } from "./ThemeSettings.jsx";
@@ -34,7 +35,6 @@ export default function App() {
     [loading, setLoading] = useState(true),
     [page, setPage] = useState("lobby"),
     [error, setError] = useState(""),
-    [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const revision = useRef(0);
@@ -88,12 +88,7 @@ export default function App() {
       window.removeEventListener("focus", refresh);
     };
   }, [request]);
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(""), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+  useFeedback(error);
   async function mutate(type, payload, message = "已儲存") {
     if (lock.current) return false;
     lock.current = true;
@@ -102,7 +97,7 @@ export default function App() {
     setError("");
     try {
       setData(await request(type, payload));
-      setToast(message);
+      notify(message);
       return true;
     } catch (e) {
       if (e.status === 401) setData(null);
@@ -340,12 +335,6 @@ export default function App() {
           </div>
         </aside>
         <main className="main">
-          {error && (
-            <div className="error banner" role="alert">
-              {error}
-              <button onClick={() => setError("")}>關閉</button>
-            </div>
-          )}
           <div key={page} className="view-transition">
             <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
               {page === "lobby" ? (
@@ -407,11 +396,6 @@ export default function App() {
               </Button>
             </div>
           </Modal>
-        )}
-        {toast && (
-          <div className="toast" role="status">
-            {toast}
-          </div>
         )}
       </div>
     </FormErrorContext.Provider>

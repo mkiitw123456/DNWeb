@@ -1,3 +1,5 @@
+import ActivityCalendar from "./ActivityCalendar.jsx";
+import { useFeedback } from "./FeedbackHost.jsx";
 import QuizScores from "./QuizScores.jsx";
 import { useState, useRef } from "react";
 import { Plus, Trash2, Download, Save } from "lucide-react";
@@ -45,6 +47,7 @@ export default function ActivityAdmin({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
+  useFeedback(error, notice);
   const lock = useRef(false),
     adjustment = useRef(null);
   async function run(type, payload) {
@@ -98,7 +101,7 @@ export default function ActivityAdmin({
       try {
         const v = await refresh();
         setDraft(structuredClone(v.adminConfig));
-        setNotice("活動規則與題庫已儲存，新提交會使用新版設定。");
+        setNotice("活動設定與日曆已儲存，新提交會使用新版設定。");
       } catch (e) {
         setError(e.message);
       }
@@ -125,6 +128,7 @@ export default function ActivityAdmin({
             ]
           : [
               ["rules", "活動規則與抽籤"],
+              ["calendar", "活動日曆"],
               ["reports", "參與報表與積分調整"],
             ]
         ).map(([id, label]) => (
@@ -151,7 +155,14 @@ export default function ActivityAdmin({
           {notice}
         </p>
       )}
-      {tab === "scores" ? (
+      {tab === "calendar" ? (
+        <ActivityCalendar
+          config={draft}
+          busy={busy}
+          onSave={save}
+          onChange={(schedule) => setDraft((d) => ({ ...d, schedule }))}
+        />
+      ) : tab === "scores" ? (
         <QuizScores request={request} onUnauthorized={onUnauthorized} />
       ) : tab !== "reports" ? (
         <form
@@ -274,7 +285,13 @@ export default function ActivityAdmin({
                   type="button"
                   disabled={draft.fortunes.length >= 100}
                   onClick={() =>
-                    setDraft({ ...draft, fortunes: [...draft.fortunes, ""] })
+                    setDraft({
+                      ...draft,
+                      fortunes: [
+                        ...draft.fortunes,
+                        { id: crypto.randomUUID(), title: "", body: "" },
+                      ],
+                    })
                   }
                 >
                   新增籤文
@@ -283,19 +300,35 @@ export default function ActivityAdmin({
               {draft.fortunes.map((f, i) => (
                 <section className="fortune-editor" key={i}>
                   <Field
-                    label={`籤文 ${i + 1}`}
+                    label={`籤文 ${i + 1} 標題`}
                     required
-                    maxLength={500}
-                    value={f}
+                    maxLength={120}
+                    value={f.title}
                     onChange={(e) =>
                       setDraft({
                         ...draft,
                         fortunes: draft.fortunes.map((v, n) =>
-                          n === i ? e.target.value : v,
+                          n === i ? { ...v, title: e.target.value } : v,
                         ),
                       })
                     }
                   />
+                  <Field label={`籤文 ${i + 1} 內文`}>
+                    <textarea
+                      required
+                      maxLength={500}
+                      rows={3}
+                      value={f.body}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          fortunes: draft.fortunes.map((v, n) =>
+                            n === i ? { ...v, body: e.target.value } : v,
+                          ),
+                        })
+                      }
+                    />
+                  </Field>
                   <Button
                     type="button"
                     disabled={draft.fortunes.length <= 1}
@@ -326,6 +359,7 @@ export default function ActivityAdmin({
                       questions: [
                         ...draft.questions,
                         {
+                          id: crypto.randomUUID(),
                           question: "",
                           options: ["", ""],
                           correct: 0,

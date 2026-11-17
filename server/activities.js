@@ -1,4 +1,4 @@
-import { randomInt, createHash } from "node:crypto";
+import { randomInt, randomUUID, createHash } from "node:crypto";
 import { fail, text, number } from "./domain.js";
 import { activityTransaction, activityQuery } from "./activity-store.js";
 export function activityPeriods(now = Date.now()) {
@@ -56,10 +56,23 @@ export const defaultActivityConfig = () => ({
   fortuneIntro: "今天，會遇見什麼好事？",
   fortuneBody: "輕輕抽一張籤，帶著好心情出發。",
   fortunes: [
-    "今日的幸運來自分享。到 Discord 分享一件讓你開心的小事吧！",
-    "旅途中最好的寶藏是夥伴。向一位公會成員打聲招呼吧！",
-    "慢慢前進也算前進。今天給自己一點休息的時間。",
+    {
+      id: "f1",
+      title: "分享帶來好運",
+      body: "今日的幸運來自分享。到 Discord 分享一件讓你開心的小事吧！",
+    },
+    {
+      id: "f2",
+      title: "旅途中的寶藏",
+      body: "旅途中最好的寶藏是夥伴。向一位公會成員打聲招呼吧！",
+    },
+    {
+      id: "f3",
+      title: "慢慢前進",
+      body: "慢慢前進也算前進。今天給自己一點休息的時間。",
+    },
   ],
+  schedule: {},
   questions: [
     {
       id: "q1",
@@ -130,6 +143,63 @@ export const defaultActivityConfig = () => ({
     },
   ],
 });
+export function normalizeActivityConfig(config) {
+  return {
+    ...config,
+    schedule: config.schedule || {},
+    fortunes: config.fortunes.map((f, i) =>
+      typeof f === "string"
+        ? { id: `legacy-f${i}`, title: `冒險籤 ${i + 1}`, body: f }
+        : f,
+    ),
+  };
+}
+function contentId(id) {
+  if (id === undefined) return randomUUID();
+  if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(id))
+    fail("內容識別碼格式錯誤");
+  return id;
+}
+function uniqueIds(list) {
+  if (new Set(list.map((x) => x.id)).size !== list.length)
+    fail("內容識別碼重複，請重新載入");
+  return list;
+}
+function validateSchedule(schedule, pools) {
+  if (
+    !schedule ||
+    typeof schedule !== "object" ||
+    Array.isArray(schedule) ||
+    Object.keys(schedule).length > 730
+  )
+    fail("日曆最多可安排 730 個日期");
+  const out = {};
+  for (const [day, entry] of Object.entries(schedule)) {
+    const date = Date.parse(`${day}T12:00:00+08:00`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+      !Number.isFinite(date) ||
+      activityPeriods(date).day !== day
+    )
+      fail("日曆日期無效");
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      Object.keys(entry).some((k) => !Object.hasOwn(pools, k))
+    )
+      fail("日曆活動設定無效");
+    const selected = {};
+    for (const [kind, id] of Object.entries(entry)) {
+      if (id === "" || id === null) continue;
+      if (!pools[kind].some((x) => x.id === id))
+        fail(`${day} 指定的內容已移除，請先取消或更換日曆安排`);
+      selected[kind] = id;
+    }
+    if (Object.keys(selected).length) out[day] = selected;
+  }
+  return out;
+}
 const keyOf = (...parts) =>
   createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 const defaultMember = (id) => ({
@@ -155,14 +225,27 @@ async function ensureQuizStats(db, member, now) {
   return member;
 }
 function selectContent(config, activity, memberId, day, used) {
+  const pool =
+    activity.type === "quiz"
+      ? config.questions
+      : activity.type === "fortune"
+        ? config.fortunes
+        : config.events;
+  const assigned = config.schedule?.[day]?.[activity.id];
+  if (assigned) {
+    const selected = pool.find((x) => x.id === assigned);
+    if (!selected) fail("當日安排已失效，請管理員重新設定", 409);
+    return selected;
+  }
   const list =
     activity.type === "quiz"
-      ? config.questions.filter(
+      ? pool.filter(
           (q) =>
             !config.quizCategories ||
             config.quizCategories.includes(q.category),
         )
-      : config.events;
+      : pool;
+  if (activity.type === "fortune") return list[randomInt(list.length)];
   if (!list.length) fail("目前沒有開放的快問快答題目，請聯絡管理員", 409);
   return list[
     parseInt(
@@ -214,7 +297,9 @@ export async function activityView(user, users, now = Date.now()) {
         db.get(`day_${keyOf(user.id, dailyActivityPeriods(now).day)}`),
         db.get(`week_${period.week}`),
       ]);
-      const config = storedConfig || defaultActivityConfig();
+      const config = normalizeActivityConfig(
+        storedConfig || defaultActivityConfig(),
+      );
       const member = await ensureQuizStats(
         db,
         storedMember || defaultMember(user.id),
@@ -291,7 +376,7 @@ function validateConfig(input, previous) {
     )
       fail("題目需要 2–6 個選項");
     return {
-      id: `q${i}`,
+      id: contentId(q.id),
       question: text(q.question, "題目", 300),
       options: q.options.map((x) => text(x, "選項", 120)),
       correct: number(q.correct, "正確選項", q.options.length - 1),
@@ -299,6 +384,7 @@ function validateConfig(input, previous) {
       category: text(q.category, "分類", 40),
     };
   });
+  uniqueIds(questions);
   const availableCategories = [...new Set(questions.map((q) => q.category))];
   const selectedCategories =
     input.quizCategories ?? previous.quizCategories ?? availableCategories;
@@ -318,13 +404,34 @@ function validateConfig(input, previous) {
     )
   )
     fail("請填寫有效的 Discord 邀請或頻道連結");
-  const fortunes = input.fortunes ?? previous.fortunes;
-  if (!Array.isArray(fortunes) || fortunes.length < 1 || fortunes.length > 100)
+  const rawFortunes = input.fortunes ?? previous.fortunes;
+  if (
+    !Array.isArray(rawFortunes) ||
+    rawFortunes.length < 1 ||
+    rawFortunes.length > 100
+  )
     fail("籤文需要 1–100 則");
+  const fortunes = uniqueIds(
+    rawFortunes.map((f, i) => {
+      if (typeof f === "string") f = { title: `冒險籤 ${i + 1}`, body: f };
+      if (!f || typeof f !== "object") fail("請填寫籤文標題與內文");
+      return {
+        id: contentId(f.id),
+        title: text(f.title, "籤文標題", 120),
+        body: text(f.body, "籤文內文", 500),
+      };
+    }),
+  );
+  const schedule = validateSchedule(input.schedule ?? previous.schedule ?? {}, {
+    fortune: fortunes,
+    quiz: questions,
+    event: previous.events,
+  });
   return {
     ...previous,
     quizCategories,
-    fortunes: fortunes.map((x) => text(x, "籤文結果", 500)),
+    fortunes,
+    schedule,
     fortuneIntro: text(
       input.fortuneIntro ??
         previous.fortuneIntro ??
@@ -413,7 +520,9 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
   }
   return activityTransaction(
     async (db) => {
-      const config = (await db.get("config")) || defaultActivityConfig();
+      const config = normalizeActivityConfig(
+        (await db.get("config")) || defaultActivityConfig(),
+      );
       if (type === "activity.config") {
         if (p.version !== config.version)
           fail("設定已更新，請重新載入後再修改", 409);
@@ -501,9 +610,12 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         activityId = a.id;
         title = a.title;
         delta = a.points;
-        if (a.type === "fortune")
-          summary = config.fortunes[randomInt(config.fortunes.length)];
-        else {
+        if (a.type === "fortune") {
+          const fortune = selectContent(config, a, user.id, period.day, used);
+          summary = fortune.title;
+          resultDetails = fortune.body;
+          contentId = fortune.id;
+        } else {
           const content = selectContent(config, a, user.id, period.day, used);
           contentId = content.id;
           if (p.contentId !== content.id)

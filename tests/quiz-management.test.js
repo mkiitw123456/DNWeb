@@ -21,7 +21,7 @@ test("fortune editing validates results and changes actual published introductio
     c = structuredClone(v.adminConfig);
   c.fortuneIntro = "今日星光";
   c.fortuneBody = "抽出你的祝福";
-  c.fortunes = ["唯一的結果"];
+  c.fortunes = [{ title: "今日祝福", body: "唯一的結果" }];
   delete c.questions[0].difficulty;
   await activityAction(admin, users, "activity.config", c, now);
   const state = await activityView(member, users, now),
@@ -41,7 +41,8 @@ test("fortune editing validates results and changes actual published introductio
     },
     now,
   );
-  assert.equal(r.summary, "唯一的結果");
+  assert.equal(r.summary, "今日祝福");
+  assert.equal(r.resultDetails, "唯一的結果");
   const current = (await activityView(admin, users, now)).adminConfig;
   await assert.rejects(() =>
     activityAction(

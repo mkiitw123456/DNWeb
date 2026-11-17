@@ -1,3 +1,4 @@
+import { notify } from "./FeedbackHost.jsx";
 import { useEffect, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 export const themeDefaults = {
@@ -171,8 +172,10 @@ export default function ThemeSettings({ userId, onClose }) {
                 JSON.stringify(theme),
               );
               setMessage("配色已儲存在這台瀏覽器。");
+              notify("配色已儲存在這台瀏覽器。");
             } catch {
               setMessage("瀏覽器不允許儲存，配色僅在本次使用生效。");
+              notify("瀏覽器不允許儲存，配色僅在本次使用生效。", "error");
             }
           }}
         >

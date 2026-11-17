@@ -1,3 +1,4 @@
+import { useFeedback } from "./FeedbackHost.jsx";
 import { useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
@@ -6,6 +7,7 @@ export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
     [selected, setSelected] = useState(null),
     [error, setError] = useState(""),
     [searching, setSearching] = useState(false);
+  useFeedback(error);
   return (
     <Modal
       title="設定 Discord 身分"

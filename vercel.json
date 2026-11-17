@@ -3,7 +3,26 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/app.js": { "maxDuration": 30 },
-    "api/discord.js": { "maxDuration": 30 }
-  }
+    "api/app.js": {
+      "maxDuration": 30
+    },
+    "api/discord.js": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/version.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ]
 }

@@ -1,3 +1,4 @@
+import { notify, useFeedback } from "./FeedbackHost.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Compass,
@@ -37,6 +38,7 @@ export default function Lobby({
     [choice, setChoice] = useState(null),
     [result, setResult] = useState(null),
     [profile, setProfile] = useState(false);
+  useFeedback(error);
   const lock = useRef(false),
     pending = useRef(null);
   const handleError = useCallback(
@@ -444,6 +446,7 @@ export default function Lobby({
                 nickname: new FormData(e.currentTarget).get("nickname"),
               });
               if (r) {
+                notify("遊戲暱稱已儲存");
                 setProfile(false);
                 refresh().catch(handleError);
               }

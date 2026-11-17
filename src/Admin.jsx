@@ -1,3 +1,4 @@
+import { useFeedback } from "./FeedbackHost.jsx";
 import ActivityAdmin from "./ActivityAdmin.jsx";
 import { useState, useEffect, useCallback } from "react";
 import { Plus, SquarePen, Trash2 } from "lucide-react";
@@ -23,6 +24,7 @@ export default function Admin({
 }) {
   const [activity, setActivity] = useState(data.activity || null),
     [activityError, setActivityError] = useState("");
+  useFeedback(activityError);
   const [deleting, setDeleting] = useState(null),
     [deleteName, setDeleteName] = useState("");
   const refreshActivity = useCallback(async () => {
