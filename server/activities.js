@@ -7,12 +7,14 @@ export function activityPeriods(now = Date.now()) {
   shifted.setUTCDate(shifted.getUTCDate() - ((shifted.getUTCDay() + 6) % 7));
   return { day, week: shifted.toISOString().slice(0, 10) };
 }
-export function quizPeriods(now = Date.now()) {
+export function dailyActivityPeriods(now = Date.now()) {
   return {
     ...activityPeriods(now),
     day: activityPeriods(now - 9 * 3600000).day,
   };
 }
+// Compatibility for callers that previously used the quiz-specific schedule.
+export const quizPeriods = dailyActivityPeriods;
 export const defaultActivityConfig = () => ({
   version: 1,
   discordUrl: "",
@@ -176,7 +178,7 @@ function visibleActivity(config, a, memberId, period, dayCounts) {
     used,
     version: config.version,
     day: period.day,
-    resetHour: a.type === "quiz" ? 9 : 0,
+    resetHour: 9,
   };
   if (a.type === "fortune")
     result.content = {
@@ -206,14 +208,12 @@ export async function activityView(user, users, now = Date.now()) {
   const period = activityPeriods(now);
   return activityTransaction(
     async (db) => {
-      const [storedConfig, storedMember, today, board, quizToday] =
-        await Promise.all([
-          db.get("config"),
-          db.get(`member_${user.id}`),
-          db.get(`day_${keyOf(user.id, period.day)}`),
-          db.get(`week_${period.week}`),
-          db.get(`day_${keyOf(user.id, quizPeriods(now).day)}`),
-        ]);
+      const [storedConfig, storedMember, today, board] = await Promise.all([
+        db.get("config"),
+        db.get(`member_${user.id}`),
+        db.get(`day_${keyOf(user.id, dailyActivityPeriods(now).day)}`),
+        db.get(`week_${period.week}`),
+      ]);
       const config = storedConfig || defaultActivityConfig();
       const member = await ensureQuizStats(
         db,
@@ -242,8 +242,8 @@ export async function activityView(user, users, now = Date.now()) {
               config,
               a,
               user.id,
-              a.type === "quiz" ? quizPeriods(now) : period,
-              (a.type === "quiz" ? quizToday : today)?.counts || {},
+              dailyActivityPeriods(now),
+              today?.counts || {},
             ),
           ),
         discordUrl: config.discordUrl,
@@ -428,11 +428,8 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         return { ok: true };
       }
       const period =
-        type === "activity.submit" &&
-        config.activities.some(
-          (a) => a.id === p.activityId && a.type === "quiz",
-        )
-          ? quizPeriods(now)
+        type === "activity.submit"
+          ? dailyActivityPeriods(now)
           : activityPeriods(now);
       if (type === "activity.profile") {
         const member =

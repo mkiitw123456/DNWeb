@@ -87,7 +87,7 @@ test("09:00 resets quiz allowance, midnight does not; stale-day submission is re
     assert.equal(r.activities.find((x) => x.id === "quiz").day, "2026-11-17");
     assert.equal(
       r.activities.find((x) => x.id === "fortune").day,
-      "2026-11-18",
+      "2026-11-17",
     );
   }
   await assert.rejects(
@@ -133,4 +133,62 @@ test("09:00 resets quiz allowance, midnight does not; stale-day submission is re
     (await activityView(member, users, next)).member.quizStats.count,
     2,
   );
+});
+test("all games retain daily allowance through midnight and reopen at 09:00", async () => {
+  const player = { id: "all-games", username: "AllGames", active: true };
+  const roster = [...users, player];
+  const start = at("2026-12-01T12:00:00");
+  const view = await activityView(player, roster, start);
+  const submissions = [];
+  for (const a of view.activities) {
+    const p = {
+      submissionId: crypto.randomUUID(),
+      activityId: a.id,
+      version: a.version,
+      day: a.day,
+      ...(a.content?.id ? { contentId: a.content.id, choice: 0 } : {}),
+    };
+    submissions.push(p);
+    await activityAction(player, roster, "activity.submit", p, start);
+  }
+  for (const time of ["2026-12-02T00:00:00", "2026-12-02T08:59:59"]) {
+    const v = await activityView(player, roster, at(time));
+    assert.ok(
+      v.activities.every(
+        (a) => a.used === 1 && a.day === "2026-12-01" && a.resetHour === 9,
+      ),
+    );
+  }
+  const next = at("2026-12-02T09:00:00");
+  const reopened = await activityView(player, roster, next);
+  assert.ok(
+    reopened.activities.every((a) => a.used === 0 && a.day === "2026-12-02"),
+  );
+  for (const p of submissions)
+    await assert.rejects(
+      () =>
+        activityAction(
+          player,
+          roster,
+          "activity.submit",
+          { ...p, submissionId: crypto.randomUUID() },
+          next,
+        ),
+      { status: 409 },
+    );
+  for (const a of reopened.activities)
+    await activityAction(
+      player,
+      roster,
+      "activity.submit",
+      {
+        submissionId: crypto.randomUUID(),
+        activityId: a.id,
+        version: a.version,
+        day: a.day,
+        ...(a.content?.id ? { contentId: a.content.id, choice: 0 } : {}),
+      },
+      next,
+    );
+  assert.equal((await activityView(player, roster, next)).member.count, 6);
 });

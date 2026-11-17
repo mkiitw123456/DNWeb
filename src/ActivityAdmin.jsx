@@ -170,8 +170,8 @@ export default function ActivityAdmin({
                 </Button>
               </div>
               <p className="muted">
-                一般活動每日 00:00、快問快答每日 09:00 重置；活動週榜於週一
-                00:00 換週。規則版本 v{draft.version}
+                所有小遊戲每日 09:00 重置；活動週榜於週一 00:00 換週。規則版本 v
+                {draft.version}
                 ；歷史積分不會隨設定變動。
               </p>
               <div className="activity-rule-grid">

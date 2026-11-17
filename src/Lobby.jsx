@@ -138,7 +138,7 @@ export default function Lobby({
         </div>
         <div className="lobby-date">
           {view.period.day}
-          <span>一般活動 00:00 · 快問快答 09:00 更新（台灣時間）</span>
+          <span>所有小遊戲每日 09:00 更新（台灣時間）</span>
         </div>
       </header>
       <div className="tabs lobby-tabs" data-tour="lobby-tabs">
@@ -249,8 +249,7 @@ export default function Lobby({
                           </Button>
                         </div>
                         <small className="activity-remaining">
-                          本日 {a.used} / {a.dailyLimit} 次 ·{" "}
-                          {a.type === "quiz" ? "每日 09:00" : "每日 00:00"} 更新
+                          本日 {a.used} / {a.dailyLimit} 次 · 每日 09:00 更新
                         </small>
                       </div>
                     </article>

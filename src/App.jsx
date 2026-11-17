@@ -336,7 +336,7 @@ export default function App() {
                 <LogOut size={17} />
               </button>
             </div>
-            <small className="storage">{data.storage} · 台灣時間</small>
+            <small className="storage">edit by MrAirWolf</small>
           </div>
         </aside>
         <main className="main">

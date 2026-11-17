@@ -1,5 +1,6 @@
 import {
   Palette,
+  MessageSquare,
   BookOpen,
   UserRound,
   ChevronRight,
@@ -47,6 +48,19 @@ export default function SettingsPanel({ me, onTheme, onDiscord, onTour }) {
             : "Discord 身分已送出，等待管理員確認"}
         </p>
       )}
+      <a
+        className="settings-option settings-feedback"
+        href="https://discord.com/channels/1552490009414737950/1572082655762325604"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <MessageSquare size={23} />
+        <span>
+          <strong>有任何修改建議請在這留言</strong>
+          <small>前往 Discord 建議留言頻道（開啟新分頁）</small>
+        </span>
+        <ChevronRight size={18} />
+      </a>
     </section>
   );
 }

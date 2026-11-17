@@ -774,3 +774,14 @@ input[type="checkbox"]::after {
     margin: auto;
   }
 }
+.settings-feedback {
+  display: flex;
+  margin-top: 24px;
+  text-decoration: none;
+  color: var(--text);
+  box-sizing: border-box;
+}
+.settings-feedback:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+}
