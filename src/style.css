@@ -11,6 +11,8 @@
   background: #14151a;
   font-synthesis: none;
   color-scheme: dark;
+  --text: #ececf2;
+  --button-text: #ffffff;
   --canvas: #14151a;
   --sidebar: #101115;
   --surface: #1b1c23;
@@ -19,7 +21,7 @@
   --muted: #a0a2b0;
   --accent: #8b7cf8;
   --accent-soft: #8b7cf81a;
-  --gold: #b5aaff;
+  --gold: var(--accent);
   --green: #85d6af;
   --radius: 10px;
 }
@@ -61,24 +63,24 @@ button svg {
 }
 button:hover {
   background: var(--hover);
-  border-color: #4c4d5c;
+  border-color: var(--border);
 }
 button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 button.primary {
-  background: #705bd5;
-  color: #fff;
+  background: var(--accent);
+  color: var(--button-text);
   border-color: var(--accent);
   box-shadow: inset 0 1px #ffffff1a;
 }
 button.primary:hover {
-  background: #715fda;
-  border-color: #a699ff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 :where(button, input, select, textarea):focus-visible {
-  outline: 2px solid #b8aaff;
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 h1,
@@ -153,7 +155,7 @@ small {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: #705bd5;
+  background: var(--accent);
   box-shadow: inset 0 1px #ffffff33;
   color: #fff;
   font-size: 15px;
@@ -180,17 +182,17 @@ small {
 }
 .sidebar button.active {
   background: var(--accent-soft);
-  color: #b9adff;
-  border-color: #8b7cf815;
+  color: var(--accent);
+  border-color: var(--accent-soft);
 }
 .sidebar nav button:hover,
 .sidebar-bottom > button:hover {
-  color: #ececf2;
+  color: var(--text);
   background: #ffffff06;
 }
 .sidebar button.active:hover {
-  background: #8b7cf827;
-  color: #c6bcff;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -228,10 +230,10 @@ small {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #2c2e3a;
-  border: 1px solid #3a3c4a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 50%;
-  color: #c2c4d4;
+  color: var(--muted);
 }
 .avatar {
   width: 36px;
@@ -311,9 +313,9 @@ small {
   overflow-wrap: anywhere;
 }
 .member-filters button.selected {
-  color: #c6bcff;
+  color: var(--accent);
   background: var(--accent-soft);
-  border-color: #786ad0;
+  border-color: var(--accent);
 }
 .filter-divider {
   width: 1px;
@@ -374,7 +376,7 @@ small {
   transition: background 0.15s;
 }
 .compact-character:hover {
-  background: #1e1f27;
+  background: var(--surface);
 }
 .compact-character-header {
   display: flex;
@@ -401,7 +403,7 @@ small {
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #b5b6c5;
+  color: var(--muted);
   max-width: 100px;
   overflow-wrap: anywhere;
 }
@@ -476,7 +478,7 @@ small {
   width: 32px;
 }
 .compact-run > span {
-  color: #b4b6c4;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -493,8 +495,8 @@ small {
   padding: 2px;
   text-align: center;
   font-size: 12px;
-  background: #24252e;
-  border-color: #3a3b49;
+  background: var(--surface);
+  border-color: var(--border);
   border-radius: 4px;
   appearance: textfield;
 }
@@ -544,8 +546,8 @@ small {
   font-size: 12px;
 }
 .scope-filter button.active {
-  background: #705bd5;
-  color: #fff;
+  background: var(--accent);
+  color: var(--button-text);
 }
 .tabs {
   display: flex;
@@ -563,12 +565,12 @@ small {
   white-space: nowrap;
 }
 .tabs button.active {
-  color: #ececf2;
+  color: var(--text);
   box-shadow: inset 0 -2px var(--accent);
 }
 .tabs span {
   font-size: 10px;
-  background: #2a2b36;
+  background: var(--surface);
   border-radius: 5px;
   padding: 2px 6px;
 }
@@ -594,9 +596,9 @@ small {
   flex-shrink: 0;
   width: 44px;
   height: 44px;
-  border: 1px solid #8b7cf833;
+  border: 1px solid var(--accent-soft);
   border-radius: 10px;
-  color: #b5aaff;
+  color: var(--accent);
   background: var(--accent-soft);
 }
 .item-info {
@@ -640,7 +642,7 @@ small {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 12px !important;
-  color: #b7b9c6 !important;
+  color: var(--muted) !important;
   margin: 12px 0 0 !important;
   line-height: 1.7;
 }
@@ -656,9 +658,9 @@ small {
   gap: 18px;
   padding: 22px 24px;
   margin-bottom: 24px;
-  border: 1px solid #51476e;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: #1d1b29;
+  background: var(--accent-soft);
 }
 .claim-summary-icon {
   display: grid;
@@ -666,7 +668,7 @@ small {
   width: 46px;
   height: 46px;
   flex-shrink: 0;
-  border: 1px solid #8b7cf833;
+  border: 1px solid var(--accent-soft);
   border-radius: 10px;
   color: var(--gold);
   background: var(--accent-soft);
@@ -677,7 +679,7 @@ small {
 }
 .claim-summary-amount > span,
 .bulk-claim-total > span {
-  color: #beb9d1;
+  color: var(--muted);
   font-size: 12px;
 }
 .claim-summary-amount > strong,
@@ -741,7 +743,7 @@ small {
 }
 .status {
   font-size: 12px;
-  color: #c3c0d9;
+  color: var(--muted);
   background: #ffffff04;
   border: 1px solid var(--border);
   padding: 6px 10px;
@@ -771,7 +773,7 @@ small {
 .settlement-numbers strong {
   display: block;
   font-size: 22px;
-  color: #ececf2;
+  color: var(--text);
   font-weight: 550;
   font-variant-numeric: tabular-nums;
   margin-top: 7px;
@@ -919,8 +921,8 @@ small {
 input,
 select,
 textarea {
-  background: #17181e;
-  border: 1px solid #3e404e;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: inherit;
   padding: 10px 12px;
@@ -935,7 +937,7 @@ textarea {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #757786;
+  color: var(--muted);
 }
 input[type="checkbox"] {
   appearance: none;
@@ -944,8 +946,8 @@ input[type="checkbox"] {
   border-radius: 20px;
   position: relative;
   padding: 0;
-  background: #3b3d49;
-  border: 1px solid #4c4e5d;
+  background: var(--surface);
+  border: 1px solid var(--border);
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s;
@@ -957,13 +959,13 @@ input[type="checkbox"]::after {
   height: 14px;
   left: 2px;
   top: 2px;
-  background: #e8e8ef;
+  background: var(--text);
   border-radius: 50%;
   transition: transform 0.15s;
 }
 input[type="checkbox"]:checked {
-  background: #705bd5;
-  border-color: #9989ff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 input[type="checkbox"]:checked::after {
   transform: translateX(14px);
@@ -976,7 +978,7 @@ input[type="checkbox"]:checked::after {
   min-width: 0;
 }
 .field > span {
-  color: #b9bbc9;
+  color: var(--muted);
 }
 .field input,
 .field select {
@@ -1004,7 +1006,7 @@ input[type="checkbox"]:checked::after {
 dialog {
   background: var(--surface);
   color: inherit;
-  border: 1px solid #3d3e4b;
+  border: 1px solid var(--border);
   border-radius: 12px;
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
@@ -1072,14 +1074,14 @@ legend {
   overflow-wrap: anywhere;
 }
 .participants label.selected {
-  background: #8b7cf807;
-  border-color: #61558f;
+  background: var(--accent-soft);
+  border-color: var(--border);
 }
 .calculation {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  background: #17181f;
+  background: var(--surface);
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -1109,9 +1111,9 @@ legend {
   place-items: center;
   width: 56px;
   height: 56px;
-  background: #8b7cf80c;
-  color: #aaa0d5;
-  border: 1px solid #8b7cf826;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-soft);
   border-radius: 14px;
   margin-bottom: 22px;
 }
@@ -1197,9 +1199,9 @@ legend {
   width: max-content;
   padding: 13px 22px;
   border-radius: 9px;
-  border: 1px solid #5a537e;
-  background: #2b2840;
-  color: #e8e1ff;
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--text);
   box-shadow: 0 8px 32px #0006;
   font-size: 13px;
   z-index: 20;
@@ -1245,7 +1247,7 @@ legend {
     justify-items: stretch;
     text-align: center;
     padding-top: 14px;
-    border-top: 1px solid #51476e;
+    border-top: 1px solid var(--border);
   }
   .sidebar {
     position: static;
@@ -1578,8 +1580,8 @@ legend {
 }
 
 .group-panel {
-  background: var(--panel, #1c1d24);
-  border: 1px solid var(--border, #353642);
+  background: var(--panel, var(--surface));
+  border: 1px solid var(--border, var(--border));
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -1635,7 +1637,7 @@ legend {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  background: #090a10;
+  background: var(--surface);
   color: #fff;
   padding: 6px 10px;
   white-space: nowrap;
@@ -1656,12 +1658,12 @@ legend {
 }
 .profession-picker button {
   padding: 6px;
-  border: 1px solid #454650;
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 .profession-picker button[aria-pressed="true"] {
-  border-color: #a18afa;
-  background: #403168;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .compact-run > div {
   flex-wrap: wrap;
@@ -1685,8 +1687,8 @@ legend {
   gap: 16px;
 }
 .bounty-card {
-  border: 1px solid #353642;
-  background: #1c1d24;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 12px;
   padding: 20px;
   overflow-wrap: anywhere;
@@ -1696,7 +1698,7 @@ legend {
   margin: 14px 0;
 }
 .bounty-category {
-  color: #bca9ff;
+  color: var(--accent);
   font-size: 12px;
 }
 @media (max-width: 600px) {
@@ -1726,15 +1728,15 @@ legend {
   width: 100%;
   height: 200px;
   object-fit: contain;
-  background: #121318;
+  background: var(--surface);
   border-radius: 8px;
 }
 .item-image-placeholder {
   height: 200px;
   display: grid;
   place-items: center;
-  background: #121318;
-  color: #9698aa;
+  background: var(--surface);
+  color: var(--muted);
   border-radius: 8px;
 }
 .item-description {
@@ -1772,23 +1774,23 @@ legend {
   align-items: start;
 }
 .onboarding {
-  border: 1px solid #494063;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 24px;
-  background: linear-gradient(120deg, #252135, #1b1d27);
+  background: linear-gradient(120deg, var(--accent-soft), var(--surface));
 }
 .onboarding-heading h2 {
   margin: 8px 0;
   font-size: 22px;
 }
 .onboarding p {
-  color: #b6b4c4;
+  color: var(--muted);
   line-height: 1.8;
   font-size: 14px;
 }
 .onboarding .eyebrow {
-  color: #b8a0ff;
+  color: var(--accent);
   font-size: 12px;
   letter-spacing: 0.1em;
 }
@@ -1800,7 +1802,7 @@ legend {
   margin: 24px 0;
 }
 .onboarding-steps li::marker {
-  color: #b8a0ff;
+  color: var(--accent);
   font-weight: 700;
 }
 .onboarding-steps strong {
@@ -1830,13 +1832,13 @@ legend {
 }
 .compact-run:not(.completed-runs) > span,
 .compact-run:not(.completed-runs) input {
-  color: #f0f0f5;
+  color: var(--text);
 }
 .raid-calendar {
   padding: 22px;
-  border: 1px solid #32323e;
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: #1b1b25;
+  background: var(--surface);
 }
 .raid-calendar h2 {
   display: flex;
@@ -1850,7 +1852,7 @@ legend {
 }
 .raid-calendar small,
 .raid-card small {
-  color: #aaaaba;
+  color: var(--muted);
 }
 .raid-week {
   display: grid;
@@ -1864,7 +1866,7 @@ legend {
   gap: 9px;
   padding: 16px 4px;
   border-radius: 12px;
-  background: #20202c;
+  background: var(--surface);
 }
 .raid-week strong {
   font-size: 19px;
@@ -1878,7 +1880,7 @@ legend {
   color: #ffadb5;
 }
 .raid-week button.selected {
-  outline: 2px solid #af9aff;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .raid-filters {
@@ -1899,21 +1901,21 @@ legend {
   align-items: start;
 }
 .raid-card {
-  background: #1b1b25;
-  border: 1px solid #32323e;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
 }
 .raid-card header {
   padding: 22px;
-  border-bottom: 1px solid #32323e;
+  border-bottom: 1px solid var(--border);
 }
 .raid-card h2 {
   margin: 10px 0;
   font-size: 22px;
 }
 .raid-date {
-  color: #c1b2ff;
+  color: var(--accent);
   font-size: 14px;
 }
 .raid-slots {
@@ -1926,17 +1928,17 @@ legend {
   align-items: center;
   gap: 12px;
   min-height: 58px;
-  border-bottom: 1px solid #2c2c38;
+  border-bottom: 1px solid var(--border);
 }
 .raid-slots li:last-child {
   border: 0;
 }
 .raid-slots li.is-me {
-  background: #29223e;
+  background: var(--accent-soft);
   border-radius: 8px;
 }
 .slot-number {
-  color: #888798;
+  color: var(--muted);
   min-width: 20px;
   font-variant-numeric: tabular-nums;
 }
@@ -1951,12 +1953,12 @@ legend {
 .raid-editor-slots small {
   display: block;
   font-size: 12px;
-  color: #aaaaba;
+  color: var(--muted);
   margin-top: 4px;
 }
 .raid-card footer {
   padding: 18px 22px;
-  border-top: 1px solid #32323e;
+  border-top: 1px solid var(--border);
   font-size: 12px;
 }
 .raid-actions {
@@ -1972,7 +1974,7 @@ legend {
 }
 .raid-editor-slots > div {
   display: flex;
-  border: 1px solid #353543;
+  border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -1994,7 +1996,7 @@ legend {
   overflow-y: auto;
 }
 .roster-search-group {
-  border: 1px solid #383747;
+  border: 1px solid var(--border);
   border-radius: 10px;
   margin-bottom: 10px;
   overflow: hidden;
@@ -2013,12 +2015,12 @@ legend {
 .roster-account small {
   display: block;
   margin-top: 5px;
-  color: #aaaaba;
+  color: var(--muted);
 }
 .roster-character {
   padding-left: 28px;
-  border-top: 1px solid #383747;
-  background: #282333;
+  border-top: 1px solid var(--border);
+  background: var(--accent-soft);
 }
 .discord-settings-grid {
   display: grid;
@@ -2027,12 +2029,12 @@ legend {
 }
 .discord-settings-grid form {
   padding: 20px;
-  border: 1px solid #383747;
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 .discord-settings-grid p {
   line-height: 1.8;
-  color: #b5b4c1;
+  color: var(--muted);
   font-size: 14px;
 }
 .delivery-row {
@@ -2040,7 +2042,7 @@ legend {
   gap: 14px;
   padding: 14px 0;
   align-items: center;
-  border-bottom: 1px solid #383747;
+  border-bottom: 1px solid var(--border);
 }
 .delivery-row > div {
   flex: 1;
@@ -2049,7 +2051,7 @@ legend {
 .delivery-row small {
   display: block;
   overflow-wrap: anywhere;
-  color: #aaaaba;
+  color: var(--muted);
   margin-top: 6px;
 }
 @media (max-width: 720px) {
@@ -2079,8 +2081,8 @@ legend {
 }
 .raid-templates {
   padding: 20px;
-  border: 1px solid #3c3553;
-  background: #211e2d;
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
   border-radius: 14px;
   margin-bottom: 20px;
 }
@@ -2104,7 +2106,7 @@ legend {
 }
 .template-list small {
   display: block;
-  color: #b5b4c1;
+  color: var(--muted);
   margin-top: 6px;
 }
 

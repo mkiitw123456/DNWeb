@@ -16,12 +16,12 @@
 .lobby-eyebrow {
   font-size: 11px;
   letter-spacing: 0.15em;
-  color: #b8abd9;
+  color: var(--accent);
 }
 .lobby-date {
   text-align: right;
   font-size: 14px;
-  color: #d0cbdc;
+  color: var(--muted);
 }
 .lobby-date span {
   display: block;
@@ -39,8 +39,8 @@
   justify-content: space-between;
   min-height: 270px;
   padding: 36px 42px;
-  background: #24222f;
-  border: 1px solid #494055;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -55,7 +55,7 @@
   margin: 13px 0;
 }
 .welcome-copy p {
-  color: #b5afc3;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.9;
   margin-bottom: 20px;
@@ -63,7 +63,7 @@
 .welcome-link {
   padding: 0;
   border: 0;
-  color: #d4bce8;
+  color: var(--accent);
   min-height: 30px;
 }
 .welcome-emblem {
@@ -74,7 +74,7 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  color: #b69bcd;
+  color: var(--accent);
   margin-right: 15px;
 }
 .welcome-emblem svg {
@@ -182,17 +182,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #392e42;
-  color: #d7b5e5;
+  background: var(--accent-soft);
+  color: var(--accent);
   flex-shrink: 0;
 }
 .activity-quiz .activity-icon {
-  color: #9bc9d5;
-  background: #23383f;
+  color: var(--muted);
+  background: var(--surface);
 }
 .activity-event .activity-icon {
-  color: #d7c29a;
-  background: #3a3429;
+  color: var(--muted);
+  background: var(--surface);
 }
 .activity-body {
   flex: 1;
@@ -221,12 +221,12 @@
 }
 .activity-foot > span {
   font-size: 11px;
-  color: #c9b5db;
+  color: var(--accent);
 }
 .activity-foot button {
   font-size: 12px;
   white-space: nowrap;
-  border-color: #524663;
+  border-color: var(--border);
 }
 .activity-remaining {
   display: block;
@@ -236,7 +236,7 @@
 }
 .weekly-board {
   padding: 24px;
-  background: #191a21;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   align-self: start;
@@ -262,17 +262,17 @@
   align-items: center;
   gap: 13px;
   padding: 17px 4px;
-  border-bottom: 1px solid #2d2d38;
+  border-bottom: 1px solid var(--border);
 }
 .weekly-board li.is-me {
-  background: #292534;
+  background: var(--accent-soft);
   border-radius: 6px;
   padding-left: 8px;
   padding-right: 8px;
 }
 .rank {
   font-size: 13px;
-  color: #b6a2d0;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 .weekly-board li > div {
@@ -308,7 +308,7 @@
 .board-empty {
   padding: 35px 0;
   text-align: center;
-  color: #a997c3;
+  color: var(--accent);
 }
 .board-empty p {
   font-size: 12px;
@@ -322,8 +322,8 @@
   justify-content: space-between;
   align-items: center;
   gap: 20px;
-  background: #1e222a;
-  border: 1px solid #353b48;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 22px 25px;
   margin-top: 32px;
@@ -343,7 +343,7 @@
   flex-shrink: 0;
 }
 .discord-link {
-  color: #c7b9ec;
+  color: var(--accent);
   font-size: 12px;
   white-space: nowrap;
   display: flex;
@@ -362,7 +362,7 @@
   padding: 8px 0 16px;
 }
 .activity-play > svg {
-  color: #d5b5e5;
+  color: var(--accent);
   margin: 20px;
 }
 .activity-play h3,
@@ -386,11 +386,11 @@
   padding: 16px;
 }
 .activity-options button.selected {
-  background: #3b3058;
-  border-color: #aa8add;
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 .result-points {
-  color: #c6a5e8;
+  color: var(--accent);
   font-size: 48px;
   padding-top: 20px;
 }
@@ -417,7 +417,7 @@
 }
 .history-row p {
   font-size: 13px;
-  color: #bbb6c6;
+  color: var(--muted);
   line-height: 1.8;
   margin: 8px 0;
 }
@@ -435,7 +435,7 @@
 .history-dot {
   width: 8px;
   height: 8px;
-  background: #ae97cd;
+  background: var(--accent);
   border-radius: 50%;
   margin-top: 6px;
 }
@@ -451,7 +451,7 @@
 .lobby-loading {
   padding: 80px 20px;
   text-align: center;
-  color: #b7a4d0;
+  color: var(--accent);
 }
 .lobby-loading h1 {
   font-size: 25px;
@@ -560,7 +560,7 @@
   background: var(--surface);
 }
 .report-summary b {
-  color: #d0b7ea;
+  color: var(--accent);
   margin-left: 5px;
 }
 .adjustment-form {
@@ -574,7 +574,7 @@
 }
 .guild-lobby button:focus-visible,
 .guild-lobby a:focus-visible {
-  outline: 2px solid #c7ade8;
+  outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
 .session-loading {
@@ -583,7 +583,7 @@
   place-content: center;
   text-align: center;
   gap: 15px;
-  color: #bcb0d5;
+  color: var(--muted);
 }
 .session-loading h1 {
   margin: 0;

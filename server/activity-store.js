@@ -32,6 +32,18 @@ export async function activityTransaction(fn, { authenticatedUser } = {}) {
           throw Object.assign(new Error("請重新登入"), { status: 401 });
       }
       const result = await fn({
+        quizRecords: async (memberId) =>
+          (
+            await tx.get(
+              db
+                .collection("guild_activity/records/ledger")
+                .where("memberId", "==", memberId),
+            )
+          ).docs
+            .map((d) => d.data())
+            .filter(
+              (r) => r.activityId === "quiz" && r.kind === "participation",
+            ),
         get: async (key) =>
           (await tx.get(db.doc(documentPath(key)))).data() ?? null,
         set: (key, value) => writes.push([key, value]),
@@ -57,6 +69,16 @@ export async function activityTransaction(fn, { authenticatedUser } = {}) {
     let dirty = false;
     const result = await fn({
       entries: () => Object.entries(structuredClone(state)),
+      quizRecords: async (memberId) =>
+        Object.entries(state)
+          .filter(
+            ([k, r]) =>
+              k.startsWith("records/ledger/") &&
+              r.memberId === memberId &&
+              r.activityId === "quiz" &&
+              r.kind === "participation",
+          )
+          .map(([, r]) => structuredClone(r)),
       delete: (key) => {
         documentPath(key);
         delete state[key];

@@ -45,6 +45,8 @@ export const defaultActivityConfig = () => ({
       duration: "約 30 秒",
     },
   ],
+  fortuneIntro: "今天，會遇見什麼好事？",
+  fortuneBody: "輕輕抽一張籤，帶著好心情出發。",
   fortunes: [
     "今日的幸運來自分享。到 Discord 分享一件讓你開心的小事吧！",
     "旅途中最好的寶藏是夥伴。向一位公會成員打聲招呼吧！",
@@ -58,7 +60,6 @@ export const defaultActivityConfig = () => ({
       correct: 0,
       explanation: "先確認分工與物資，可以讓不同經驗的隊友一起順利冒險。",
       category: "團隊合作",
-      difficulty: "入門",
     },
     {
       id: "q2",
@@ -67,7 +68,6 @@ export const defaultActivityConfig = () => ({
       correct: 1,
       explanation: "清楚且友善的說明，能幫助新成員融入團隊。",
       category: "公會知識",
-      difficulty: "入門",
     },
     {
       id: "q3",
@@ -77,7 +77,6 @@ export const defaultActivityConfig = () => ({
       explanation:
         "Swordsman 對應劍聖。你可以在角色資訊中查看職業圖示與中文名稱。",
       category: "職業知識",
-      difficulty: "入門",
     },
     {
       id: "q4",
@@ -87,7 +86,6 @@ export const defaultActivityConfig = () => ({
       explanation:
         "角色副本場次於每週六 09:00 重置；活動積分則於週一 00:00 開始新的一週。",
       category: "公會工具",
-      difficulty: "入門",
     },
   ],
   events: [
@@ -133,6 +131,21 @@ const defaultMember = (id) => ({
   count: 0,
   lastAt: null,
 });
+async function ensureQuizStats(db, member, now) {
+  if (member.quizStats) return member;
+  const records = await db.quizRecords(member.memberId);
+  member.quizStats = {
+    points: records.reduce((n, r) => n + r.delta, 0),
+    count: records.length,
+    correct: records.filter(
+      (r) => r.quizCorrect === true || r.summary === "答對了！",
+    ).length,
+    trackingSince: now,
+    recoveredHistory: records.length > 0,
+  };
+  db.set(`member_${member.memberId}`, member);
+  return member;
+}
 function selectContent(config, activity, memberId, day, used) {
   const list = activity.type === "quiz" ? config.questions : config.events;
   return list[
@@ -145,6 +158,11 @@ function selectContent(config, activity, memberId, day, used) {
 function visibleActivity(config, a, memberId, period, dayCounts) {
   const used = dayCounts[a.id] || 0;
   const result = { ...a, used, version: config.version };
+  if (a.type === "fortune")
+    result.content = {
+      intro: config.fortuneIntro || defaultActivityConfig().fortuneIntro,
+      body: config.fortuneBody || defaultActivityConfig().fortuneBody,
+    };
   if (a.type !== "fortune" && used < a.dailyLimit) {
     const item = selectContent(config, a, memberId, period.day, used);
     result.content =
@@ -154,7 +172,6 @@ function visibleActivity(config, a, memberId, period, dayCounts) {
             question: item.question,
             options: item.options,
             category: item.category,
-            difficulty: item.difficulty,
           }
         : {
             id: item.id,
@@ -167,47 +184,54 @@ function visibleActivity(config, a, memberId, period, dayCounts) {
 }
 export async function activityView(user, users, now = Date.now()) {
   const period = activityPeriods(now);
-  return activityTransaction(async (db) => {
-    const [storedConfig, storedMember, today, board] = await Promise.all([
-      db.get("config"),
-      db.get(`member_${user.id}`),
-      db.get(`day_${keyOf(user.id, period.day)}`),
-      db.get(`week_${period.week}`),
-    ]);
-    const config = storedConfig || defaultActivityConfig();
-    const member = storedMember || defaultMember(user.id);
-    const rows = Object.values(board?.members || {})
-      .filter((x) => users.some((u) => u.id === x.memberId && u.active))
-      .sort(
-        (a, b) =>
-          b.points - a.points ||
-          b.count - a.count ||
-          a.memberId.localeCompare(b.memberId),
+  return activityTransaction(
+    async (db) => {
+      const [storedConfig, storedMember, today, board] = await Promise.all([
+        db.get("config"),
+        db.get(`member_${user.id}`),
+        db.get(`day_${keyOf(user.id, period.day)}`),
+        db.get(`week_${period.week}`),
+      ]);
+      const config = storedConfig || defaultActivityConfig();
+      const member = await ensureQuizStats(
+        db,
+        storedMember || defaultMember(user.id),
+        now,
       );
-    const own = rows.find((x) => x.memberId === user.id);
-    return {
-      period,
-      timezone: "Asia/Taipei",
-      member,
-      weekly: own?.points || 0,
-      weeklyCount: own?.count || 0,
-      activities: config.activities
-        .filter((x) => x.enabled)
-        .map((a) =>
-          visibleActivity(config, a, user.id, period, today?.counts || {}),
-        ),
-      discordUrl: config.discordUrl,
-      leaderboard: rows.slice(0, 50).map((x, i) => ({
-        ...x,
-        rank: i + 1,
-        name:
-          x.nickname ||
-          users.find((u) => u.id === x.memberId)?.username ||
-          "冒險者",
-      })),
-      adminConfig: user.admin ? config : null,
-    };
-  });
+      const rows = Object.values(board?.members || {})
+        .filter((x) => users.some((u) => u.id === x.memberId && u.active))
+        .sort(
+          (a, b) =>
+            b.points - a.points ||
+            b.count - a.count ||
+            a.memberId.localeCompare(b.memberId),
+        );
+      const own = rows.find((x) => x.memberId === user.id);
+      return {
+        period,
+        timezone: "Asia/Taipei",
+        member,
+        weekly: own?.points || 0,
+        weeklyCount: own?.count || 0,
+        activities: config.activities
+          .filter((x) => x.enabled)
+          .map((a) =>
+            visibleActivity(config, a, user.id, period, today?.counts || {}),
+          ),
+        discordUrl: config.discordUrl,
+        leaderboard: rows.slice(0, 50).map((x, i) => ({
+          ...x,
+          rank: i + 1,
+          name:
+            x.nickname ||
+            users.find((u) => u.id === x.memberId)?.username ||
+            "冒險者",
+        })),
+        adminConfig: user.admin ? config : null,
+      };
+    },
+    { authenticatedUser: user },
+  );
 }
 function validateConfig(input, previous) {
   if (!Array.isArray(input.activities)) fail("活動設定不完整");
@@ -245,7 +269,6 @@ function validateConfig(input, previous) {
       correct: number(q.correct, "正確選項", q.options.length - 1),
       explanation: text(q.explanation, "答案解析", 500),
       category: text(q.category, "分類", 40),
-      difficulty: text(q.difficulty, "難度", 20),
     };
   });
   const discordUrl =
@@ -257,8 +280,26 @@ function validateConfig(input, previous) {
     )
   )
     fail("請填寫有效的 Discord 邀請或頻道連結");
+  const fortunes = input.fortunes ?? previous.fortunes;
+  if (!Array.isArray(fortunes) || fortunes.length < 1 || fortunes.length > 100)
+    fail("籤文需要 1–100 則");
   return {
     ...previous,
+    fortunes: fortunes.map((x) => text(x, "籤文結果", 500)),
+    fortuneIntro: text(
+      input.fortuneIntro ??
+        previous.fortuneIntro ??
+        defaultActivityConfig().fortuneIntro,
+      "抽籤標題",
+      120,
+    ),
+    fortuneBody: text(
+      input.fortuneBody ??
+        previous.fortuneBody ??
+        defaultActivityConfig().fortuneBody,
+      "抽籤內文",
+      500,
+    ),
     activities,
     questions,
     discordUrl,
@@ -267,10 +308,38 @@ function validateConfig(input, previous) {
 }
 export async function activityAction(user, users, type, p, now = Date.now()) {
   if (
-    ["activity.config", "activity.adjust", "activity.report"].includes(type) &&
+    [
+      "activity.config",
+      "activity.adjust",
+      "activity.report",
+      "activity.quizScores",
+    ].includes(type) &&
     !user.admin
   )
     fail("僅管理員可操作", 403);
+  if (type === "activity.quizScores") {
+    return activityTransaction(
+      async (db) => ({
+        members: await Promise.all(
+          users.map(async (u) => {
+            const m = await ensureQuizStats(
+              db,
+              (await db.get(`member_${u.id}`)) || defaultMember(u.id),
+              now,
+            );
+            return {
+              memberId: u.id,
+              username: u.username,
+              nickname: m.nickname,
+              active: u.active,
+              ...m.quizStats,
+            };
+          }),
+        ),
+      }),
+      { authenticatedUser: user },
+    );
+  }
   if (type === "activity.state") return activityView(user, users, now);
   if (type === "activity.history") fail("個人明細已停用，請查看積分摘要", 410);
   if (type === "activity.report") {
@@ -353,9 +422,14 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         db.get(`day_${keyOf(memberId, period.day)}`),
         db.get(`week_${period.week}`),
       ]);
-      const member = savedMember || defaultMember(memberId),
+      const member = await ensureQuizStats(
+          db,
+          savedMember || defaultMember(memberId),
+          now,
+        ),
         day = savedDay || { counts: {} },
         board = savedBoard || { members: {} };
+      let quizCorrect = null;
       let delta,
         summary,
         activityId = null,
@@ -395,6 +469,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           const choice = number(p.choice, "選項", content.options.length - 1);
           if (a.type === "quiz") {
             const correct = choice === content.correct;
+            quizCorrect = correct;
             delta += correct ? a.bonus : 0;
             summary = correct ? "答對了！" : "謝謝參與，下次再試試！";
             resultDetails = `${content.question}\n正確答案：${content.options[content.correct]}\n${content.explanation}`;
@@ -404,6 +479,11 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           }
         }
         day.counts[a.id] = used + 1;
+      }
+      if (quizCorrect !== null) {
+        member.quizStats.points += delta;
+        member.quizStats.count += 1;
+        member.quizStats.correct += quizCorrect ? 1 : 0;
       }
       const previous = member.total;
       member.total += delta;
@@ -437,6 +517,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         week: period.week,
         version: config.version,
         contentId,
+        quizCorrect,
         kind: type === "activity.submit" ? "participation" : "adjustment",
         operatorId: user.id,
         reason,

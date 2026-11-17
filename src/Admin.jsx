@@ -35,7 +35,7 @@ export default function Admin({
     [editing, setEditing] = useState(null),
     [url, setUrl] = useState("");
   useEffect(() => {
-    if (tab === "activities")
+    if (tab === "activities" || tab === "quiz")
       refreshActivity().catch((e) => {
         setActivityError(e.message);
         if (e.status === 401) onUnauthorized();
@@ -48,6 +48,7 @@ export default function Admin({
         {[
           ["users", "成員帳號"],
           ["activities", "活動管理"],
+          ["quiz", "快問快答"],
           ["dungeons", "副本設定"],
           ["professions", "職業清單"],
           ["quantities", "數量項目"],
@@ -66,9 +67,11 @@ export default function Admin({
           </button>
         ))}
       </div>
-      {tab === "activities" ? (
+      {tab === "activities" || tab === "quiz" ? (
         activity?.adminConfig ? (
           <ActivityAdmin
+            key={tab}
+            mode={tab}
             request={request}
             config={activity.adminConfig}
             users={data.users}
@@ -304,9 +307,11 @@ export default function Admin({
                 setEditing(null);
             }}
           >
-            {tab === "activities" ? (
+            {tab === "activities" || tab === "quiz" ? (
               activity?.adminConfig ? (
                 <ActivityAdmin
+                  key={tab}
+                  mode={tab}
                   request={request}
                   config={activity.adminConfig}
                   users={data.users}

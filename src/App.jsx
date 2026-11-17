@@ -133,11 +133,15 @@ export default function App() {
   const tourNeeded = data && !data.me.tourCompleted;
   if (loading)
     return (
-      <div className="session-loading">
+      <div
+        className="session-loading startup-splash"
+        role="status"
+        aria-live="polite"
+      >
         <div className="brand">
           <img
             className="brand-logo"
-            src="/ddstar-logo.png"
+            src="/ddstar-logo-blue.png"
             alt="DDStar 公會標誌"
             width="40"
             height="40"
@@ -175,11 +179,11 @@ export default function App() {
     );
   if (!data)
     return (
-      <main className="login">
+      <main className="login session-enter">
         <div className="login-brand brand">
           <img
             className="brand-logo"
-            src="/ddstar-logo.png"
+            src="/ddstar-logo-blue.png"
             alt="DDStar 公會標誌"
             width="40"
             height="40"
@@ -262,12 +266,12 @@ export default function App() {
   ];
   return (
     <FormErrorContext.Provider value={error}>
-      <div className="app">
+      <div className="app session-enter">
         <aside className="sidebar">
           <div className="brand">
             <img
               className="brand-logo"
-              src="/ddstar-logo.png"
+              src="/ddstar-logo-blue.png"
               alt="DDStar 公會標誌"
               width="40"
               height="40"

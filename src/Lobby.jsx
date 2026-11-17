@@ -301,6 +301,12 @@ export default function Lobby({
         ) : (
           <section className="summary-panel">
             <h2>本週概況</h2>
+            <p>
+              快問快答累積：
+              <strong>{view.member.quizStats?.points || 0} 分</strong> · 已答{" "}
+              {view.member.quizStats?.count || 0} 題 · 答對{" "}
+              {view.member.quizStats?.correct || 0} 題
+            </p>
             <dl>
               <div>
                 <dt>本週參與</dt>
@@ -379,8 +385,8 @@ export default function Lobby({
               {selected.type === "fortune" ? (
                 <>
                   <Sparkles size={52} />
-                  <h3>今天，會遇見什麼好事？</h3>
-                  <p>輕輕抽一張籤，帶著好心情出發。</p>
+                  <h3>{selected.content?.intro}</h3>
+                  <p>{selected.content?.body}</p>
                 </>
               ) : (
                 <>
@@ -389,10 +395,7 @@ export default function Lobby({
                   </h3>
                   {selected.content?.story && <p>{selected.content.story}</p>}
                   {selected.content?.category && (
-                    <p className="muted">
-                      {selected.content.category} ·{" "}
-                      {selected.content.difficulty}
-                    </p>
+                    <p className="muted">{selected.content.category}</p>
                   )}
                   <div className="activity-options">
                     {selected.content?.options.map((o, i) => (

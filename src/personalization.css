@@ -422,3 +422,133 @@ dialog {
     padding: 5px 8px;
   }
 }
+/* Theme-aware interaction states also apply to dialogs mounted outside .app. */
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+button.primary {
+  background: var(--accent);
+  color: var(--button-text);
+}
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  border-color: var(--accent);
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--accent);
+}
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.quiz-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--border);
+  margin: 16px 0;
+  padding: 16px;
+}
+.quiz-categories label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.quiz-question-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.quiz-question-grid .quiz-editor {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.quiz-editor summary {
+  cursor: pointer;
+  padding: 20px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.quiz-editor[open] {
+  grid-column: 1/-1;
+}
+.quiz-editor-fields {
+  padding: 0 20px 20px;
+}
+.fortune-editor {
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+.startup-splash .brand {
+  flex-direction: column;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  gap: 12px;
+}
+.startup-splash .brand > .brand-logo {
+  width: clamp(150px, 24vw, 220px);
+  height: clamp(150px, 24vw, 220px);
+  animation: star-breathe 1.8s ease-in-out infinite alternate;
+}
+.startup-splash .brand strong {
+  font-size: 28px;
+}
+.login-brand.brand > .brand-logo {
+  width: 88px;
+  height: 88px;
+}
+.session-enter {
+  animation: session-enter 320ms ease-out both;
+}
+@keyframes star-breathe {
+  from {
+    opacity: 0.65;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes session-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup-splash .brand > .brand-logo,
+  .session-enter {
+    animation: none;
+  }
+}
+
+input[type="checkbox"]::after {
+  background: var(--text);
+}
+.quiz-categories input[type="checkbox"] {
+  appearance: auto;
+  width: 18px;
+  height: 18px;
+}
+.quiz-categories input[type="checkbox"]::after {
+  content: none;
+}

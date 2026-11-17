@@ -1,3 +1,4 @@
+import QuizScores from "./QuizScores.jsx";
 import { useState, useRef } from "react";
 import { Plus, Trash2, Download, Save } from "lucide-react";
 import { Button, Field, NumberField } from "./ui.jsx";
@@ -29,12 +30,14 @@ function csvDownload(rows, filename) {
 }
 export default function ActivityAdmin({
   request,
+  mode = "activities",
   config,
   users,
   refresh,
   onUnauthorized,
 }) {
-  const [tab, setTab] = useState("rules"),
+  const [tab, setTab] = useState(mode === "quiz" ? "questions" : "rules"),
+    [categories, setCategories] = useState([]),
     [draft, setDraft] = useState(() => structuredClone(config)),
     [dates, setDates] = useState(() => range()),
     [report, setReport] = useState(null),
@@ -75,13 +78,15 @@ export default function ActivityAdmin({
         n === i ? { ...a, [key]: value } : a,
       ),
     }));
-  const updateQuestion = (i, key, value) =>
+  const updateQuestion = (i, key, value) => {
+    if (key === "category") setCategories([]);
     setDraft((d) => ({
       ...d,
       questions: d.questions.map((q, n) =>
         n === i ? { ...q, [key]: value } : q,
       ),
     }));
+  };
   const save = async () => {
     const r = await run("activity.config", draft);
     if (r) {
@@ -104,13 +109,20 @@ export default function ActivityAdmin({
     };
   };
   const members = report?.members.map(summarize) || [];
+  const allCategories = [...new Set(draft.questions.map((q) => q.category))];
   return (
     <section className="activity-admin">
       <div className="tabs">
-        {[
-          ["rules", "活動規則與題庫"],
-          ["reports", "參與報表與積分調整"],
-        ].map(([id, label]) => (
+        {(mode === "quiz"
+          ? [
+              ["questions", "快問快答題庫"],
+              ["scores", "成員快問快答分數"],
+            ]
+          : [
+              ["rules", "活動規則與抽籤"],
+              ["reports", "參與報表與積分調整"],
+            ]
+        ).map(([id, label]) => (
           <button
             key={id}
             className={tab === id ? "active" : ""}
@@ -134,241 +146,354 @@ export default function ActivityAdmin({
           {notice}
         </p>
       )}
-      {tab === "rules" ? (
+      {tab === "scores" ? (
+        <QuizScores request={request} onUnauthorized={onUnauthorized} />
+      ) : tab !== "reports" ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             save();
           }}
         >
-          <div className="lobby-section-title">
-            <h2>每日活動規則</h2>
-            <Button primary disabled={busy}>
-              <Save size={16} />
-              儲存設定
-            </Button>
-          </div>
-          <p className="muted">
-            台灣時間每日 00:00 重置，週一 00:00 換週。規則版本 v{draft.version}
-            ；歷史積分不會隨設定變動。
-          </p>
-          <div className="activity-rule-grid">
-            {draft.activities.map((a, i) => (
-              <section key={a.id} className="activity-rule">
-                <Field
-                  label="活動名稱"
-                  value={a.title}
-                  maxLength={60}
-                  required
-                  onChange={(e) => updateActivity(i, "title", e.target.value)}
-                />
-                <Field
-                  label="活動說明"
-                  value={a.description}
-                  maxLength={200}
-                  required
-                  onChange={(e) =>
-                    updateActivity(i, "description", e.target.value)
-                  }
-                />
-                <div className="activity-form-grid">
-                  <NumberField
-                    label="每日次數"
-                    max={10}
-                    value={a.dailyLimit}
-                    onChange={(e) =>
-                      updateActivity(i, "dailyLimit", Number(e.target.value))
-                    }
-                  />
-                  <NumberField
-                    label="參與積分"
-                    max={100}
-                    value={a.points}
-                    onChange={(e) =>
-                      updateActivity(i, "points", Number(e.target.value))
-                    }
-                  />
-                  {a.type === "quiz" && (
-                    <NumberField
-                      label="答對加分"
-                      max={100}
-                      value={a.bonus}
+          {tab === "rules" && (
+            <>
+              <div className="lobby-section-title">
+                <h2>每日活動規則</h2>
+                <Button primary disabled={busy}>
+                  <Save size={16} />
+                  儲存設定
+                </Button>
+              </div>
+              <p className="muted">
+                台灣時間每日 00:00 重置，週一 00:00 換週。規則版本 v
+                {draft.version}
+                ；歷史積分不會隨設定變動。
+              </p>
+              <div className="activity-rule-grid">
+                {draft.activities.map((a, i) => (
+                  <section key={a.id} className="activity-rule">
+                    <Field
+                      label="活動名稱"
+                      value={a.title}
+                      maxLength={60}
+                      required
                       onChange={(e) =>
-                        updateActivity(i, "bonus", Number(e.target.value))
+                        updateActivity(i, "title", e.target.value)
                       }
                     />
-                  )}
-                </div>
-                <label className="switch-row">
-                  開放活動
-                  <input
-                    type="checkbox"
-                    checked={a.enabled}
-                    onChange={(e) =>
-                      updateActivity(i, "enabled", e.target.checked)
-                    }
-                  />
-                </label>
-              </section>
-            ))}
-          </div>
-          <Field
-            label="公會 Discord 連結（選填）"
-            type="url"
-            placeholder="https://discord.gg/…"
-            value={draft.discordUrl}
-            onChange={(e) => setDraft({ ...draft, discordUrl: e.target.value })}
-          />
-          <div className="lobby-section-title">
-            <h2>快問快答題庫</h2>
-            <Button
-              type="button"
-              disabled={draft.questions.length >= 100}
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  questions: [
-                    ...draft.questions,
-                    {
-                      question: "",
-                      options: ["", ""],
-                      correct: 0,
-                      explanation: "",
-                      category: "公會知識",
-                      difficulty: "入門",
-                    },
-                  ],
-                })
-              }
-            >
-              <Plus size={16} />
-              新增題目
-            </Button>
-          </div>
-          <p className="muted">
-            可維護 1–100 題；答案與解析只會在成員提交後回傳。
-          </p>
-          {draft.questions.map((q, i) => (
-            <section key={i} className="quiz-editor">
-              <div className="lobby-section-title">
-                <h3>題目 {i + 1}</h3>
-                <Button
-                  type="button"
-                  aria-label={`刪除題目 ${i + 1}`}
-                  disabled={draft.questions.length <= 1}
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      questions: draft.questions.filter((_, n) => n !== i),
-                    })
-                  }
-                >
-                  <Trash2 size={15} />
-                  刪除
-                </Button>
+                    <Field
+                      label="活動說明"
+                      value={a.description}
+                      maxLength={200}
+                      required
+                      onChange={(e) =>
+                        updateActivity(i, "description", e.target.value)
+                      }
+                    />
+                    <div className="activity-form-grid">
+                      <NumberField
+                        label="每日次數"
+                        max={10}
+                        value={a.dailyLimit}
+                        onChange={(e) =>
+                          updateActivity(
+                            i,
+                            "dailyLimit",
+                            Number(e.target.value),
+                          )
+                        }
+                      />
+                      <NumberField
+                        label="參與積分"
+                        max={100}
+                        value={a.points}
+                        onChange={(e) =>
+                          updateActivity(i, "points", Number(e.target.value))
+                        }
+                      />
+                      {a.type === "quiz" && (
+                        <NumberField
+                          label="答對加分"
+                          max={100}
+                          value={a.bonus}
+                          onChange={(e) =>
+                            updateActivity(i, "bonus", Number(e.target.value))
+                          }
+                        />
+                      )}
+                    </div>
+                    <label className="switch-row">
+                      開放活動
+                      <input
+                        type="checkbox"
+                        checked={a.enabled}
+                        onChange={(e) =>
+                          updateActivity(i, "enabled", e.target.checked)
+                        }
+                      />
+                    </label>
+                  </section>
+                ))}
               </div>
               <Field
-                label="題目"
-                required
-                maxLength={300}
-                value={q.question}
-                onChange={(e) => updateQuestion(i, "question", e.target.value)}
-              />
-              <div className="activity-form-grid">
-                <Field
-                  label="分類"
-                  required
-                  maxLength={40}
-                  value={q.category}
-                  onChange={(e) =>
-                    updateQuestion(i, "category", e.target.value)
-                  }
-                />
-                <Field
-                  label="難度"
-                  required
-                  maxLength={20}
-                  value={q.difficulty}
-                  onChange={(e) =>
-                    updateQuestion(i, "difficulty", e.target.value)
-                  }
-                />
-              </div>
-              {q.options.map((o, j) => (
-                <Field
-                  key={j}
-                  label={`選項 ${j + 1}`}
-                  required
-                  maxLength={120}
-                  value={o}
-                  onChange={(e) =>
-                    updateQuestion(
-                      i,
-                      "options",
-                      q.options.map((x, n) => (n === j ? e.target.value : x)),
-                    )
-                  }
-                />
-              ))}
-              <div className="activity-editor-actions">
-                <Button
-                  type="button"
-                  disabled={q.options.length >= 6}
-                  onClick={() =>
-                    updateQuestion(i, "options", [...q.options, ""])
-                  }
-                >
-                  新增選項
-                </Button>
-                <Button
-                  type="button"
-                  disabled={q.options.length <= 2}
-                  onClick={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      questions: d.questions.map((x, n) =>
-                        n === i
-                          ? {
-                              ...x,
-                              options: x.options.slice(0, -1),
-                              correct: Math.min(
-                                x.correct,
-                                x.options.length - 2,
-                              ),
-                            }
-                          : x,
-                      ),
-                    }))
-                  }
-                >
-                  移除最後選項
-                </Button>
-              </div>
-              <Field label="正確答案">
-                <select
-                  value={q.correct}
-                  onChange={(e) =>
-                    updateQuestion(i, "correct", Number(e.target.value))
-                  }
-                >
-                  {q.options.map((o, j) => (
-                    <option key={j} value={j}>
-                      選項 {j + 1}：{o}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field
-                label="答案解析"
-                required
-                maxLength={500}
-                value={q.explanation}
+                label="公會 Discord 連結（選填）"
+                type="url"
+                placeholder="https://discord.gg/…"
+                value={draft.discordUrl}
                 onChange={(e) =>
-                  updateQuestion(i, "explanation", e.target.value)
+                  setDraft({ ...draft, discordUrl: e.target.value })
                 }
               />
-            </section>
-          ))}
+              <h2>每日冒險抽籤內容</h2>
+              <Field
+                label="抽籤標題"
+                required
+                maxLength={120}
+                value={draft.fortuneIntro ?? "今天，會遇見什麼好事？"}
+                onChange={(e) =>
+                  setDraft({ ...draft, fortuneIntro: e.target.value })
+                }
+              />
+              <Field
+                label="抽籤內文"
+                required
+                maxLength={500}
+                value={draft.fortuneBody ?? "輕輕抽一張籤，帶著好心情出發。"}
+                onChange={(e) =>
+                  setDraft({ ...draft, fortuneBody: e.target.value })
+                }
+              />
+              <div className="lobby-section-title">
+                <h3>籤文結果</h3>
+                <Button
+                  type="button"
+                  disabled={draft.fortunes.length >= 100}
+                  onClick={() =>
+                    setDraft({ ...draft, fortunes: [...draft.fortunes, ""] })
+                  }
+                >
+                  新增籤文
+                </Button>
+              </div>
+              {draft.fortunes.map((f, i) => (
+                <section className="fortune-editor" key={i}>
+                  <Field
+                    label={`籤文 ${i + 1}`}
+                    required
+                    maxLength={500}
+                    value={f}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        fortunes: draft.fortunes.map((v, n) =>
+                          n === i ? e.target.value : v,
+                        ),
+                      })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    disabled={draft.fortunes.length <= 1}
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        fortunes: draft.fortunes.filter((_, n) => n !== i),
+                      })
+                    }
+                  >
+                    移除籤文 {i + 1}
+                  </Button>
+                </section>
+              ))}
+            </>
+          )}
+          {tab === "questions" && (
+            <>
+              <div className="lobby-section-title">
+                <h2>快問快答題庫</h2>
+                <Button
+                  type="button"
+                  disabled={draft.questions.length >= 100}
+                  onClick={() => {
+                    setCategories([]);
+                    setDraft({
+                      ...draft,
+                      questions: [
+                        ...draft.questions,
+                        {
+                          question: "",
+                          options: ["", ""],
+                          correct: 0,
+                          explanation: "",
+                          category: "公會知識",
+                        },
+                      ],
+                    });
+                  }}
+                >
+                  <Plus size={16} />
+                  新增題目
+                </Button>
+              </div>
+              <p className="muted">
+                可維護 1–100 題；答案與解析只會在成員提交後回傳。
+              </p>
+              <fieldset className="quiz-categories">
+                <legend>篩選分類（未勾選時顯示全部）</legend>
+                {allCategories.map((c) => (
+                  <label key={c}>
+                    <input
+                      type="checkbox"
+                      checked={categories.includes(c)}
+                      onChange={(e) =>
+                        setCategories(
+                          e.target.checked
+                            ? [...categories, c]
+                            : categories.filter((x) => x !== c),
+                        )
+                      }
+                    />
+                    {c || "未分類"}
+                  </label>
+                ))}
+              </fieldset>
+              <p className="muted">
+                在題目內填寫新分類即可建立分類，例如海龍、綠龍。新增題目會顯示在下方。
+              </p>
+              <div className="quiz-question-grid">
+                {draft.questions.map(
+                  (q, i) =>
+                    (!categories.length ||
+                      categories.includes(q.category) ||
+                      !q.question) && (
+                      <details key={i} className="quiz-editor">
+                        <summary>{q.question || "新題目（點擊編輯）"}</summary>
+                        <div className="quiz-editor-fields">
+                          <div className="lobby-section-title">
+                            <h3>題目 {i + 1}</h3>
+                            <Button
+                              type="button"
+                              aria-label={`刪除題目 ${i + 1}`}
+                              disabled={draft.questions.length <= 1}
+                              onClick={() =>
+                                setDraft({
+                                  ...draft,
+                                  questions: draft.questions.filter(
+                                    (_, n) => n !== i,
+                                  ),
+                                })
+                              }
+                            >
+                              <Trash2 size={15} />
+                              刪除
+                            </Button>
+                          </div>
+                          <Field
+                            label="題目"
+                            required
+                            maxLength={300}
+                            value={q.question}
+                            onChange={(e) =>
+                              updateQuestion(i, "question", e.target.value)
+                            }
+                          />
+                          <div className="activity-form-grid">
+                            <Field
+                              label="分類"
+                              required
+                              maxLength={40}
+                              value={q.category}
+                              onChange={(e) =>
+                                updateQuestion(i, "category", e.target.value)
+                              }
+                            />
+                          </div>
+                          {q.options.map((o, j) => (
+                            <Field
+                              key={j}
+                              label={`選項 ${j + 1}`}
+                              required
+                              maxLength={120}
+                              value={o}
+                              onChange={(e) =>
+                                updateQuestion(
+                                  i,
+                                  "options",
+                                  q.options.map((x, n) =>
+                                    n === j ? e.target.value : x,
+                                  ),
+                                )
+                              }
+                            />
+                          ))}
+                          <div className="activity-editor-actions">
+                            <Button
+                              type="button"
+                              disabled={q.options.length >= 6}
+                              onClick={() =>
+                                updateQuestion(i, "options", [...q.options, ""])
+                              }
+                            >
+                              新增選項
+                            </Button>
+                            <Button
+                              type="button"
+                              disabled={q.options.length <= 2}
+                              onClick={() =>
+                                setDraft((d) => ({
+                                  ...d,
+                                  questions: d.questions.map((x, n) =>
+                                    n === i
+                                      ? {
+                                          ...x,
+                                          options: x.options.slice(0, -1),
+                                          correct: Math.min(
+                                            x.correct,
+                                            x.options.length - 2,
+                                          ),
+                                        }
+                                      : x,
+                                  ),
+                                }))
+                              }
+                            >
+                              移除最後選項
+                            </Button>
+                          </div>
+                          <Field label="正確答案">
+                            <select
+                              value={q.correct}
+                              onChange={(e) =>
+                                updateQuestion(
+                                  i,
+                                  "correct",
+                                  Number(e.target.value),
+                                )
+                              }
+                            >
+                              {q.options.map((o, j) => (
+                                <option key={j} value={j}>
+                                  選項 {j + 1}：{o}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field
+                            label="答案解析"
+                            required
+                            maxLength={500}
+                            value={q.explanation}
+                            onChange={(e) =>
+                              updateQuestion(i, "explanation", e.target.value)
+                            }
+                          />
+                        </div>
+                      </details>
+                    ),
+                )}
+              </div>
+            </>
+          )}
           <Button primary disabled={busy}>
             <Save size={16} />
             儲存設定
@@ -380,7 +505,7 @@ export default function ActivityAdmin({
           <p className="muted">
             明細保留 35
             天，累積積分永久保留。這份報表只包含網站活動，不代表完整的遊戲或
-            Discord 貢獻。最多查詢 366 天、5,000 筆紀錄。
+            Discord 貢獻。最多查詢 35 天、5,000 筆紀錄。
           </p>
           <form
             className="report-filters"

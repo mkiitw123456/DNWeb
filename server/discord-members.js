@@ -12,7 +12,7 @@ export async function searchDiscordMembers(
   const token = process.env.DISCORD_BOT_TOKEN,
     guild = process.env.DISCORD_GUILD_ID;
   if (!token || !/^\d{17,20}$/.test(guild || ""))
-    fail("尚未設定 Discord 成員搜尋，可先手動填 ID 或稍後設定", 503);
+    fail("尚未設定 Discord 成員搜尋，請聯絡管理員或稍後再試", 503);
   if (!cache || cache.guild !== guild || now - cache.at > 300000) {
     if (!loading)
       loading = (async () => {
@@ -51,7 +51,7 @@ export async function searchDiscordMembers(
           }
           after = rows.at(-1).user.id;
         }
-        fail("伺服器成員過多，請先使用手動 ID", 503);
+        fail("伺服器成員過多，請聯絡管理員協助設定", 503);
       })().finally(() => {
         loading = null;
       });
