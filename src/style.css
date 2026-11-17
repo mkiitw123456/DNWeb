@@ -2120,3 +2120,44 @@ legend {
   object-fit: contain;
   flex-shrink: 0;
 }
+
+/* Adapted from Uiverse.io/barisdogansutcu/fuzzy-bullfrog-72.
+   Action buttons use the effect; navigation, calendar and selection controls retain their layout. */
+button.primary,
+:where(.form-actions, .modal-actions) > button {
+  border-radius: 50px;
+  padding-inline: 24px;
+  letter-spacing: 0.04em;
+  transition:
+    background 0.35s ease,
+    color 0.35s ease,
+    box-shadow 0.35s ease,
+    transform 0.15s ease,
+    border-color 0.35s ease;
+}
+@media (hover: hover) {
+  button.primary:not(:disabled):hover,
+  :where(.form-actions, .modal-actions) > button:not(:disabled):hover {
+    background: var(--accent);
+    color: var(--button-text);
+    border-color: var(--accent);
+    box-shadow: 0 7px 29px color-mix(in srgb, var(--accent) 45%, transparent);
+    transform: translateY(-2px);
+  }
+}
+button.primary:not(:disabled):active,
+:where(.form-actions, .modal-actions) > button:not(:disabled):active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+button.primary:disabled {
+  box-shadow: none;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  button.primary,
+  :where(.form-actions, .modal-actions) > button {
+    transition: none;
+    transform: none !important;
+  }
+}
