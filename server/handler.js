@@ -1,3 +1,4 @@
+import { casinoAction, settleCasino } from "./casino.js";
 import {
   cleanupDeploymentTest,
   drainUserDeletions,
@@ -252,6 +253,32 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
+    if (type.startsWith("casino.")) {
+      const result = await transact((s) => {
+        const user = s.users.find(
+          (x) => x.id === token.id && x.active && x.version === token.version,
+        );
+        if (!user) fail("登入已過期，請重新登入", 401);
+        const state = casinoAction(s, user, type, payload);
+        const ids = (s.deliveries || [])
+          .filter((e) => e.channel === "casino" && e.status === "pending")
+          .map((e) => e.id);
+        return { state, ids, user };
+      });
+      background(deliverEvents(result.ids));
+      cookie(res, result.user);
+      return res.status(200).json(result.state);
+    }
+    if (type === "state")
+      background(
+        transact((s) => {
+          settleCasino(s);
+          return s.deliveries
+            .filter((e) => e.channel === "casino" && e.status === "pending")
+            .map((e) => e.id);
+        }).then(deliverEvents),
+      );
+
     if (
       type.startsWith("activity.") ||
       type === "discord.members" ||

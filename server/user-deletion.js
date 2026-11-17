@@ -65,6 +65,20 @@ export function removeUser(s, actor, p, { migration = false } = {}) {
       x.targetId !== uid &&
       !x.message?.content?.replaceAll("\\", "").includes(target.username),
   );
+  s.casinoRooms = (s.casinoRooms || []).filter((r) => r.ownerId !== uid);
+  for (const r of s.casinoRooms) {
+    r.entries = r.entries.filter((e) => e.userId !== uid);
+    for (const e of r.eligible || []) {
+      if (e.userId === uid) {
+        e.name = "已刪除帳號";
+        e.userId = "deleted-account";
+      }
+    }
+    if (r.winnerId === uid) {
+      r.winnerId = "deleted-account";
+      r.resultMention = "";
+    }
+  }
   s.pendingUserDeletions ??= [];
   if (!s.pendingUserDeletions.some((j) => j.id === uid))
     s.pendingUserDeletions.push({ id: uid, createdAt: Date.now() });

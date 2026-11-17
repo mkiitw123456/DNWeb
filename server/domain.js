@@ -212,6 +212,7 @@ export function publicState(s, u) {
           importantConfigured: !!s.discordWebhooks?.important,
           logConfigured: !!s.discordWebhooks?.log,
           raidConfigured: !!s.discordWebhooks?.raid,
+          casinoConfigured: !!s.discordWebhooks?.casino,
         }
       : null,
     deliveries: u.admin

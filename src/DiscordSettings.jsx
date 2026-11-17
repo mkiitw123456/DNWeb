@@ -9,15 +9,25 @@ const statuses = {
   obsolete: "排班已變更",
 };
 export default function DiscordSettings({ data, mutate, busy }) {
-  const [urls, setUrls] = useState({ log: "", important: "", raid: "" });
+  const [urls, setUrls] = useState({
+    log: "",
+    important: "",
+    raid: "",
+    casino: "",
+  });
   return (
     <section className="admin-panel">
       <h2>Discord 通知設定</h2>
       <p className="hint">
-        三個頻道分開設定。網址僅存於伺服器，不會回傳到瀏覽器。舊交易通知維持原有設定。
+        四個頻道分開設定。網址僅存於伺服器，不會回傳到瀏覽器。舊交易通知維持原有設定。
       </p>
       <div className="discord-settings-grid">
         {[
+          [
+            "casino",
+            "賭場抽獎通知",
+            "免費抽獎報名時標記房主，結算時標記房主與贏家",
+          ],
           [
             "log",
             "Log 紀錄",
@@ -82,14 +92,18 @@ export default function DiscordSettings({ data, mutate, busy }) {
         .filter(
           (e) =>
             ["failed", "unconfigured"].includes(e.status) &&
-            ["log", "important"].includes(e.channel),
+            ["log", "important", "casino"].includes(e.channel),
         )
         .slice(-5)
         .map((e) => (
           <div className="delivery-row" key={e.id}>
             <span>
-              {e.channel === "important" ? "重大通知" : "Log"}：
-              {statuses[e.status]}
+              {e.channel === "casino"
+                ? "抽獎"
+                : e.channel === "important"
+                  ? "重大通知"
+                  : "Log"}
+              ：{statuses[e.status]}
             </span>
             <Button
               disabled={busy}

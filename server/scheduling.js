@@ -62,7 +62,7 @@ export function schedulingAction(s, u, type, p, now) {
     return true;
   }
   if (type === "discordSettings.save") {
-    if (!["log", "important", "raid"].includes(p.channel))
+    if (!["log", "important", "raid", "casino"].includes(p.channel))
       fail("通知類型不正確");
     if (
       typeof p.url !== "string" ||
@@ -77,7 +77,7 @@ export function schedulingAction(s, u, type, p, now) {
   }
   if (type === "delivery.retry") {
     const event = s.deliveries.find((x) => x.id === p.id);
-    if (!event || !["log", "important"].includes(event.channel))
+    if (!event || !["log", "important", "casino"].includes(event.channel))
       fail("找不到通知紀錄", 404);
     if (
       !["failed", "unconfigured"].includes(event.status) &&
