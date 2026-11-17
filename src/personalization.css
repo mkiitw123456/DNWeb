@@ -1062,3 +1062,26 @@ dialog.save-error {
 .activity-settings-actions {
   margin-top: 24px;
 }
+
+/* Status indicators must remain visibly active even when decorative motion is reduced. */
+@media (prefers-reduced-motion: reduce) {
+  .star-loading .star-energy,
+  .save-overlay .save-spinner,
+  .update-spinner {
+    animation: status-gentle-spin 5s linear infinite !important;
+  }
+  .update-spinner {
+    box-shadow:
+      0 1px 1px #fff inset,
+      0 3px 5px #ff5f9f inset,
+      0 4px 4px #0693ff inset;
+  }
+}
+@keyframes status-gentle-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
