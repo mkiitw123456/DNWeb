@@ -1,3 +1,4 @@
+import SaveOverlay from "./SaveOverlay.jsx";
 import FeedbackHost from "./FeedbackHost.jsx";
 import VersionNotice from "./VersionNotice.jsx";
 import React from "react";
@@ -7,6 +8,7 @@ import "./style.css";
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <FeedbackHost />
+    <SaveOverlay />
     <VersionNotice />
     <App />
   </React.StrictMode>,

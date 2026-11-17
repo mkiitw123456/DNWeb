@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
 export default function VersionNotice() {
   const [available, setAvailable] = useState(null);
   useEffect(() => {
@@ -39,7 +38,7 @@ export default function VersionNotice() {
   if (!available) return null;
   return (
     <aside className="version-notice" role="status">
-      <RefreshCw size={20} />
+      <span className="update-spinner" aria-hidden="true" />
       <div>
         <strong>網站有新版本</strong>
         <p>請重新整理以使用最新版。未儲存的內容請先儲存。</p>

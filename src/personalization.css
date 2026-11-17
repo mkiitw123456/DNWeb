@@ -946,3 +946,115 @@ input[type="checkbox"]::after {
     font-size: 14px;
   }
 }
+
+/* Spinner adapted from Uiverse.io by pradip_1434. */
+.update-spinner {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  margin-top: 3px;
+  border-radius: 50%;
+  animation: update-loader-rotate 1.5s linear infinite;
+}
+@keyframes update-loader-rotate {
+  0% {
+    transform: rotate(90deg);
+    box-shadow:
+      0 1px 1px #fff inset,
+      0 3px 5px #ff5f9f inset,
+      0 4px 4px #0693ff inset;
+  }
+  50% {
+    transform: rotate(270deg);
+    background: #7c0911;
+    box-shadow:
+      0 1px 1px #fff inset,
+      0 3px 5px #d60a47 inset,
+      0 4px 4px #fbef19 inset;
+  }
+  100% {
+    transform: rotate(450deg);
+    box-shadow:
+      0 1px 1px #fff inset,
+      0 3px 5px #ff5f9f inset,
+      0 4px 4px #28a9ff inset;
+  }
+}
+dialog.save-overlay {
+  --save-color: #38bdf8;
+  width: min(360px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px);
+  padding: 32px;
+  text-align: center;
+  background: rgb(16 23 34 / 48%);
+  color: #f1f5f9;
+  border: 1px solid var(--save-color);
+  border-radius: 20px;
+  box-shadow: 0 0 36px color-mix(in srgb, var(--save-color) 20%, transparent);
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+dialog.save-overlay::backdrop {
+  background: #000a;
+}
+dialog.save-success {
+  --save-color: #4ade80;
+}
+dialog.save-error {
+  --save-color: #fb7185;
+}
+.save-spinner {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 22px;
+  border-radius: 50%;
+  box-shadow:
+    0 2px 2px #fff inset,
+    0 8px 14px var(--save-color) inset,
+    0 12px 18px color-mix(in srgb, var(--save-color) 55%, transparent) inset;
+  animation: save-loader-rotate 1.5s linear infinite;
+  transition: box-shadow 0.35s;
+}
+.save-overlay strong {
+  display: block;
+  color: var(--save-color);
+  font-size: 21px;
+  transition: color 0.35s;
+}
+.save-overlay p {
+  margin: 14px 0 0;
+  color: #e2e8f0;
+  overflow-wrap: anywhere;
+}
+.save-overlay button {
+  margin-top: 20px;
+  color: #f1f5f9;
+  border-color: #64748b;
+}
+@keyframes save-loader-rotate {
+  from {
+    transform: rotate(90deg);
+  }
+  to {
+    transform: rotate(450deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-spinner,
+  .save-spinner {
+    animation: none;
+  }
+  .update-spinner {
+    box-shadow:
+      0 1px 1px #fff inset,
+      0 3px 5px #ff5f9f inset,
+      0 4px 4px #0693ff inset;
+  }
+  dialog.save-overlay,
+  .save-spinner,
+  .save-overlay strong {
+    transition: none;
+  }
+}

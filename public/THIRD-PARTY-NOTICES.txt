@@ -7,6 +7,10 @@ Source: https://uiverse.io/joao-canais/bitter-earwig-55
 Copyright (c) 2026 dexter-st
 Copyright (c) 2026 joao-canais (João Canais)
 
+Update/save spinner adaptation
+From Uiverse.io by pradip_1434 (CSS supplied by the project owner)
+Copyright (c) 2026 pradip_1434
+
 MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
