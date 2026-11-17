@@ -85,7 +85,7 @@ test("Applications notify only specified Discord users; owner-only approval, no 
   assert.equal(
     casinoAction(s, s.users[2], "casino.state", {}, now + 2).rooms[0].entries
       .length,
-    0,
+    1,
   );
   casinoAction(
     s,
@@ -97,7 +97,7 @@ test("Applications notify only specified Discord users; owner-only approval, no 
   assert.equal(
     casinoAction(s, s.users[2], "casino.state", {}, now + 4).rooms[0].entries
       .length,
-    1,
+    2,
   );
 });
 test("Server draws once from approved active linked users, never pending; locks at deadline and delays result notification until animation ends", () => {
@@ -121,8 +121,9 @@ test("Server draws once from approved active linked users, never pending; locks 
   );
   s.users[2].active = false;
   settleCasino(s, now + 60000);
-  assert.equal(r.winnerId, "u1");
-  assert.equal(r.eligible.length, 1);
+  assert.ok(["u0", "u1"].includes(r.winnerId));
+  assert.equal(r.eligible.length, 2);
+  const originalWinner = r.winnerId;
   const spin = structuredClone(r.spin);
   assert.ok(spin.duration >= 8500 && spin.duration <= 12500);
   assert.throws(
@@ -137,13 +138,14 @@ test("Server draws once from approved active linked users, never pending; locks 
   settleCasino(s, r.notifyAt + 1000);
   assert.equal(s.deliveries.length, n + 1);
   assert.deepEqual(r.spin, spin);
-  assert.equal(r.winnerId, "u1");
+  assert.equal(r.winnerId, originalWinner);
   settleCasino(s, Date.parse("2026-11-18T09:00:00+08:00"));
   assert.equal(s.casinoRooms.length, 0);
 });
 test("Empty draw cancels; 09:00 history cleanup preserves future rooms", () => {
   const s = setup(),
     r = create(s);
+  r.entries = [];
   settleCasino(s, now + 60000);
   assert.equal(r.status, "cancelled");
   casinoAction(
@@ -160,4 +162,26 @@ test("Empty draw cancels; 09:00 history cleanup preserves future rooms", () => {
     casinoDay(Date.parse("2026-11-18T08:59:59+08:00")),
     casinoDay(Date.parse("2026-11-18T09:00:00+08:00")),
   );
+});
+
+test("Host automatically joins exactly once and messages omit footer text and URL", () => {
+  const s = setup(),
+    r = create(s);
+  assert.equal(r.entries.length, 1);
+  assert.equal(r.entries[0].userId, s.users[0].id);
+  assert.equal(r.entries[0].status, "approved");
+  assert.throws(
+    () => casinoAction(s, s.users[0], "casino.join", { id: r.id }, now + 1),
+    /申請過/,
+  );
+  casinoAction(s, s.users[1], "casino.join", { id: r.id }, now + 1);
+  settleCasino(s, now + 60000);
+  assert.equal(r.winnerId, s.users[0].id);
+  settleCasino(s, r.notifyAt);
+  for (const e of s.deliveries) {
+    assert.doesNotMatch(
+      e.message.content,
+      /免費報名，不需交付金幣或道具|https?:/,
+    );
+  }
 });

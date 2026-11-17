@@ -39,7 +39,6 @@ function Wheel({ room, now }) {
     const total =
       room.spin.turns * 360 + 360 - ((winner + room.spin.offset) * 360) / count;
     const offset = now - Date.now();
-    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame;
     function animate() {
       const t = Math.max(
@@ -51,8 +50,8 @@ function Wheel({ room, now }) {
       );
       const a = room.spin.acceleration;
       const progress = t < a ? (t * t) / a : 1 - (1 - t) ** 2 / (1 - a);
-      ref.current.style.transform = `rotate(${total * (reduced ? 1 : progress)}deg)`;
-      if (t < 1 && !reduced) frame = requestAnimationFrame(animate);
+      ref.current.style.transform = `rotate(${total * progress}deg)`;
+      if (t < 1) frame = requestAnimationFrame(animate);
     }
     animate();
     return () => cancelAnimationFrame(frame);
@@ -71,6 +70,7 @@ function Wheel({ room, now }) {
         style={{ background: `conic-gradient(${gradient})` }}
         aria-hidden="true"
       >
+        <i className="prize-wheel-marker" aria-hidden="true" />
         {members.map((m, i) => {
           const angle = ((i + 0.5) * Math.PI * 2) / count;
           return (
@@ -317,7 +317,7 @@ export default function Casino({ me, request, onUnauthorized }) {
               onChange={(e) => setStartsAt(e.target.value)}
             />
             <p className="hint">
-              免費報名，不收取參加物品；房主需在開獎前確認參加資格。時間須在一分鐘後至七天內。
+              建立後房主自動加入；其他成員需由房主在開獎前確認參加資格。時間須在一分鐘後至七天內。
             </p>
             <Button primary disabled={busy}>
               建立獎池

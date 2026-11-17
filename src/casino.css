@@ -129,3 +129,17 @@ dialog:has(.prize-room) {
     max-height: 300px;
   }
 }
+
+.prize-wheel {
+  position: relative;
+}
+.prize-wheel-marker {
+  position: absolute;
+  top: 6px;
+  left: calc(50% - 4px);
+  width: 8px;
+  height: 24px;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 0 10px #ffffff70;
+}

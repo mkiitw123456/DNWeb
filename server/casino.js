@@ -10,7 +10,7 @@ function notice(s, r, content, ids, now) {
     s,
     "casino",
     {
-      content: content + "\nhttps://dn-web-roan.vercel.app/",
+      content,
       allowed_mentions: { parse: [], users: [...new Set(ids.filter(Boolean))] },
     },
     { casinoRoomId: r.id },
@@ -101,7 +101,9 @@ export function casinoAction(s, u, type, p = {}, now = Date.now()) {
       ownerName: u.username,
       status: "open",
       createdAt: now,
-      entries: [],
+      entries: [
+        { userId: u.id, name: u.username, status: "approved", joinedAt: now },
+      ],
     });
   } else if (type !== "casino.state") {
     const r = s.casinoRooms.find((r) => r.id === p.id);
@@ -122,7 +124,7 @@ export function casinoAction(s, u, type, p = {}, now = Date.now()) {
       notice(
         s,
         r,
-        `【抽獎報名】${r.title}\n<@${owner.discordId}>，<@${u.discordId}> 申請加入，請到網站審核參加資格。\n免費報名，不需交付金幣或道具。`,
+        `【抽獎報名】${r.title}\n<@${owner.discordId}>，<@${u.discordId}> 申請加入，請到網站審核參加資格。`,
         [owner.discordId, u.discordId],
         now,
       );
