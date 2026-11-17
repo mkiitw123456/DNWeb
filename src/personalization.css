@@ -1058,3 +1058,7 @@ dialog.save-error {
     transition: none;
   }
 }
+
+.activity-settings-actions {
+  margin-top: 24px;
+}

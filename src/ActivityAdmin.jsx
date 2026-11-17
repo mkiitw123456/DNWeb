@@ -1,3 +1,4 @@
+import { matchesContent } from "./activity-calendar.js";
 import ActivityCalendar from "./ActivityCalendar.jsx";
 import { useFeedback } from "./FeedbackHost.jsx";
 import QuizScores from "./QuizScores.jsx";
@@ -40,6 +41,7 @@ export default function ActivityAdmin({
 }) {
   const [tab, setTab] = useState(mode === "quiz" ? "questions" : "rules"),
     [categories, setCategories] = useState([]),
+    [fortuneSearch, setFortuneSearch] = useState(""),
     [draft, setDraft] = useState(() => structuredClone(config)),
     [dates, setDates] = useState(() => range()),
     [report, setReport] = useState(null),
@@ -251,15 +253,6 @@ export default function ActivityAdmin({
                   </section>
                 ))}
               </div>
-              <Field
-                label="公會 Discord 連結（選填）"
-                type="url"
-                placeholder="https://discord.gg/…"
-                value={draft.discordUrl}
-                onChange={(e) =>
-                  setDraft({ ...draft, discordUrl: e.target.value })
-                }
-              />
               <h2>每日冒險抽籤內容</h2>
               <Field
                 label="抽籤標題"
@@ -297,52 +290,89 @@ export default function ActivityAdmin({
                   新增籤文
                 </Button>
               </div>
-              {draft.fortunes.map((f, i) => (
-                <section className="fortune-editor" key={i}>
-                  <Field
-                    label={`籤文 ${i + 1} 標題`}
-                    required
-                    maxLength={120}
-                    value={f.title}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        fortunes: draft.fortunes.map((v, n) =>
-                          n === i ? { ...v, title: e.target.value } : v,
-                        ),
-                      })
-                    }
-                  />
-                  <Field label={`籤文 ${i + 1} 內文`}>
-                    <textarea
-                      required
-                      maxLength={500}
-                      rows={3}
-                      value={f.body}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          fortunes: draft.fortunes.map((v, n) =>
-                            n === i ? { ...v, body: e.target.value } : v,
-                          ),
-                        })
-                      }
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    disabled={draft.fortunes.length <= 1}
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        fortunes: draft.fortunes.filter((_, n) => n !== i),
-                      })
-                    }
-                  >
-                    移除籤文 {i + 1}
-                  </Button>
-                </section>
-              ))}
+              <Field
+                label="搜尋籤文"
+                type="search"
+                placeholder="輸入標題或內文的任意文字"
+                value={fortuneSearch}
+                onChange={(e) => setFortuneSearch(e.target.value)}
+              />
+              {!draft.fortunes.some(
+                (f) =>
+                  !f.title ||
+                  !f.body ||
+                  matchesContent(f.title + " " + f.body, fortuneSearch),
+              ) && (
+                <p className="muted" role="status">
+                  找不到符合的籤文，請換個關鍵字。
+                </p>
+              )}
+              <div className="quiz-question-grid fortune-question-grid">
+                {draft.fortunes.map(
+                  (f, i) =>
+                    (!f.title ||
+                      !f.body ||
+                      matchesContent(
+                        f.title + " " + f.body,
+                        fortuneSearch,
+                      )) && (
+                      <details
+                        className="quiz-editor fortune-editor"
+                        key={f.id}
+                      >
+                        <summary>{f.title || "新籤文（點擊編輯）"}</summary>
+                        <div className="quiz-editor-fields">
+                          <Field
+                            label={`籤文 ${i + 1} 標題`}
+                            required
+                            maxLength={120}
+                            value={f.title}
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                fortunes: draft.fortunes.map((v, n) =>
+                                  n === i ? { ...v, title: e.target.value } : v,
+                                ),
+                              })
+                            }
+                          />
+                          <Field label={`籤文 ${i + 1} 內文`}>
+                            <textarea
+                              required
+                              maxLength={500}
+                              rows={3}
+                              value={f.body}
+                              onChange={(e) =>
+                                setDraft({
+                                  ...draft,
+                                  fortunes: draft.fortunes.map((v, n) =>
+                                    n === i
+                                      ? { ...v, body: e.target.value }
+                                      : v,
+                                  ),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Button
+                            type="button"
+                            disabled={draft.fortunes.length <= 1}
+                            onClick={() =>
+                              setDraft({
+                                ...draft,
+                                fortunes: draft.fortunes.filter(
+                                  (_, n) => n !== i,
+                                ),
+                              })
+                            }
+                          >
+                            移除籤文 {i + 1}
+                          </Button>
+                        </div>
+                      </details>
+                    ),
+                )}
+              </div>
             </>
           )}
           {tab === "questions" && (
@@ -561,10 +591,12 @@ export default function ActivityAdmin({
               </div>
             </>
           )}
-          <Button primary disabled={busy}>
-            <Save size={16} />
-            儲存設定
-          </Button>
+          <div className="activity-settings-actions">
+            <Button primary disabled={busy}>
+              <Save size={16} />
+              儲存設定
+            </Button>
+          </div>
         </form>
       ) : (
         <>
