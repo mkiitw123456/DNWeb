@@ -71,6 +71,11 @@ export function applyTheme(value) {
     hover: t.accent + "18",
     text: light(t.background) ? "#202523" : "#ececf2",
     muted: light(t.background) ? "#575f59" : "#a0a2b0",
+    "panel-text": light(t.surface) ? "#202523" : "#ececf2",
+    "panel-muted": light(t.surface) ? "#575f59" : "#a0a2b0",
+    "panel-background": t.gradient
+      ? `linear-gradient(${t.angle}deg,${t.surface},${t.gradientEnd})`
+      : t.surface,
     "button-text": light(t.accent) ? "#101714" : "#ffffff",
     "page-background": t.gradient
       ? `linear-gradient(${t.angle}deg,${t.background},${t.gradientEnd})`

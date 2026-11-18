@@ -46,7 +46,13 @@ export function Empty({ title, description, action }) {
     </div>
   );
 }
-export function Modal({ title, children, onClose, explicitCloseOnly = false }) {
+export function Modal({
+  title,
+  children,
+  onClose,
+  explicitCloseOnly = false,
+  className = "",
+}) {
   const ref = useRef();
   const titleId = useId();
   const error = useContext(FormErrorContext);
@@ -57,6 +63,7 @@ export function Modal({ title, children, onClose, explicitCloseOnly = false }) {
   }, []);
   return (
     <dialog
+      className={`app-modal ${className}`}
       ref={ref}
       aria-labelledby={titleId}
       onCancel={(e) => {

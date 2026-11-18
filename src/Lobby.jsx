@@ -360,6 +360,7 @@ export default function Lobby({
       </footer>
       {selected && (
         <Modal
+          className="activity-modal"
           title={selected.title}
           onClose={() => {
             if (!busy) {
