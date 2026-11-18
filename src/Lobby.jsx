@@ -1,3 +1,4 @@
+import { useStarRewards, STAR_ASSET } from "./StarRewards.jsx";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -38,6 +39,14 @@ export default function Lobby({
     [choice, setChoice] = useState(null),
     [result, setResult] = useState(null),
     [profile, setProfile] = useState(false);
+  const { hold, collect } = useStarRewards();
+  const finishReward = (event) => {
+    const button =
+      event?.currentTarget || document.querySelector(".star-collect");
+    collect(button?.getBoundingClientRect());
+    setSelected(null);
+    pending.current = null;
+  };
   useFeedback(error);
   const lock = useRef(false),
     pending = useRef(null);
@@ -111,6 +120,7 @@ export default function Lobby({
       };
     const r = await perform("activity.submit", pending.current);
     if (r) {
+      hold(r);
       setResult(r);
       pending.current = null;
       refresh().catch(handleError);
@@ -173,17 +183,17 @@ export default function Lobby({
           aria-label="我的活動統計"
         >
           <div>
-            <span>本週積分</span>
+            <span>本週星星</span>
             <strong>
               {view.weekly}
-              <small> 分</small>
+              <small> 顆星星</small>
             </strong>
           </div>
           <div>
-            <span>累積積分</span>
+            <span>累積星星</span>
             <strong>
               {view.member.total}
-              <small> 分</small>
+              <small> 顆星星</small>
             </strong>
           </div>
           <div>
@@ -230,7 +240,7 @@ export default function Lobby({
                         <p>{a.description}</p>
                         <div className="activity-foot">
                           <span>
-                            {a.duration} · 參與 +{a.points} 分
+                            {a.duration} · 參與 +{a.points} 顆星星
                             {a.bonus ? `，答對 +${a.bonus}` : ""}
                           </span>
                           <Button
@@ -266,7 +276,7 @@ export default function Lobby({
               <div className="lobby-section-title">
                 <h2>
                   <Trophy size={18} />
-                  本週積分
+                  本週星星
                 </h2>
               </div>
               <p className="board-subtitle">
@@ -289,7 +299,7 @@ export default function Lobby({
                       </div>
                       <b>
                         {row.points}
-                        <small> 分</small>
+                        <small> 顆星星</small>
                       </b>
                     </li>
                   ))}
@@ -297,7 +307,7 @@ export default function Lobby({
               ) : (
                 <p className="muted">本週尚無參與紀錄。</p>
               )}
-              <p className="board-note">積分僅供活動參考。</p>
+              <p className="board-note">星星僅供活動參考。</p>
             </aside>
           </div>
         ) : (
@@ -305,8 +315,8 @@ export default function Lobby({
             <h2>本週概況</h2>
             <p>
               快問快答累積：
-              <strong>{view.member.quizStats?.points || 0} 分</strong> · 已答{" "}
-              {view.member.quizStats?.count || 0} 題 · 答對{" "}
+              <strong>{view.member.quizStats?.points || 0} 顆星星</strong> ·
+              已答 {view.member.quizStats?.count || 0} 題 · 答對{" "}
               {view.member.quizStats?.correct || 0} 題
             </p>
             <dl>
@@ -330,7 +340,7 @@ export default function Lobby({
               </div>
             </dl>
             <p className="muted">
-              僅顯示積分與參與摘要，不再保存一份個人逐筆歷史。累積積分不會因換週而清除。
+              僅顯示星星與參與摘要，不再保存一份個人逐筆歷史。累積星星不會因換週而清除。
             </p>
           </section>
         )}
@@ -353,8 +363,11 @@ export default function Lobby({
           title={selected.title}
           onClose={() => {
             if (!busy) {
-              setSelected(null);
-              pending.current = null;
+              if (result) finishReward();
+              else {
+                setSelected(null);
+                pending.current = null;
+              }
             }
           }}
         >
@@ -364,25 +377,76 @@ export default function Lobby({
             </p>
           )}
           {result ? (
-            <div className="activity-result">
-              <div className="result-points">
-                +{result.delta}
-                <small> 活動積分</small>
+            <div className="star-reward-card">
+              <div className="star-emblem" aria-hidden="true">
+                <img src={STAR_ASSET} alt="" width="126" height="126" />
               </div>
-              <h3>{result.summary}</h3>
-              {result.resultDetails && (
-                <p className="preserve-lines">{result.resultDetails}</p>
-              )}
-              <p className="muted">積分已更新，可在「我的冒險」查看摘要。</p>
-              <Button primary onClick={() => setSelected(null)}>
-                完成冒險
-              </Button>
+              <svg
+                className="reward-laurels"
+                viewBox="0 0 320 100"
+                aria-hidden="true"
+              >
+                {[false, true].map((mirror) => (
+                  <g
+                    key={String(mirror)}
+                    transform={
+                      mirror ? "translate(320 0) scale(-1 1)" : undefined
+                    }
+                  >
+                    <path
+                      d="M108 92 Q42 75 36 8"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    />
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <g
+                        key={i}
+                        transform={`translate(${38 + i * i * 1.8} ${18 + i * 12}) rotate(${-22 + i * 8})`}
+                      >
+                        <ellipse
+                          cx="-7"
+                          cy="-3"
+                          rx="4"
+                          ry="11"
+                          transform="rotate(-35)"
+                        />
+                        <ellipse
+                          cx="7"
+                          cy="-5"
+                          rx="4"
+                          ry="11"
+                          transform="rotate(35)"
+                        />
+                      </g>
+                    ))}
+                  </g>
+                ))}
+              </svg>
+              <div className="star-earned">
+                <strong>+{result.delta}</strong>
+                <span>顆星星</span>
+              </div>
+              <div className="star-reward-story">
+                <h3>{result.summary}</h3>
+                {result.resultDetails && <p>{result.resultDetails}</p>}
+              </div>
+              <p className="star-reward-note">
+                星星已記入帳號，確認後飛入右上角。
+              </p>
+              <button
+                type="button"
+                className="star-collect"
+                onClick={finishReward}
+              >
+                確認收下星星
+              </button>
             </div>
           ) : (
             <div className="activity-play">
               <p className="muted">
-                每日 {selected.dailyLimit} 次 · 參與 +{selected.points} 分
-                {selected.bonus ? `，答對另加 ${selected.bonus} 分` : ""}
+                每日 {selected.dailyLimit} 次 · 參與 +{selected.points} 顆星星
+                {selected.bonus ? `，答對另加 ${selected.bonus} 顆星星` : ""}
               </p>
               {selected.type === "fortune" ? (
                 <>
@@ -436,7 +500,7 @@ export default function Lobby({
       {profile && (
         <Modal title="設定遊戲暱稱" onClose={() => setProfile(false)}>
           <p className="muted">
-            請使用夥伴認得的遊戲暱稱。積分綁定帳號，改名不影響歷史紀錄；同名成員仍是不同帳號。
+            請使用夥伴認得的遊戲暱稱。星星綁定帳號，改名不影響歷史紀錄；同名成員仍是不同帳號。
           </p>
           {error && <p className="error">{error}</p>}
           <form

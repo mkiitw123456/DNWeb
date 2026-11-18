@@ -1,3 +1,4 @@
+import StarRewardsProvider from "./StarRewards.jsx";
 import SaveOverlay from "./SaveOverlay.jsx";
 import FeedbackHost from "./FeedbackHost.jsx";
 import VersionNotice from "./VersionNotice.jsx";
@@ -10,6 +11,8 @@ createRoot(document.getElementById("root")).render(
     <FeedbackHost />
     <SaveOverlay />
     <VersionNotice />
-    <App />
+    <StarRewardsProvider>
+      <App />
+    </StarRewardsProvider>
   </React.StrictMode>,
 );

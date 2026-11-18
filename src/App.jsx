@@ -1,3 +1,4 @@
+import { useStarRewards } from "./StarRewards.jsx";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import StarLoading from "./StarLoading.jsx";
 import SettingsPanel from "./SettingsPanel.jsx";
@@ -37,6 +38,10 @@ export default function App() {
     [page, setPage] = useState("lobby"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const { sync: syncStars } = useStarRewards();
+  useEffect(() => {
+    syncStars(data?.me.id ?? null, data?.activity?.member?.total);
+  }, [data?.me.id, data?.activity?.member?.total, syncStars]);
   const lock = useRef(false);
   const revision = useRef(0);
   const [confirmation, setConfirmation] = useState(null);

@@ -1,0 +1,289 @@
+.star-reward-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  overflow: hidden;
+  color: #e9f5ff;
+}
+.star-wallet {
+  position: absolute;
+  top: 14px;
+  right: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 10px;
+  border: 1px solid #42658e80;
+  border-radius: 40px;
+  background: linear-gradient(120deg, #102039f0, #101924f5);
+  box-shadow: 0 6px 24px #0003;
+  font-variant-numeric: tabular-nums;
+}
+.star-wallet img {
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px #328ddb70);
+}
+.star-wallet small {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #99b8d4;
+}
+.star-wallet strong {
+  display: block;
+  font-size: 21px;
+  line-height: 1.2;
+}
+.reward-flying-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  will-change: transform, opacity;
+}
+.star-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.app .main {
+  padding-top: 86px;
+}
+dialog:has(.star-reward-card) {
+  width: min(570px, calc(100vw - 32px));
+  max-width: 570px;
+  border-radius: 16px;
+  padding: 28px 32px;
+  color: #e9f5ff;
+  border: 1px solid #4876ae;
+  background:
+    radial-gradient(ellipse at 50% 24%, #14365e70, transparent 55%), #0d1728;
+  box-shadow:
+    0 0 0 5px #0b1424,
+    0 0 0 6px #31568380,
+    0 30px 100px #0008;
+}
+dialog:has(.star-reward-card) .modal-header {
+  border: 0;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 0;
+}
+dialog:has(.star-reward-card) .modal-header h2 {
+  font-family: "Noto Serif TC", "PMingLiU", serif;
+  font-size: 24px;
+  letter-spacing: 0.1em;
+  margin: 0 26px;
+  text-align: center;
+}
+dialog:has(.star-reward-card) .modal-header button {
+  position: absolute;
+  right: -18px;
+  top: -16px;
+  color: #d6e6fb;
+}
+.star-reward-card {
+  text-align: center;
+  padding: 8px 0 0;
+}
+.star-emblem {
+  position: relative;
+  margin: 10px auto 0;
+  width: 150px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+}
+.star-emblem::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px solid #3985cf3d;
+  border-radius: 50%;
+  box-shadow: 0 0 28px #2e84d425;
+}
+.star-emblem img {
+  width: 126px;
+  height: 126px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 17px #2888e790);
+  animation: reward-reveal 0.55s ease-out both;
+}
+.star-emblem::after {
+  content: "✦";
+  position: absolute;
+  right: -14px;
+  top: 40px;
+  color: #8bd7ff;
+  text-shadow:
+    -164px 34px #77c9ff,
+    -20px -30px #b8eaff;
+  font-size: 12px;
+}
+.star-earned {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 22px;
+  color: #c4eaff;
+}
+.star-earned strong {
+  font-family: Georgia, serif;
+  font-size: 64px;
+  font-weight: 400;
+  line-height: 1.1;
+  text-shadow: 0 0 20px #288ce080;
+}
+.star-earned span {
+  color: #a8c8e6;
+  font-size: 14px;
+}
+.star-reward-story {
+  border-top: 1px solid #52789c70;
+  padding-top: 22px;
+  position: relative;
+}
+.star-reward-story::before {
+  content: "✦";
+  position: absolute;
+  top: -14px;
+  left: calc(50% - 18px);
+  width: 36px;
+  background: #0f1d32;
+  color: #9ec9f1;
+}
+.star-reward-story h3 {
+  margin: 6px 0 12px;
+  font-family: "Noto Serif TC", "PMingLiU", serif;
+  font-size: 26px;
+  line-height: 1.6;
+  color: #f1f7ff;
+}
+.star-reward-story p {
+  font-size: 15px;
+  line-height: 1.9;
+  color: #c6d4e5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 18px;
+}
+.star-reward-note {
+  font-size: 12px;
+  color: #8fa6c1;
+  margin: 16px 0 20px;
+}
+button.star-collect {
+  border-radius: 40px;
+  min-height: 46px;
+  min-width: 210px;
+  padding: 11px 30px;
+  color: #f2fbff;
+  border: 1px solid #69bcff;
+  background: linear-gradient(#167bc3, #0951a0);
+  box-shadow:
+    inset 0 1px #b3e3ff60,
+    0 0 18px #177fd347;
+  font-size: 16px;
+}
+button.star-collect:hover {
+  background: linear-gradient(#2594dd, #1263b9);
+  border-color: #bbecff;
+}
+@keyframes reward-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-15deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+@media (max-width: 600px) {
+  .star-wallet {
+    top: 10px;
+    right: 12px;
+    padding: 6px 14px 6px 8px;
+  }
+  .star-wallet strong {
+    font-size: 18px;
+  }
+  .app .main {
+    padding-top: 76px;
+  }
+  dialog:has(.star-reward-card) {
+    padding: 22px;
+    max-height: calc(100dvh - 110px);
+    margin-top: 82px;
+    margin-bottom: auto;
+  }
+  .star-emblem {
+    width: 120px;
+    height: 120px;
+  }
+  .star-emblem img {
+    width: 104px;
+    height: 104px;
+  }
+  .star-earned strong {
+    font-size: 52px;
+  }
+  .star-reward-story h3 {
+    font-size: 23px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-emblem img {
+    animation: none;
+  }
+}
+
+.star-reward-card {
+  position: relative;
+}
+.reward-laurels {
+  position: absolute;
+  width: 280px;
+  height: 88px;
+  top: 148px;
+  left: calc(50% - 140px);
+  color: #2a5580;
+  fill: currentColor;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.star-earned {
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+}
+dialog:has(.star-reward-card)::after {
+  content: "✦";
+  position: absolute;
+  bottom: 7px;
+  left: 14px;
+  color: #548cc3;
+  font-size: 10px;
+}
+@media (max-width: 600px) {
+  .reward-laurels {
+    top: 120px;
+    width: 240px;
+    left: calc(50% - 120px);
+  }
+}
