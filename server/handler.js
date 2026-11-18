@@ -382,13 +382,19 @@ export default async function handler(req, res) {
     if (type === "state")
       background(Promise.all([drainUserDeletions(), compactActivityHistory()]));
     if (result.eventIds?.length) {
-      await deliverEvents(result.eventIds);
-      result.state = await transact((s) =>
-        publicState(
-          s,
-          s.users.find((x) => x.id === token.id),
-        ),
-      );
+      if (type.startsWith("character.")) {
+        // Character state is already committed. Discord delivery must not delay
+        // the response; persisted delivery records still support failed retries.
+        background(deliverEvents(result.eventIds));
+      } else {
+        await deliverEvents(result.eventIds);
+        result.state = await transact((s) =>
+          publicState(
+            s,
+            s.users.find((x) => x.id === token.id),
+          ),
+        );
+      }
     }
     if (result.notificationId) {
       await notify(result.notificationId);
