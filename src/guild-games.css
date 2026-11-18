@@ -1,0 +1,105 @@
+.guild-game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.guild-game-card {
+  display: block;
+  text-align: left;
+  padding: 22px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.guild-game-card h3 {
+  margin: 10px 0;
+  font-size: 20px;
+}
+.guild-game-card:hover {
+  border-color: var(--accent);
+}
+.guild-game-modal {
+  width: min(760px, calc(100vw - 32px));
+}
+.game-pot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 18px 0;
+  gap: 12px;
+}
+.game-pot strong {
+  font-size: 26px;
+}
+.game-pot small {
+  font-size: 14px;
+}
+.game-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.game-options > div {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.game-entry-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.game-entry-list small {
+  display: block;
+  margin-top: 6px;
+}
+.game-entry-list .actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.game-riders {
+  max-height: 250px;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+.game-riders label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.game-riders input {
+  width: auto;
+}
+.guild-games fieldset {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+@media (max-width: 600px) {
+  .guild-games .section-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .game-pot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

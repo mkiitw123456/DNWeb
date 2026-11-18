@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { createServer } from "node:http";
 import handler from "./handler.js";
 import casinoTick from "../api/casino-tick.js";
+import voiceIngest from "../api/voice-ingest.js";
 import { handleDiscordRequest } from "./discord-interactions.js";
 const app = express();
 const httpServer = createServer(app);
@@ -27,6 +28,7 @@ app.all(
 app.use(express.json({ limit: "64kb" }));
 app.all("/api/app", handler);
 app.all("/api/casino-tick", casinoTick);
+app.all("/api/voice-ingest", voiceIngest);
 const vite = await createViteServer({
   server: { middlewareMode: true, hmr: { server: httpServer } },
   appType: "spa",

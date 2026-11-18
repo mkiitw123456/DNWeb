@@ -87,7 +87,7 @@ test("HTTP submissions ignore spoofed owner and points; concurrent requests rema
   const payload = {
     submissionId: crypto.randomUUID(),
     activityId: a.id,
-    day: v.period.day,
+    day: a.day,
     version: a.version,
     memberId: admin.body.me.id,
     points: 100000,

@@ -81,6 +81,17 @@ export function removeUser(s, actor, p, { migration = false } = {}) {
   }
   s.pendingUserDeletions ??= [];
   if (!s.pendingUserDeletions.some((j) => j.id === uid))
-    s.pendingUserDeletions.push({ id: uid, createdAt: Date.now() });
+    s.pendingUserDeletions.push({
+      id: uid,
+      discordId: target.discordId || "",
+      createdAt: Date.now(),
+    });
+  for (const room of s.gameRooms || []) {
+    if (room.ownerId === uid) room.ownerName = "已刪除帳號";
+    for (const entry of room.entries)
+      if (entry.userId === uid) entry.name = "已刪除帳號";
+    for (const option of room.options)
+      if (option.id === uid) option.name = "已刪除帳號";
+  }
   return uid;
 }

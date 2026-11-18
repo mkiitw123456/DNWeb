@@ -48,7 +48,7 @@ async function participate(u) {
       submissionId: crypto.randomUUID(),
       activityId: a.id,
       version: a.version,
-      day: v.period.day,
+      day: a.day,
     },
     now,
   );

@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 import { notify } from "./FeedbackHost.jsx";
 import "./casino.css";
+import GuildGames from "./GuildGames.jsx";
 
 const time = (value) =>
   new Date(value).toLocaleString("zh-TW", {
@@ -227,7 +228,7 @@ export default function Casino({ me, request, onUnauthorized }) {
       <header className="casino-heading">
         <div>
           <h1>賭場</h1>
-          <p className="muted">公會免費抽獎 · 房主人工審核 · 台灣時間</p>
+          <p className="muted">公會遊戲 · 房主人工審核 · 台灣時間</p>
         </div>
         {tab === "pool" && (
           <Button primary onClick={() => setCreating(true)}>
@@ -238,7 +239,8 @@ export default function Casino({ me, request, onUnauthorized }) {
       <nav className="tabs">
         {[
           ["pool", "獎池"],
-          ["duel", "對賭"],
+          ["duel", "預測"],
+          ["race", "賽馬"],
           ["history", "歷史紀錄"],
         ].map(([id, label]) => (
           <button
@@ -260,11 +262,14 @@ export default function Casino({ me, request, onUnauthorized }) {
           尚未設定抽獎 Webhook，Discord 通知暫時無法傳送，請管理員至後台設定。
         </p>
       )}
-      {tab === "duel" ? (
-        <div className="admin-panel">
-          <h2>還在開發中</h2>
-          <p className="muted">目前可以前往獎池參加免費抽獎。</p>
-        </div>
+      {tab === "duel" || tab === "race" ? (
+        <GuildGames
+          key={tab}
+          kind={tab === "race" ? "race" : "prediction"}
+          me={me}
+          request={request}
+          onUnauthorized={onUnauthorized}
+        />
       ) : (
         <>
           {tab === "history" && (

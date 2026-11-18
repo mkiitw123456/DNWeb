@@ -97,6 +97,18 @@ export async function drainUserDeletions() {
     const jobs = await transact((s) => s.pendingUserDeletions || []);
     for (const job of jobs) {
       await purgeActivityMember(job.id);
+      if (job.discordId)
+        await activityTransaction(async (db) => {
+          const voice = await db.get("voice_tracking");
+          if (!voice) return;
+          delete voice.totals[job.discordId];
+          for (const day of Object.values(voice.days || {}))
+            delete day[job.discordId];
+          voice.members = (voice.members || []).filter(
+            (m) => m.id !== job.discordId,
+          );
+          db.set("voice_tracking", voice);
+        });
       await transact((s) => {
         s.pendingUserDeletions = (s.pendingUserDeletions || []).filter(
           (j) => j.id !== job.id,

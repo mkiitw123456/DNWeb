@@ -1,4 +1,6 @@
 import { casinoAction, settleCasino } from "./casino.js";
+import { gameAction } from "./guild-games.js";
+import { voiceView } from "./voice-tracking.js";
 import {
   cleanupDeploymentTest,
   drainUserDeletions,
@@ -253,13 +255,15 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
-    if (type.startsWith("casino.")) {
+    if (type.startsWith("casino.") || type.startsWith("game.")) {
       const result = await transact((s) => {
         const user = s.users.find(
           (x) => x.id === token.id && x.active && x.version === token.version,
         );
         if (!user) fail("登入已過期，請重新登入", 401);
-        const state = casinoAction(s, user, type, payload);
+        const state = type.startsWith("game.")
+          ? gameAction(s, user, type, payload)
+          : casinoAction(s, user, type, payload);
         const ids = (s.deliveries || [])
           .filter((e) => e.channel === "casino" && e.status === "pending")
           .map((e) => e.id);
@@ -281,6 +285,7 @@ export default async function handler(req, res) {
 
     if (
       type.startsWith("activity.") ||
+      type === "voice.state" ||
       type === "discord.members" ||
       type === "maintenance.retryDeletions"
     ) {
@@ -291,13 +296,16 @@ export default async function handler(req, res) {
         if (!user) fail("登入已過期，請重新登入", 401);
         return {
           user,
-          users: s.users.map(({ id, username, active }) => ({
+          users: s.users.map(({ id, username, active, discordId }) => ({
             id,
             username,
             active,
+            discordId: discordId || "",
           })),
         };
       });
+      if (type === "voice.state")
+        return res.status(200).json(await voiceView(auth.user, auth.users));
       if (type === "maintenance.retryDeletions") {
         if (!auth.user.admin) fail("僅管理員可操作", 403);
         await drainUserDeletions();

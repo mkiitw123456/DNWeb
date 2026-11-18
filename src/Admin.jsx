@@ -5,6 +5,8 @@ import { Plus, SquarePen, Trash2 } from "lucide-react";
 import Professions from "./Professions.jsx";
 import DiscordSettings from "./DiscordSettings.jsx";
 import QuantityTypes from "./QuantityTypes.jsx";
+import VoiceStats from "./VoiceStats.jsx";
+import "./guild-games.css";
 import {
   Heading,
   Button,
@@ -55,6 +57,7 @@ export default function Admin({
           ["professions", "職業清單"],
           ["quantities", "數量項目"],
           ["discord", "Discord 通知"],
+          ["voice", "語音統計"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -69,7 +72,9 @@ export default function Admin({
           </button>
         ))}
       </div>
-      {tab === "activities" || tab === "quiz" ? (
+      {tab === "voice" ? (
+        <VoiceStats request={request} onUnauthorized={onUnauthorized} />
+      ) : tab === "activities" || tab === "quiz" ? (
         activity?.adminConfig ? (
           <ActivityAdmin
             key={tab}
