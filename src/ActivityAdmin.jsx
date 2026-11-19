@@ -162,6 +162,10 @@ export default function ActivityAdmin({
       {tab === "events" ? (
         <EventBank
           events={draft.events}
+          unlimited={draft.eventUnlimited}
+          onUnlimited={(eventUnlimited) =>
+            setDraft((d) => ({ ...d, eventUnlimited }))
+          }
           busy={busy}
           save={save}
           onChange={(events) => setDraft((d) => ({ ...d, events }))}

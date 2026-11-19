@@ -35,6 +35,7 @@ async function payload(id, u = member, time = now) {
     submissionId: crypto.randomUUID(),
     activityId: id,
     version: a.version,
+    round: a.used,
     day: v.period.day,
     ...(a.content ? { contentId: a.content.id, choice: 0 } : {}),
   };
@@ -306,4 +307,64 @@ test("scheduled event deducts its signed reward exactly once and rejects invalid
   const after = await view(other);
   assert.equal(after.member.total, before.member.total - 1);
   assert.equal(after.weekly, before.weekly - 1);
+});
+
+test("journey advances across days and retries, with a server-validated optional middle choice", async () => {
+  const c = (await view(admin)).adminConfig;
+  const chapters = c.events.filter((e) => e.id.startsWith("journey-"));
+  assert.equal(chapters.length, 60);
+  assert.equal(
+    chapters.filter((e) => e.options.some((o) => o.revealChance === 30)).length,
+    24,
+  );
+  const extra = chapters[1].options[2];
+  extra.revealChance = 100;
+  c.eventUnlimited = true;
+  c.schedule = {};
+  await activityAction(admin, users, "activity.config", c, now);
+  const event = async (time) =>
+    (await view(admin, time)).activities.find((a) => a.id === "event");
+  const play = async (a, choice, time) =>
+    activityAction(
+      admin,
+      users,
+      "activity.submit",
+      {
+        activityId: a.id,
+        version: a.version,
+        day: a.day,
+        round: a.used,
+        contentId: a.content.id,
+        submissionId: crypto.randomUUID(),
+        choice,
+      },
+      time,
+    );
+  const first = await event(now);
+  assert.equal(first.content.id, "journey-1");
+  await play(first, 0, now);
+  await assert.rejects(() => play(first, 0, now), { status: 409 });
+  const second = await event(now);
+  assert.equal(second.content.extraIndex, 1);
+  assert.equal(second.content.options[1], extra.text);
+  const record = await play(second, 1, now);
+  assert.ok(
+    extra.outcomes.some(
+      (o) => o.result === record.summary && o.stars === record.delta,
+    ),
+  );
+  const tomorrow = now + 86400000;
+  const next = await event(tomorrow);
+  assert.equal(next.content.id, "journey-3");
+  assert.equal(next.used, 0);
+  const settings = (await view(admin, tomorrow)).adminConfig;
+  settings.eventUnlimited = false;
+  const chapter = settings.events.find((e) => e.id === next.content.id);
+  chapter.options.push({ ...extra, revealChance: 0 });
+  await activityAction(admin, users, "activity.config", settings, tomorrow);
+  const hidden = await event(tomorrow);
+  assert.equal(hidden.content.options.length, 2);
+  await assert.rejects(() => play(hidden, 2, tomorrow));
+  await play(hidden, 1, tomorrow);
+  assert.equal((await event(tomorrow)).content, undefined);
 });

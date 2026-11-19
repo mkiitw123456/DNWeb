@@ -35,7 +35,14 @@ const replaceAt = (items, index, value) =>
   items.map((item, i) => (i === index ? value : item));
 const removeAt = (items, index) => items.filter((_, i) => i !== index);
 
-export default function EventBank({ events, onChange, busy, save }) {
+export default function EventBank({
+  events,
+  onChange,
+  busy,
+  save,
+  unlimited,
+  onUnlimited,
+}) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(null);
   function add(example) {
@@ -52,6 +59,18 @@ export default function EventBank({ events, onChange, busy, save }) {
           儲存題庫
         </Button>
       </div>
+      <label className="switch-row">
+        冒險連玩測試（解除每日次數限制）
+        <input
+          type="checkbox"
+          checked={unlimited}
+          disabled={busy}
+          onChange={(e) => onUnlimited(e.target.checked)}
+        />
+      </label>
+      <p className="muted">
+        每天首次冒險優先使用日曆指定的事件，其餘回合接續個人旅程。星數照常結算。
+      </p>
       <Field
         label="搜尋事件"
         value={query}
@@ -59,13 +78,13 @@ export default function EventBank({ events, onChange, busy, save }) {
       />
       <div className="actions">
         <Button
-          disabled={busy || events.length >= 100}
+          disabled={busy || events.length >= 160}
           onClick={() => add(false)}
         >
           新增事件
         </Button>
         <Button
-          disabled={busy || events.length >= 100}
+          disabled={busy || events.length >= 160}
           onClick={() => add(true)}
         >
           新增藥水範例
@@ -107,7 +126,21 @@ export default function EventBank({ events, onChange, busy, save }) {
                     });
                   return (
                     <fieldset key={j}>
-                      <legend>選項 {j + 1}</legend>
+                      <legend>
+                        {opt.revealChance !== undefined
+                          ? "機遇選項"
+                          : `選項 ${j + 1}`}
+                      </legend>
+                      {opt.revealChance !== undefined && (
+                        <NumberField
+                          label="出現機率（%）"
+                          max={100}
+                          value={opt.revealChance}
+                          onChange={(e) =>
+                            change({ revealChance: Number(e.target.value) })
+                          }
+                        />
+                      )}
                       <Field
                         label="選項名稱"
                         value={opt.text}
@@ -193,7 +226,12 @@ export default function EventBank({ events, onChange, busy, save }) {
                         新增結果
                       </Button>
                       <Button
-                        disabled={event.options.length <= 2}
+                        disabled={
+                          opt.revealChance === undefined &&
+                          event.options.filter(
+                            (o) => o.revealChance === undefined,
+                          ).length <= 2
+                        }
                         onClick={() =>
                           edit({ options: removeAt(event.options, j) })
                         }
@@ -210,6 +248,22 @@ export default function EventBank({ events, onChange, busy, save }) {
                   }
                 >
                   新增選項
+                </Button>
+                <Button
+                  disabled={
+                    event.options.length >= 6 ||
+                    event.options.some((o) => o.revealChance !== undefined)
+                  }
+                  onClick={() =>
+                    edit({
+                      options: [
+                        ...event.options,
+                        { ...newOption(), revealChance: 30 },
+                      ],
+                    })
+                  }
+                >
+                  新增機遇選項
                 </Button>
                 <Button
                   disabled={events.length <= 1}

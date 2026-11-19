@@ -37,6 +37,7 @@ export default function Lobby({
     [busy, setBusy] = useState(false),
     [tab, setTab] = useState("lobby"),
     [selected, setSelected] = useState(null),
+    [revealExtra, setRevealExtra] = useState(false),
     [choice, setChoice] = useState(null),
     [result, setResult] = useState(null),
     [profile, setProfile] = useState(false);
@@ -106,10 +107,16 @@ export default function Lobby({
   const open = (a) => {
     pending.current = null;
     setError("");
+    setRevealExtra(false);
     setSelected(a);
     setChoice(null);
     setResult(null);
   };
+  useEffect(() => {
+    if (!(selected?.content?.extraIndex >= 0)) return;
+    const timer = setTimeout(() => setRevealExtra(true), 380);
+    return () => clearTimeout(timer);
+  }, [selected]);
   const submit = async () => {
     if (!pending.current)
       pending.current = {
@@ -117,6 +124,7 @@ export default function Lobby({
         activityId: selected.id,
         day: selected.day || view.period.day,
         version: selected.version,
+        round: selected.used,
         ...(selected.content ? { contentId: selected.content.id, choice } : {}),
       };
     const r = await perform("activity.submit", pending.current);
@@ -138,7 +146,7 @@ export default function Lobby({
       </section>
     );
   const completed = view.activities.filter(
-    (a) => a.used >= a.dailyLimit,
+    (a) => !a.unlimited && a.used >= a.dailyLimit,
   ).length;
   return (
     <div className="guild-lobby compact-lobby">
@@ -228,7 +236,7 @@ export default function Lobby({
               <div className="activity-list">
                 {view.activities.map((a) => {
                   const Icon = icons[a.type],
-                    done = a.used >= a.dailyLimit;
+                    done = !a.unlimited && a.used >= a.dailyLimit;
                   return (
                     <article
                       key={a.id}
@@ -266,7 +274,9 @@ export default function Lobby({
                           </Button>
                         </div>
                         <small className="activity-remaining">
-                          本日 {a.used} / {a.dailyLimit} 次 · 每日 09:00 更新
+                          {a.unlimited
+                            ? `測試中 · 今日已玩 ${a.used} 次`
+                            : `本日 ${a.used} / ${a.dailyLimit} 次 · 每日 09:00 更新`}
                         </small>
                       </div>
                     </article>
@@ -456,7 +466,10 @@ export default function Lobby({
           ) : (
             <div className="activity-play">
               <p className="muted">
-                每日 {selected.dailyLimit} 次 ·{" "}
+                {selected.unlimited
+                  ? "測試期間不限次數"
+                  : `每日 ${selected.dailyLimit} 次`}{" "}
+                ·{" "}
                 {selected.type === "event"
                   ? "依選擇結果增減星星"
                   : `參與 +${selected.points} 顆星星`}
@@ -477,28 +490,40 @@ export default function Lobby({
                   {selected.content?.category && (
                     <p className="muted">{selected.content.category}</p>
                   )}
-                  <div className="activity-options">
-                    {selected.content?.options.map((o, i) => (
-                      <button
-                        key={i}
-                        disabled={busy || !!pending.current}
-                        className={choice === i ? "selected" : ""}
-                        aria-pressed={choice === i}
-                        onClick={() => setChoice(i)}
-                      >
-                        {o}
-                        {selected.content.odds?.[i] && (
-                          <small className="event-odds">
-                            {selected.content.odds[i]
-                              .map(
-                                ({ chance, stars }) =>
-                                  `${chance}%：${stars > 0 ? "+" : ""}${stars} 星`,
-                              )
-                              .join(" ／ ")}
-                          </small>
-                        )}
-                      </button>
-                    ))}
+                  <div
+                    className={
+                      revealExtra
+                        ? "activity-options event-surprise"
+                        : "activity-options"
+                    }
+                  >
+                    {selected.content?.options.map((o, i) =>
+                      selected.content.extraIndex === i &&
+                      !revealExtra ? null : (
+                        <button
+                          key={i}
+                          disabled={busy || !!pending.current}
+                          className={`${choice === i ? "selected" : ""} ${selected.content.extraIndex === i ? "event-extra" : ""}`}
+                          aria-pressed={choice === i}
+                          onClick={() => setChoice(i)}
+                        >
+                          {selected.content.extraIndex === i && (
+                            <small>意外的機遇 · </small>
+                          )}
+                          {o}
+                          {selected.content.odds?.[i] && (
+                            <small className="event-odds">
+                              {selected.content.odds[i]
+                                .map(
+                                  ({ chance, stars }) =>
+                                    `${chance}%：${stars > 0 ? "+" : ""}${stars} 星`,
+                                )
+                                .join(" ／ ")}
+                            </small>
+                          )}
+                        </button>
+                      ),
+                    )}
                   </div>
                 </>
               )}

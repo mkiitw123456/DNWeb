@@ -1,4 +1,5 @@
 import { randomInt, randomUUID, createHash } from "node:crypto";
+import { journeyEvents } from "./journey.js";
 import { fail, text, number } from "./domain.js";
 import { activityTransaction, activityQuery } from "./activity-store.js";
 export function activityPeriods(now = Date.now()) {
@@ -147,7 +148,17 @@ export function normalizeActivityConfig(config) {
   return {
     ...config,
     schedule: config.schedule || {},
-    events: config.events.map((event) => ({
+    journeyInstalled: true,
+    eventUnlimited: config.eventUnlimited ?? true,
+    events: (config.journeyInstalled
+      ? config.events
+      : [
+          ...config.events,
+          ...journeyEvents().filter(
+            (j) => !config.events.some((e) => e.id === j.id),
+          ),
+        ]
+    ).map((event) => ({
       ...event,
       options: event.options.map((option) =>
         option.outcomes
@@ -242,18 +253,37 @@ async function ensureQuizStats(db, member, now) {
   db.set(`member_${member.memberId}`, member);
   return member;
 }
-function selectContent(config, activity, memberId, day, used) {
+function scheduledItem(config, activity, day, used) {
+  if (activity.type === "event" && config.eventUnlimited && used > 0)
+    return null;
+  return config.schedule?.[day]?.[activity.id];
+}
+function eventChoices(item, memberId, day, used) {
+  const base = item.options.filter((o) => o.revealChance === undefined);
+  const extra = item.options.find((o) => o.revealChance !== undefined);
+  const roll =
+    parseInt(keyOf(memberId, item.id, day, used).slice(0, 12), 16) / 2 ** 48;
+  if (extra && roll * 100 < extra.revealChance) base.splice(1, 0, extra);
+  return base;
+}
+function selectContent(config, activity, memberId, day, used, progress = 0) {
   const pool =
     activity.type === "quiz"
       ? config.questions
       : activity.type === "fortune"
         ? config.fortunes
         : config.events;
-  const assigned = config.schedule?.[day]?.[activity.id];
+  const assigned = scheduledItem(config, activity, day, used);
   if (assigned) {
     const selected = pool.find((x) => x.id === assigned);
     if (!selected) fail("當日安排已失效，請管理員重新設定", 409);
     return selected;
+  }
+  if (activity.type === "event") {
+    const chapters = pool
+      .filter((e) => /^journey-\d+$/.test(e.id))
+      .sort((a, b) => Number(a.id.slice(8)) - Number(b.id.slice(8)));
+    if (chapters.length) return chapters[progress % chapters.length];
   }
   const list =
     activity.type === "quiz"
@@ -272,7 +302,7 @@ function selectContent(config, activity, memberId, day, used) {
     ) % list.length
   ];
 }
-function visibleActivity(config, a, memberId, period, dayCounts) {
+function visibleActivity(config, a, memberId, period, dayCounts, progress) {
   const used = dayCounts[a.id] || 0;
   const result = {
     ...a,
@@ -280,14 +310,17 @@ function visibleActivity(config, a, memberId, period, dayCounts) {
     version: config.version,
     day: period.day,
     resetHour: 9,
+    unlimited: a.type === "event" && config.eventUnlimited,
   };
   if (a.type === "fortune")
     result.content = {
       intro: config.fortuneIntro || defaultActivityConfig().fortuneIntro,
       body: config.fortuneBody || defaultActivityConfig().fortuneBody,
     };
-  if (a.type !== "fortune" && used < a.dailyLimit) {
-    const item = selectContent(config, a, memberId, period.day, used);
+  if (a.type !== "fortune" && (result.unlimited || used < a.dailyLimit)) {
+    const item = selectContent(config, a, memberId, period.day, used, progress);
+    const choices =
+      a.type === "event" ? eventChoices(item, memberId, period.day, used) : [];
     result.content =
       a.type === "quiz"
         ? {
@@ -300,8 +333,9 @@ function visibleActivity(config, a, memberId, period, dayCounts) {
             id: item.id,
             title: item.title,
             story: item.story,
-            options: item.options.map((x) => x.text),
-            odds: item.options.map((x) =>
+            options: choices.map((x) => x.text),
+            extraIndex: choices.findIndex((x) => x.revealChance !== undefined),
+            odds: choices.map((x) =>
               x.outcomes.map(({ chance, stars }) => ({ chance, stars })),
             ),
           };
@@ -350,6 +384,7 @@ export async function activityView(user, users, now = Date.now()) {
               user.id,
               dailyActivityPeriods(now),
               today?.counts || {},
+              member.journeyProgress || 0,
             ),
           ),
         discordUrl: config.discordUrl,
@@ -369,8 +404,8 @@ export async function activityView(user, users, now = Date.now()) {
   );
 }
 function validateEvents(events) {
-  if (!Array.isArray(events) || !events.length || events.length > 100)
-    fail("冒險事件題庫需要 1–100 題");
+  if (!Array.isArray(events) || !events.length || events.length > 160)
+    fail("冒險事件題庫需要 1–160 題");
   return uniqueIds(
     events.map((event) => {
       if (
@@ -379,6 +414,9 @@ function validateEvents(events) {
         event.options.length > 6
       )
         fail("每題需要 2–6 個選項");
+      const extras = event.options.filter((o) => o?.revealChance !== undefined);
+      if (extras.length > 1 || event.options.length - extras.length < 2)
+        fail("每題至少需要兩個一般選項，最多一個機遇選項");
       return {
         id: contentId(event.id),
         title: text(event.title, "事件標題", 120),
@@ -403,7 +441,13 @@ function validateEvents(events) {
           });
           if (outcomes.reduce((sum, o) => sum + o.chance, 0) !== 100)
             fail(`「${option.text}」的結果機率合計必須為 100%`);
-          return { text: text(option.text, "選項名稱", 120), outcomes };
+          return {
+            text: text(option.text, "選項名稱", 120),
+            outcomes,
+            ...(option.revealChance === undefined
+              ? {}
+              : { revealChance: number(option.revealChance, "出現機率", 100) }),
+          };
         }),
       };
     }),
@@ -486,6 +530,11 @@ function validateConfig(input, previous) {
       };
     }),
   );
+  if (
+    input.eventUnlimited !== undefined &&
+    typeof input.eventUnlimited !== "boolean"
+  )
+    fail("測試模式設定無效");
   const events = validateEvents(input.events ?? previous.events);
   const schedule = validateSchedule(input.schedule ?? previous.schedule ?? {}, {
     fortune: fortunes,
@@ -495,6 +544,7 @@ function validateConfig(input, previous) {
   return {
     ...previous,
     quizCategories,
+    eventUnlimited: input.eventUnlimited ?? previous.eventUnlimited,
     events,
     fortunes,
     schedule,
@@ -672,7 +722,11 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         if (p.version !== config.version || p.day !== period.day)
           fail("活動內容或日期已更新，請重新開啟活動", 409);
         const used = day.counts[a.id] || 0;
-        if (used >= a.dailyLimit) fail("今日已達參與上限，明天再來吧", 409);
+        const unlimited = a.type === "event" && config.eventUnlimited;
+        if ((unlimited || p.round !== undefined) && p.round !== used)
+          fail("這回合已結算，請重新開啟活動", 409);
+        if (!unlimited && used >= a.dailyLimit)
+          fail("今日已達參與上限，明天再來吧", 409);
         activityId = a.id;
         title = a.title;
         delta = a.points;
@@ -682,11 +736,22 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           resultDetails = fortune.body;
           contentId = fortune.id;
         } else {
-          const content = selectContent(config, a, user.id, period.day, used);
+          const content = selectContent(
+            config,
+            a,
+            user.id,
+            period.day,
+            used,
+            member.journeyProgress || 0,
+          );
           contentId = content.id;
           if (p.contentId !== content.id)
             fail("題目已更新，請重新開啟活動", 409);
-          const choice = number(p.choice, "選項", content.options.length - 1);
+          const choices =
+            a.type === "event"
+              ? eventChoices(content, user.id, period.day, used)
+              : content.options;
+          const choice = number(p.choice, "選項", choices.length - 1);
           if (a.type === "quiz") {
             const correct = choice === content.correct;
             quizCorrect = correct;
@@ -696,7 +761,9 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           } else {
             const roll = randomInt(100);
             let limit = 0;
-            const outcome = content.options[choice].outcomes.find((o) => {
+            if (!scheduledItem(config, a, period.day, used))
+              member.journeyProgress = (member.journeyProgress || 0) + 1;
+            const outcome = choices[choice].outcomes.find((o) => {
               limit += o.chance;
               return roll < limit;
             });

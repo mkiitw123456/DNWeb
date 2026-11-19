@@ -72,6 +72,7 @@ test("09:00 resets quiz allowance, midnight does not; stale-day submission is re
     activityId: "quiz",
     version: a.version,
     day: a.day,
+    round: a.used,
     contentId: a.content.id,
     choice: 0,
   };
@@ -146,6 +147,7 @@ test("all games retain daily allowance through midnight and reopen at 09:00", as
       activityId: a.id,
       version: a.version,
       day: a.day,
+      round: a.used,
       ...(a.content?.id ? { contentId: a.content.id, choice: 0 } : {}),
     };
     submissions.push(p);
@@ -186,6 +188,7 @@ test("all games retain daily allowance through midnight and reopen at 09:00", as
         activityId: a.id,
         version: a.version,
         day: a.day,
+        round: a.used,
         ...(a.content?.id ? { contentId: a.content.id, choice: 0 } : {}),
       },
       next,
