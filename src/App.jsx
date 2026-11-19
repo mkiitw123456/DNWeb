@@ -63,7 +63,7 @@ export default function App() {
   useEffect(() => {
     let live = true;
     const refresh = (initial = false) => {
-      if (lock.current) return;
+      if (lock.current || (initial !== true && document.hidden)) return;
       const current = ++revision.current;
       (initial === true ? initialSession : request())
         .then((d) => {
@@ -86,7 +86,7 @@ export default function App() {
         });
     };
     refresh(true);
-    const timer = setInterval(refresh, 30000);
+    const timer = setInterval(refresh, 120000);
     window.addEventListener("focus", refresh);
     return () => {
       live = false;

@@ -98,7 +98,7 @@ export function settleGame(room, result) {
   }));
 }
 export function gameAction(s, u, type, p = {}, now = Date.now()) {
-  if (!linked(u)) fail("請先完成 Discord 身分綁定與審核", 403);
+  if (!linked(u)) fail("請先完成 Discord 身分綁定", 403);
   advanceGames(s, now);
   if (type === "game.create") {
     if (!["prediction", "race"].includes(p.kind)) fail("玩法無效");

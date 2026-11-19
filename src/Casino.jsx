@@ -138,6 +138,8 @@ export default function Casino({ me, request, onUnauthorized }) {
   const offset = useRef(0),
     sequence = useRef(0),
     lock = useRef(false);
+  const watching = useRef(null);
+  watching.current = selected;
   const linked = /^\d{17,20}$/.test(me.discordId || "");
   const refresh = useCallback(async () => {
     const seq = ++sequence.current;
@@ -151,9 +153,12 @@ export default function Casino({ me, request, onUnauthorized }) {
   useEffect(() => {
     if (!linked || !["pool", "history"].includes(tab)) return;
     let live = true,
-      pending = false;
+      pending = false,
+      lastPoll = 0;
     const poll = async () => {
-      if (pending || lock.current || !live) return;
+      if (pending || lock.current || !live || document.hidden) return;
+      if (Date.now() - lastPoll < (watching.current ? 4000 : 16000)) return;
+      lastPoll = Date.now();
       pending = true;
       try {
         await refresh();
@@ -221,7 +226,7 @@ export default function Casino({ me, request, onUnauthorized }) {
     return (
       <section className="admin-panel">
         <h1>賭場</h1>
-        <p>請先到設定完成 Discord 身分綁定，並等待管理員審核後使用公會抽獎。</p>
+        <p>請先到設定完成 Discord 身分綁定，系統確認成功後即可使用所有玩法。</p>
       </section>
     );
   return (

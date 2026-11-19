@@ -2,6 +2,7 @@ import { casinoAction, settleCasino } from "./casino.js";
 import { gameAction } from "./guild-games.js";
 import { duelAction, advanceDuels } from "./duels.js";
 import { voiceView } from "./voice-tracking.js";
+import { firebaseUsage } from "./firebase-usage.js";
 import {
   cleanupDeploymentTest,
   drainUserDeletions,
@@ -321,6 +322,7 @@ export default async function handler(req, res) {
     if (
       type.startsWith("activity.") ||
       type === "voice.state" ||
+      type === "firebase.usage" ||
       type === "discord.members" ||
       type === "maintenance.retryDeletions"
     ) {
@@ -344,6 +346,8 @@ export default async function handler(req, res) {
       });
       if (type === "voice.state")
         return res.status(200).json(await voiceView(auth.user, auth.users));
+      if (type === "firebase.usage")
+        return res.status(200).json(await firebaseUsage(auth.user));
       if (type === "maintenance.retryDeletions") {
         if (!auth.user.admin) fail("僅管理員可操作", 403);
         await drainUserDeletions();

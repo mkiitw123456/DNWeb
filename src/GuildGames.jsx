@@ -45,7 +45,7 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
     let live = true,
       pending = false;
     async function poll() {
-      if (!live || pending || lock.current) return;
+      if (!live || pending || lock.current || document.hidden) return;
       pending = true;
       try {
         await refresh();
@@ -59,7 +59,7 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
       }
     }
     poll();
-    const timer = setInterval(poll, 10000);
+    const timer = setInterval(poll, 15000);
     return () => {
       live = false;
       sequence.current++;

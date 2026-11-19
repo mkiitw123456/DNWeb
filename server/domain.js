@@ -289,17 +289,8 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     u.discordSetupDone = true;
     return;
   }
-  if (type === "user.discordApprove") {
-    if (!u.admin) fail("僅管理員可操作", 403);
-    const target = s.users.find((x) => x.id === p.id);
-    if (!target?.discordPendingId || target.discordPendingId !== p.discordId)
-      fail("申請已變更，請重新確認", 409);
-    if (s.users.some((x) => x.id !== target.id && x.discordId === p.discordId))
-      fail("此 Discord ID 已被綁定");
-    target.discordId = target.discordPendingId;
-    delete target.discordPendingId;
-    return;
-  }
+  if (type === "user.discordApprove")
+    fail("Discord 已改為由成員自行確認，請至設定重新綁定", 410);
   if (type === "onboarding.complete") {
     s.users.find((x) => x.id === u.id).onboardingCompleted = true;
     return;

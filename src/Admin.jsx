@@ -6,6 +6,7 @@ import Professions from "./Professions.jsx";
 import DiscordSettings from "./DiscordSettings.jsx";
 import QuantityTypes from "./QuantityTypes.jsx";
 import VoiceStats from "./VoiceStats.jsx";
+import FirebaseUsage from "./FirebaseUsage.jsx";
 import "./guild-games.css";
 import {
   Heading,
@@ -58,6 +59,7 @@ export default function Admin({
           ["quantities", "數量項目"],
           ["discord", "Discord 通知"],
           ["voice", "語音統計"],
+          ["usage", "Firebase 用量"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -72,7 +74,9 @@ export default function Admin({
           </button>
         ))}
       </div>
-      {tab === "voice" ? (
+      {tab === "usage" ? (
+        <FirebaseUsage request={request} onUnauthorized={onUnauthorized} />
+      ) : tab === "voice" ? (
         <VoiceStats request={request} onUnauthorized={onUnauthorized} />
       ) : tab === "activities" || tab === "quiz" ? (
         activity?.adminConfig ? (
@@ -130,25 +134,6 @@ export default function Admin({
                   <SquarePen size={16} />
                   編輯
                 </Button>
-                {u.discordPendingId && (
-                  <Button
-                    disabled={busy}
-                    onClick={async () => {
-                      if (
-                        await ask(
-                          `確認 ${u.username} 的 Discord ID 為 ${u.discordPendingId}？請先核對成員身分。`,
-                        )
-                      )
-                        mutate(
-                          "user.discordApprove",
-                          { id: u.id, discordId: u.discordPendingId },
-                          "Discord 綁定已確認",
-                        );
-                    }}
-                  >
-                    確認 Discord 申請
-                  </Button>
-                )}
                 {u.id !== data.me.id &&
                   u.id !== data.adminOwnerId &&
                   (!u.admin || data.canDelegate) && (

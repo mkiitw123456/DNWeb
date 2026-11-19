@@ -77,7 +77,7 @@ export default function Lobby({
         if (live) handleError(e);
       });
     const focus = () => {
-      if (!lock.current) refresh().catch(handleError);
+      if (!lock.current && !document.hidden) refresh().catch(handleError);
     };
     window.addEventListener("focus", focus);
     const timer = setInterval(focus, 60000);

@@ -77,7 +77,7 @@ export function settleCasino(s, now = Date.now()) {
   );
 }
 export function casinoAction(s, u, type, p = {}, now = Date.now()) {
-  if (!linked(u)) fail("請先完成 Discord 身分綁定與審核後使用抽獎", 403);
+  if (!linked(u)) fail("請先完成 Discord 身分綁定後使用賭場", 403);
   settleCasino(s, now);
   if (type === "casino.create") {
     const title = text(p.title, "獎池標題", 80);
