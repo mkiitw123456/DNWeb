@@ -9,6 +9,7 @@ export default function useGearSaves(setData, revision, refreshShell) {
   const inFlight = useRef(null);
   const hasPending = useRef(false);
   const timer = useRef(null);
+  const batchStarted = useRef(0);
   const writer = useRef(null);
   const [pending, setPending] = useState({});
   const saving = Object.keys(pending).length > 0;
@@ -94,6 +95,7 @@ export default function useGearSaves(setData, revision, refreshShell) {
   function flush() {
     clearTimeout(timer.current);
     timer.current = null;
+    batchStarted.current = 0;
     if (!writer.current && drafts.current.size) {
       writer.current = drain().finally(() => {
         writer.current = null;
@@ -106,10 +108,15 @@ export default function useGearSaves(setData, revision, refreshShell) {
     revision.current++;
     drafts.current.set(id, { ...drafts.current.get(id), [slot]: grade });
     publish();
-    // Briefly group quick selections into one Firestore transaction per character.
-    if (!writer.current && timer.current === null) {
-      timer.current = setTimeout(flush, 150);
-    }
+    if (writer.current) return;
+    // Save after a short pause, or within 900 ms if selections keep arriving.
+    const now = performance.now();
+    if (timer.current === null) batchStarted.current = now;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(
+      flush,
+      Math.min(300, Math.max(0, 900 - (now - batchStarted.current))),
+    );
   }
 
   return { pending, changeGear, flush, hasPending };
