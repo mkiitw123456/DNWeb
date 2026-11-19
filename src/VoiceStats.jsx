@@ -38,7 +38,7 @@ export default function VoiceStats({ request, onUnauthorized }) {
   return (
     <section className="admin-panel">
       <div className="section-title">
-        <h2>語音活躍時間</h2>
+        <h2>語音時間與文字發言</h2>
         <Button onClick={() => setRevision((n) => n + 1)}>重新整理</Button>
       </div>
       <p className="hint">
@@ -78,6 +78,7 @@ export default function VoiceStats({ request, onUnauthorized }) {
               <span>
                 今日 {duration(r.todayMs)}
                 <small>累積 {duration(r.totalMs)}</small>
+                <small>累積發言 {r.messages || 0} 則</small>
               </span>
             </div>
           ))}

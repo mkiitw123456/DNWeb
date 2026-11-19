@@ -52,6 +52,19 @@ export function applyVoiceSnapshot(previous, input, now = Date.now()) {
     previous || { totals: {}, days: {}, startedAt: now },
   );
   if (s.sessionId === p.sessionId && p.sequence <= s.sequence) return s;
+  if (input.textCounts !== undefined) {
+    if (!/^[a-f0-9-]{36}$/.test(input.textSession || "") || !input.textCounts || typeof input.textCounts !== "object" || Array.isArray(input.textCounts)) fail("文字統計格式錯誤");
+    const rows = Object.entries(input.textCounts);
+    if (rows.length > 500) fail("文字統計人數過多");
+    const previousCounts = s.textSession === input.textSession ? s.textCursor : {};
+    s.textTotals ||= {};
+    for (const [id, count] of rows) {
+      if (!/^\d{17,20}$/.test(id) || !Number.isSafeInteger(count) || count < (previousCounts[id] || 0)) fail("文字統計數量錯誤");
+      s.textTotals[id] = (s.textTotals[id] || 0) + count - (previousCounts[id] || 0);
+    }
+    s.textSession = input.textSession;
+    s.textCursor = { ...input.textCounts };
+  }
   const gap = now - (s.lastSeen || now);
   if (
     s.sessionId === p.sessionId &&
@@ -91,6 +104,7 @@ export async function recordVoiceSnapshot(p, now = Date.now()) {
     return {
       ok: true,
       receivedAt: next.lastSeen,
+      totalMessages: Object.values(next.textTotals || {}).reduce((sum, count) => sum + count, 0),
       trackedMembers: Object.keys(next.totals).length,
       totalRecordedMs: Object.values(next.totals).reduce(
         (sum, ms) => sum + ms,
@@ -120,6 +134,7 @@ export async function voiceView(user, users, now = Date.now()) {
           .map((u) => ({
             id: u.id,
             name: u.nickname || u.username,
+            messages: s?.textTotals?.[u.discordId] || 0,
             todayMs: s?.days?.[day]?.[u.discordId] || 0,
             totalMs: s?.totals?.[u.discordId] || 0,
             counting: active.has(u.discordId),

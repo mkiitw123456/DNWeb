@@ -1213,6 +1213,9 @@ legend {
   color: var(--muted);
   font-size: 14px;
 }
+@media (min-width: 701px) {
+  .app .sidebar { height: 100dvh; box-sizing: border-box; overflow-y: auto; }
+}
 @media (max-width: 1150px) {
   .sidebar {
     width: 190px;

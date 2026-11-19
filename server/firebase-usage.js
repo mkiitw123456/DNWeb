@@ -138,6 +138,7 @@ export async function firebaseUsage(user, now = Date.now()) {
       fail("無法取得監控存取權，請確認正式站 Firebase 服務帳戶設定", 503);
     }
     const value = await readUsage(project, access_token, now);
+    value.serviceAccount = account.client_email;
     cache = { key, at: now, value };
     return value;
   })();

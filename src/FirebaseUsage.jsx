@@ -95,7 +95,7 @@ export default function FirebaseUsage({ request, onUnauthorized }) {
                   <ol>
                     <li>在此 Firebase 專案啟用 Cloud Monitoring API。</li>
                     <li>
-                      將正式站 Firebase 服務帳戶加入「Monitoring
+                      將正式站服務帳戶 <code>{data.serviceAccount}</code> 加入「Monitoring
                       Viewer」（roles/monitoring.viewer）角色。
                     </li>
                     <li>等待權限生效，再按「更新用量」。</li>

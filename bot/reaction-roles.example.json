@@ -1,0 +1,10 @@
+[
+  {
+    "channelId": "頻道 ID",
+    "messageId": "領取職業的訊息 ID",
+    "jobs": [
+      { "name": "劍聖", "emojiId": "劍聖表情 ID", "roleId": "劍聖身分組 ID" },
+      { "name": "祭司", "emojiId": "祭司表情 ID", "roleId": "祭司身分組 ID" }
+    ]
+  }
+]

@@ -261,7 +261,7 @@ export default function App() {
   ];
   return (
     <FormErrorContext.Provider value={error}>
-      <div className="app session-enter">
+      <div className="app">
         <aside className="sidebar">
           <div className="brand">
             <img

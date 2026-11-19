@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { setupReactionRole } from "./reaction-role.js";
+import { Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { createHmac, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { mkdir, open, readFile, unlink } from "node:fs/promises";
@@ -44,19 +45,30 @@ async function acquireLock() {
 }
 await acquireLock();
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
 let sessionId = randomUUID(),
   sequence = 0,
   chain = Promise.resolve(),
   ready = false,
   stopping = false;
+// Session totals survive failed uploads. The server applies only the increase.
+const textCounts = new Map();
+const textSession = randomUUID();
+setupReactionRole(client, guildId);
+client.on(Events.MessageCreate, message => {
+  if (message.guildId !== guildId || message.author.bot || message.webhookId || message.system) return;
+  const id = message.author.id;
+  if (textCounts.has(id) || textCounts.size < 500) textCounts.set(id, (textCounts.get(id) || 0) + 1);
+});
 function snapshot() {
   const guild = client.guilds.cache.get(guildId);
   return {
     guildId,
     sessionId,
     sequence: ++sequence,
+    textSession, textCounts: Object.fromEntries(textCounts),
     observedAt: Date.now(),
     afkChannelId: guild?.afkChannelId || null,
     members:
@@ -94,6 +106,7 @@ function send() {
       });
       if (!res.ok) throw new Error(`網站回報失敗 HTTP ${res.status}`);
       const receipt = await res.json();
+      if (Number.isFinite(receipt.totalMessages)) console.log(`已寫入網站：累積文字發言 ${receipt.totalMessages} 則`);
       if (!receipt.ok || !Number.isFinite(receipt.totalRecordedMs))
         throw new Error("網站未回傳有效的統計收據");
       console.log(

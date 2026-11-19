@@ -102,6 +102,7 @@ export async function drainUserDeletions() {
           const voice = await db.get("voice_tracking");
           if (!voice) return;
           delete voice.totals[job.discordId];
+          if (voice.textTotals) delete voice.textTotals[job.discordId];
           for (const day of Object.values(voice.days || {}))
             delete day[job.discordId];
           voice.members = (voice.members || []).filter(
