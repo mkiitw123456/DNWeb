@@ -4,7 +4,14 @@ import { Heading, Button, Field, Modal, FormActions, Empty } from "./ui.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
 import GearPicker from "./GearPicker.jsx";
 import CharacterCard from "./CharacterCard.jsx";
-export default function Characters({ data, mutate, busy, ask }) {
+export default function Characters({
+  data,
+  mutate,
+  busy,
+  ask,
+  pendingGear,
+  changeGear,
+}) {
   const [editing, setEditing] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const characters = data.characters.filter((c) => c.ownerId === data.me.id);
@@ -104,6 +111,8 @@ export default function Characters({ data, mutate, busy, ask }) {
               canEdit={true}
               busy={busy}
               mutate={mutate}
+              pendingGear={pendingGear[c.id]}
+              onGearChange={changeGear}
               onEdit={() =>
                 setEditing({
                   id: c.id,
@@ -182,6 +191,7 @@ export default function Characters({ data, mutate, busy, ask }) {
               <GearPicker
                 gear={{
                   ...characters.find((c) => c.id === editing.id)?.gear,
+                  ...pendingGear[editing.id],
                   ...editing.gear,
                 }}
                 disabled={busy}

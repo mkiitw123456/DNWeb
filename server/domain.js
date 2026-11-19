@@ -562,6 +562,14 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
       s.characters.find((x) => x.id === p.id),
       u,
     );
+    if (Object.hasOwn(p, "gear")) {
+      if (Object.hasOwn(p, "slot") || Object.hasOwn(p, "grade"))
+        fail("請擇一使用單一部位或多部位更新");
+      if (!p.gear || !Object.keys(p.gear).length)
+        fail("請至少選擇一個要更新的裝備部位");
+      c.gear = applyGear(c.gear, p.gear);
+      return { id: c.id, gear: c.gear };
+    }
     if (typeof p.slot !== "string") fail("裝備部位不正確");
     c.gear = applyGear(c.gear, { [p.slot]: p.grade });
     return;

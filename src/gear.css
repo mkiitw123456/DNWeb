@@ -1,3 +1,8 @@
+.gear-saving {
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
 .gear-picker {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

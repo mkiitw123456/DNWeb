@@ -35,6 +35,9 @@ async function performRequest(type, payload) {
       ? {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          ...(type === "character.gear" && {
+            signal: AbortSignal.timeout(20000),
+          }),
           body: JSON.stringify({ type, payload }),
         }
       : { credentials: "same-origin", signal: AbortSignal.timeout(15000) },

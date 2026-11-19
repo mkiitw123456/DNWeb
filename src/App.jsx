@@ -7,6 +7,7 @@ import DiscordSetup from "./DiscordSetup.jsx";
 import GuidedTour from "./GuidedTour.jsx";
 import "./personalization.css";
 import { apiRequest, initialSession } from "./api.js";
+import useGearSaves from "./useGearSaves.js";
 import {
   useState,
   useEffect,
@@ -44,6 +45,9 @@ export default function App() {
   }, [data?.me.id, data?.activity?.member?.total, syncStars]);
   const lock = useRef(false);
   const revision = useRef(0);
+  const refreshShell = useRef(null);
+  const gearSaves = useGearSaves(setData, revision, refreshShell);
+  const { hasPending } = gearSaves;
   const [confirmation, setConfirmation] = useState(null);
   const [registering, setRegistering] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false),
@@ -63,7 +67,12 @@ export default function App() {
   useEffect(() => {
     let live = true;
     const refresh = (initial = false) => {
-      if (lock.current || (initial !== true && document.hidden)) return;
+      if (
+        lock.current ||
+        hasPending.current ||
+        (initial !== true && document.hidden)
+      )
+        return;
       const current = ++revision.current;
       (initial === true ? initialSession : request())
         .then((d) => {
@@ -85,15 +94,17 @@ export default function App() {
           if (live) setLoading(false);
         });
     };
+    refreshShell.current = refresh;
     refresh(true);
     const timer = setInterval(refresh, 120000);
     window.addEventListener("focus", refresh);
     return () => {
       live = false;
+      refreshShell.current = null;
       clearInterval(timer);
       window.removeEventListener("focus", refresh);
     };
-  }, [request]);
+  }, [request, hasPending]);
   useFeedback(error);
   async function mutate(type, payload, message = "已儲存") {
     if (lock.current) return false;
@@ -102,6 +113,7 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
+      await gearSaves.flush();
       setData(await request(type, payload));
       notify(message);
       return true;
@@ -325,6 +337,7 @@ export default function App() {
                   revision.current++;
                   setBusy(true);
                   try {
+                    await gearSaves.flush();
                     await request("logout");
                     setPage("lobby");
                     setData(null);
@@ -370,7 +383,11 @@ export default function App() {
                   onUnauthorized={onUnauthorized}
                 />
               ) : page === "characters" ? (
-                <Characters {...shared} />
+                <Characters
+                  {...shared}
+                  pendingGear={gearSaves.pending}
+                  changeGear={gearSaves.changeGear}
+                />
               ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
                 <Raids {...shared} />
               ) : page === "admin" && data.me.admin ? (

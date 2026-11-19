@@ -124,6 +124,39 @@ test("gear supports legacy characters, partial edits, clear and owner permission
   update("weapon", null);
   assert.equal(c.gear.weapon, null);
 });
+test("batched gear updates validate the whole patch and only change requested slots", () => {
+  const s = initialState(),
+    admin = s.users[0];
+  action(s, admin, "character.save", {
+    name: "旅行者",
+    gear: { accessory: "S" },
+  });
+  const c = s.characters[0];
+  const update = (payload, who = admin) =>
+    action(s, who, "character.gear", { id: c.id, ...payload });
+  assert.throws(
+    () => update({ gear: { equipment: "L" } }, { id: "another-owner" }),
+    { status: 403 },
+  );
+  assert.deepEqual(update({ gear: { equipment: "A", weapon: "S" } }), {
+    id: c.id,
+    gear: { equipment: "A", weapon: "S", accessory: "S" },
+  });
+  for (const payload of [
+    { gear: {} },
+    { gear: null },
+    { gear: "weapon" },
+    { gear: ["L"] },
+    { gear: { weapon: "L", accessory: "X" } },
+    { gear: { armor: "L" } },
+    { gear: { weapon: "L" }, slot: "weapon" },
+    { gear: { weapon: "L" }, grade: "A" },
+  ])
+    assert.throws(() => update(payload), { status: 400 });
+  assert.deepEqual(c.gear, { equipment: "A", weapon: "S", accessory: "S" });
+  update({ gear: { weapon: null } });
+  assert.deepEqual(c.gear, { equipment: "A", weapon: null, accessory: "S" });
+});
 test("cost notes survive sale, edit, claiming and history; old records remain compatible", () => {
   const s = initialState(),
     u = s.users[0];

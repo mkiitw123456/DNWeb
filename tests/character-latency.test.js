@@ -85,6 +85,23 @@ test("Character writes return committed state without waiting for slow Discord; 
     assert.equal(result.status, 200);
     const character = result.data.characters.find((c) => c.name === "延遲測試");
     assert.ok(character);
+    const legacy = await call(
+      "character.gear",
+      { id: character.id, slot: "weapon", grade: "A" },
+      login.cookie,
+    );
+    assert.equal(legacy.data.characters[0].gear.weapon, "A");
+    const patch = {
+      id: character.id,
+      gear: { equipment: "S", accessory: "L" },
+    };
+    assert.equal((await call("character.gear", patch)).status, 401);
+    const receipt = await call("character.gear", patch, login.cookie);
+    assert.equal(receipt.status, 200);
+    assert.deepEqual(receipt.data, {
+      id: character.id,
+      gear: { equipment: "S", weapon: "A", accessory: "L" },
+    });
     for (const [type, payload] of [
       ["character.run", { id: character.id, dungeonId: "d", count: 1 }],
       ["character.complete", { id: character.id, dungeonId: "d" }],
@@ -98,6 +115,7 @@ test("Character writes return committed state without waiting for slow Discord; 
     );
     assert.equal(stored.runs.d, 3);
     assert.equal(stored.quantities.q, 7);
+    assert.deepEqual(stored.gear, receipt.data.gear);
     console.log(
       "Committed character save response with blocked Discord:",
       Math.round(performance.now() - start),
@@ -113,7 +131,7 @@ test("Character writes return committed state without waiting for slow Discord; 
       if (complete) break;
       await new Promise((r) => setTimeout(r, 10));
     }
-    assert.ok(sent >= 8);
+    assert.ok(sent >= 12);
     assert.ok(
       await transact((s) =>
         s.deliveries.some(

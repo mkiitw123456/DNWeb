@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { SquarePen } from "lucide-react";
 import GearPicker from "./GearPicker.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
@@ -11,27 +10,20 @@ export default function CharacterCard({
   canEdit,
   busy,
   mutate,
+  pendingGear,
+  onGearChange,
   onEdit,
 }) {
-  const [pendingGear, setPendingGear] = useState(null);
-  async function changeGear(slot, grade) {
-    if (busy || pendingGear || (c.gear?.[slot] ?? null) === grade) return;
-    setPendingGear({ [slot]: grade });
-    try {
-      await mutate(
-        "character.gear",
-        { id: c.id, slot, grade },
-        "裝備階級已更新",
-      );
-    } finally {
-      setPendingGear(null);
-    }
-  }
   const profession = professions.find((p) => p.id === c.professionId);
   return (
     <article className="compact-character" aria-label={`角色 ${c.name}`}>
       <header className="compact-character-header">
         <h3 title={c.name}>{c.name}</h3>
+        {pendingGear && (
+          <small role="status" className="gear-saving">
+            儲存中…
+          </small>
+        )}
         <ProfessionIcon profession={profession} />
         {canEdit && (
           <Button aria-label={`編輯角色 ${c.name}`} onClick={onEdit}>
@@ -42,8 +34,10 @@ export default function CharacterCard({
       <GearPicker
         characterName={c.name}
         gear={pendingGear ? { ...c.gear, ...pendingGear } : c.gear}
-        disabled={busy || !!pendingGear}
-        onChange={canEdit ? changeGear : undefined}
+        disabled={busy}
+        onChange={
+          canEdit ? (slot, grade) => onGearChange(c.id, slot, grade) : undefined
+        }
       />
       <div
         className={

@@ -434,7 +434,8 @@ export default async function handler(req, res) {
         if (!s.users.some((x) => x.id === u.id))
           return { state: null, user: null };
         return {
-          state: publicState(s, u),
+          state:
+            type === "character.gear" && result ? result : publicState(s, u),
           user: { ...u },
           eventIds,
           notificationId: ["listing.sell", "notification.retry"].includes(type)
