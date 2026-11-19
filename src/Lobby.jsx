@@ -105,7 +105,11 @@ export default function Lobby({
       return await request(type, payload);
     } catch (e) {
       handleError(e);
-      if (e.status === 409) refresh().catch(handleError);
+      if (e.status === 409) {
+        pending.current = null;
+        setSelected(null);
+        refresh().catch(handleError);
+      }
       return null;
     } finally {
       lock.current = false;
