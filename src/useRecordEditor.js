@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+
+export const RecordDraftContext = createContext(null);
 
 function existingRecord(draft, id, savedCredentialInput) {
   const { createKey, createAttempt, credentialInput, ...fields } = draft;
@@ -7,12 +9,35 @@ function existingRecord(draft, id, savedCredentialInput) {
   return { ...fields, id };
 }
 
-export default function useRecordEditor() {
+function safeDraft(record) {
+  return Object.hasOwn(record, "password")
+    ? { ...record, password: "" }
+    : { ...record };
+}
+
+export default function useRecordEditor(type) {
+  const registry = useContext(RecordDraftContext);
   const [editing, setRecord] = useState(null);
   const session = useRef(0);
+  const submitting = useRef(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const keyOf = (record) => type + ":" + (record.id || record.createKey);
   function openEditor(record) {
     session.current++;
     if (record && !record.id) {
+      for (const [key, ticket] of registry.records) {
+        if (ticket.type === type && ticket.failed && !ticket.draft.id) {
+          registry.records.delete(key);
+          setRecord(ticket.draft);
+          return;
+        }
+      }
       const stamp = crypto.randomUUID();
       setRecord({
         ...record,
@@ -22,7 +47,15 @@ export default function useRecordEditor() {
           ? { credentialInput: stamp }
           : {}),
       });
-    } else setRecord(record);
+      return;
+    }
+    if (record) {
+      const key = keyOf(record);
+      const ticket = registry.records.get(key);
+      if (ticket?.failed) registry.records.delete(key);
+      if (ticket) record = { ...record, ...ticket.draft };
+    }
+    setRecord(record);
   }
   function setEditing(update) {
     const stamp = crypto.randomUUID();
@@ -38,38 +71,59 @@ export default function useRecordEditor() {
       };
     });
   }
-  async function saveEditor(mutate, type) {
+  async function saveEditor(mutate) {
     const currentSession = session.current;
     const submitted = editing;
-    const result = await mutate(type, submitted);
-    if (!result || session.current !== currentSession) return;
-    const id = result.savedRecordId;
-    const credential = result.savedCredentialInput ?? submitted.credentialInput;
     if (
-      id &&
-      result.savedCreateAttempt &&
-      result.savedCreateAttempt !== submitted.createAttempt
-    ) {
-      // A previous create succeeded without its reply. The user has since
-      // changed the draft and pressed Save: apply these edits to that exact ID.
-      const followUp = existingRecord(submitted, id, credential);
-      setRecord((latest) => {
-        if (!latest || latest.createKey !== submitted.createKey) return latest;
-        return latest === submitted
-          ? followUp
-          : existingRecord(latest, id, credential);
-      });
-      const saved = await mutate(type, followUp);
-      if (saved && session.current === currentSession) {
-        setRecord((latest) => (latest === followUp ? null : latest));
-      }
+      !submitted ||
+      !registry.isCurrent() ||
+      submitting.current === currentSession
+    )
       return;
+    submitting.current = currentSession;
+    let key = keyOf(submitted);
+    const ticket = { type, draft: safeDraft(submitted) };
+    registry.records.set(key, ticket);
+    // The form's HTML constraints have already passed. Keep a recoverable
+    // draft while leaving the rest of the page usable during the network trip.
+    setRecord(null);
+    let saved = false;
+    try {
+      const result = await mutate(type, submitted);
+      if (!result || !registry.isCurrent()) return;
+      if (
+        result.savedCreateAttempt &&
+        result.savedCreateAttempt !== submitted.createAttempt
+      ) {
+        // A previous create committed but lost its reply. Apply this explicit
+        // submit to the returned ID even if the user has since left the page.
+        const followUp = existingRecord(
+          submitted,
+          result.savedRecordId,
+          result.savedCredentialInput,
+        );
+        if (registry.records.get(key) === ticket) registry.records.delete(key);
+        key = keyOf(followUp);
+        // A later edit of this exact record already superseded the retry.
+        if (registry.records.has(key)) return;
+        ticket.draft = safeDraft(followUp);
+        registry.records.set(key, ticket);
+        saved = !!(await mutate(type, followUp));
+      } else saved = true;
+    } finally {
+      if (submitting.current === currentSession) submitting.current = null;
+      if (registry.records.get(key) === ticket) {
+        if (saved || !registry.isCurrent()) registry.records.delete(key);
+        else if (mounted.current && session.current === currentSession) {
+          registry.records.delete(key);
+          setRecord(ticket.draft);
+        } else {
+          // Recover this edit on a deliberate reopen, without replacing a
+          // different editor or interrupting the user's new page.
+          ticket.failed = true;
+        }
+      }
     }
-    setRecord((latest) => {
-      if (!latest || latest === submitted) return null;
-      if (!submitted.id && id) return existingRecord(latest, id, credential);
-      return latest;
-    });
   }
   return { editing, setEditing, openEditor, saveEditor };
 }

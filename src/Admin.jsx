@@ -52,8 +52,8 @@ export default function Admin({
   const [tab, setTab] = useState("users"),
     [memberSearch, setMemberSearch] = useState(""),
     [url, setUrl] = useState("");
-  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
   const editorType = tab === "users" ? "user.save" : "dungeon.save";
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor(editorType);
   useEffect(() => {
     if (!activity && (tab === "activities" || tab === "quiz"))
       refreshActivity().catch((e) => {
@@ -325,7 +325,7 @@ export default function Admin({
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              await saveEditor(mutate, editorType);
+              await saveEditor(mutate);
             }}
           >
             {tab === "activities" || tab === "quiz" ? (

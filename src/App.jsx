@@ -8,11 +8,13 @@ import GuidedTour from "./GuidedTour.jsx";
 import "./personalization.css";
 import { apiRequest, initialSession } from "./api.js";
 import useCharacterSaves from "./useCharacterSaves.js";
+import { RecordDraftContext } from "./useRecordEditor.js";
 import {
   useState,
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   lazy,
   Suspense,
 } from "react";
@@ -65,6 +67,13 @@ export default function App() {
   const authVersion = useRef(0);
   const sessionMember = useRef(null);
   const generation = authVersion.current;
+  const editorDrafts = useMemo(
+    () => ({
+      records: new Map(),
+      isCurrent: () => authVersion.current === generation,
+    }),
+    [generation],
+  );
   const invalidate = useCallback((expected) => {
     if (authVersion.current !== expected) return;
     authVersion.current++;
@@ -160,7 +169,11 @@ export default function App() {
   }, [request, hasPending, invalidate]);
   useFeedback(error);
   async function mutate(type, payload, message = "已儲存") {
-    if (lock.current || duplicateWrite(writes.current, type, payload))
+    if (
+      authVersion.current !== generation ||
+      lock.current ||
+      duplicateWrite(writes.current, type, payload)
+    )
       return false;
     const auth = type === "login" || type === "register";
     if (auth) {
@@ -476,44 +489,46 @@ export default function App() {
         </aside>
         <main className="main">
           <div key={`${data.me.id}/${page}`} className="view-transition">
-            <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
-              {page === "lobby" ? (
-                <Lobby
-                  data={data}
-                  request={request}
-                  onUnauthorized={onUnauthorized}
-                  onActivityChange={onActivityChange}
-                  mutate={mutate}
-                  isSaving={isSaving}
-                />
-              ) : page === "settings" ? (
-                <SettingsPanel
-                  me={data.me}
-                  mutate={mutate}
-                  busy={busy}
-                  isSaving={isSaving}
-                  onTheme={() => setThemeOpen(true)}
-                  onDiscord={() => setDiscordOpen(true)}
-                  onTour={() => setTourOpen(true)}
-                />
-              ) : page === "casino" ? (
-                <Casino
-                  me={data.me}
-                  request={request}
-                  onUnauthorized={onUnauthorized}
-                />
-              ) : page === "characters" ? (
-                <Characters
-                  {...shared}
-                  pendingChanges={characterSaves.pending}
-                  change={characterSaves.change}
-                />
-              ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
-                <Raids {...shared} />
-              ) : page === "admin" && data.me.admin ? (
-                <Admin {...shared} />
-              ) : null}
-            </Suspense>
+            <RecordDraftContext.Provider value={editorDrafts}>
+              <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
+                {page === "lobby" ? (
+                  <Lobby
+                    data={data}
+                    request={request}
+                    onUnauthorized={onUnauthorized}
+                    onActivityChange={onActivityChange}
+                    mutate={mutate}
+                    isSaving={isSaving}
+                  />
+                ) : page === "settings" ? (
+                  <SettingsPanel
+                    me={data.me}
+                    mutate={mutate}
+                    busy={busy}
+                    isSaving={isSaving}
+                    onTheme={() => setThemeOpen(true)}
+                    onDiscord={() => setDiscordOpen(true)}
+                    onTour={() => setTourOpen(true)}
+                  />
+                ) : page === "casino" ? (
+                  <Casino
+                    me={data.me}
+                    request={request}
+                    onUnauthorized={onUnauthorized}
+                  />
+                ) : page === "characters" ? (
+                  <Characters
+                    {...shared}
+                    pendingChanges={characterSaves.pending}
+                    change={characterSaves.change}
+                  />
+                ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
+                  <Raids {...shared} />
+                ) : page === "admin" && data.me.admin ? (
+                  <Admin {...shared} />
+                ) : null}
+              </Suspense>
+            </RecordDraftContext.Provider>
           </div>
         </main>
         {themeOpen && (

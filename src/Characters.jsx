@@ -14,7 +14,7 @@ export default function Characters({
   pendingChanges,
   change,
 }) {
-  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor("character.save");
   const [guideOpen, setGuideOpen] = useState(false);
   const characters = data.characters.filter((c) => c.ownerId === data.me.id);
   const showGuide = guideOpen;
@@ -140,7 +140,7 @@ export default function Characters({
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              await saveEditor(mutate, "character.save");
+              await saveEditor(mutate);
             }}
           >
             <Field

@@ -1,7 +1,7 @@
 import useRecordEditor from "./useRecordEditor.js";
 import { Button, Field, Modal, FormActions } from "./ui.jsx";
 export default function QuantityTypes({ data, mutate, isSaving, ask }) {
-  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor("quantityType.save");
   return (
     <section className="admin-panel">
       <div className="section-title">
@@ -39,7 +39,7 @@ export default function QuantityTypes({ data, mutate, isSaving, ask }) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              await saveEditor(mutate, "quantityType.save");
+              await saveEditor(mutate);
             }}
           >
             <Field

@@ -3,7 +3,7 @@ import { Button, Field, Modal, FormActions } from "./ui.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
 import { professionIcons } from "../shared/professions.js";
 export default function Professions({ data, mutate, isSaving, ask }) {
-  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor("profession.save");
   return (
     <section className="admin-panel">
       <div className="section-title">
@@ -63,7 +63,7 @@ export default function Professions({ data, mutate, isSaving, ask }) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              await saveEditor(mutate, "profession.save");
+              await saveEditor(mutate);
             }}
           >
             <Field
