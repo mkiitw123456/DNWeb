@@ -131,7 +131,7 @@ export function gameAction(s, u, type, p = {}, now = Date.now()) {
       options = p.riders.map((id) => {
         const rider = s.users.find((x) => x.id === id);
         if (!linked(rider)) fail("馬手須為已綁定且啟用的會員");
-        return { id, name: rider.username };
+        return { id, name: rider.nickname || rider.username };
       });
     }
     const room = {
@@ -139,7 +139,7 @@ export function gameAction(s, u, type, p = {}, now = Date.now()) {
       kind: p.kind,
       title: text(p.title, "標題", 80),
       ownerId: u.id,
-      ownerName: u.username,
+      ownerName: u.nickname || u.username,
       closesAt,
       createdAt: now,
       status: "open",
@@ -164,7 +164,7 @@ export function gameAction(s, u, type, p = {}, now = Date.now()) {
         fail("金額須為 1 至 1,000,000 的整數");
       r.entries.push({
         userId: u.id,
-        name: u.username,
+        name: u.nickname || u.username,
         optionId: p.optionId,
         amount: p.amount,
         status: "pending",
@@ -173,7 +173,7 @@ export function gameAction(s, u, type, p = {}, now = Date.now()) {
       notice(
         s,
         r,
-        `${u.username} 申請報名，請房主核對後確認。`,
+        `${u.nickname || u.username} 申請報名，請房主核對後確認。`,
         [r.ownerId, u.id],
         now,
       );
@@ -245,17 +245,28 @@ export function gameAction(s, u, type, p = {}, now = Date.now()) {
     serverNow: now,
     rooms: s.gameRooms.map((r) => ({
       ...r,
+      ownerName:
+        s.users.find((x) => x.id === r.ownerId)?.nickname || r.ownerName,
+      options: r.options.map((o) => ({
+        ...o,
+        name: s.users.find((x) => x.id === o.id)?.nickname || o.name,
+      })),
       canManage:
         r.ownerId === u.id ||
         (u.admin && !s.users.some((x) => x.id === r.ownerId && x.active)),
-      entries: r.entries.filter(
-        (e) =>
-          e.status === "approved" || u.id === r.ownerId || u.id === e.userId,
-      ),
+      entries: r.entries
+        .filter(
+          (e) =>
+            e.status === "approved" || u.id === r.ownerId || u.id === e.userId,
+        )
+        .map((e) => ({
+          ...e,
+          name: s.users.find((x) => x.id === e.userId)?.nickname || e.name,
+        })),
     })),
     members: s.users
       .filter(linked)
-      .map((x) => ({ id: x.id, name: x.username })),
+      .map((x) => ({ id: x.id, name: x.nickname || x.username })),
     webhookConfigured: !!s.discordWebhooks?.casino,
   };
 }

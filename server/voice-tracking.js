@@ -119,7 +119,7 @@ export async function voiceView(user, users, now = Date.now()) {
           .filter((u) => u.active && /^\d{17,20}$/.test(u.discordId || ""))
           .map((u) => ({
             id: u.id,
-            name: u.username,
+            name: u.nickname || u.username,
             todayMs: s?.days?.[day]?.[u.discordId] || 0,
             totalMs: s?.totals?.[u.discordId] || 0,
             counting: active.has(u.discordId),

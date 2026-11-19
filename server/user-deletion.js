@@ -24,6 +24,15 @@ export function removeUser(s, actor, p, { migration = false } = {}) {
     chars = new Set(
       s.characters.filter((c) => c.ownerId === uid).map((c) => c.id),
     );
+  for (const r of s.duels || []) {
+    if (
+      [r.ownerId, r.guestId].includes(uid) &&
+      ["open", "pending"].includes(r.status)
+    ) {
+      r.status = "cancelled";
+      r.completedAt = Date.now();
+    }
+  }
   s.users = s.users.filter((u) => u.id !== uid);
   s.characters = s.characters.filter((c) => c.ownerId !== uid);
   for (const key of [

@@ -100,11 +100,16 @@ export function casinoAction(s, u, type, p = {}, now = Date.now()) {
       title,
       startsAt,
       ownerId: u.id,
-      ownerName: u.username,
+      ownerName: u.nickname || u.username,
       status: "open",
       createdAt: now,
       entries: [
-        { userId: u.id, name: u.username, status: "approved", joinedAt: now },
+        {
+          userId: u.id,
+          name: u.nickname || u.username,
+          status: "approved",
+          joinedAt: now,
+        },
       ],
     });
   } else if (type !== "casino.state") {
@@ -118,7 +123,7 @@ export function casinoAction(s, u, type, p = {}, now = Date.now()) {
       if (r.entries.length >= 60) fail("報名人數已達上限");
       r.entries.push({
         userId: u.id,
-        name: u.username,
+        name: u.nickname || u.username,
         status: "pending",
         joinedAt: now,
       });
@@ -145,17 +150,26 @@ export function casinoAction(s, u, type, p = {}, now = Date.now()) {
       id: r.id,
       title: r.title,
       ownerId: r.ownerId,
-      ownerName: r.ownerName,
+      ownerName:
+        s.users.find((x) => x.id === r.ownerId)?.nickname || r.ownerName,
       startsAt: r.startsAt,
       status: r.status,
       settledAt: r.settledAt || null,
       winnerId: r.winnerId || null,
       spin: r.spin || null,
-      eligible: r.eligible || [],
-      entries: r.entries.filter(
-        (e) =>
-          e.status === "approved" || r.ownerId === u.id || e.userId === u.id,
-      ),
+      eligible: (r.eligible || []).map((e) => ({
+        ...e,
+        name: s.users.find((x) => x.id === e.userId)?.nickname || e.name,
+      })),
+      entries: r.entries
+        .filter(
+          (e) =>
+            e.status === "approved" || r.ownerId === u.id || e.userId === u.id,
+        )
+        .map((e) => ({
+          ...e,
+          name: s.users.find((x) => x.id === e.userId)?.nickname || e.name,
+        })),
     })),
   };
 }

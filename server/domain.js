@@ -186,6 +186,10 @@ export function split(price, cost, taxed, ids) {
 }
 export function publicState(s, u) {
   const safeUser = ({ password, version, ...rest }) => rest;
+  const displayName = (id) => {
+    const user = s.users.find((x) => x.id === id);
+    return user?.nickname || user?.username || "已刪除帳號";
+  };
   return {
     users: s.users.filter((x) => u.admin || x.id === u.id).map(safeUser),
     characters: s.characters.filter((c) => c.ownerId === u.id),
@@ -232,16 +236,14 @@ export function publicState(s, u) {
     invitations: [],
     bounties: s.bounties.map((b) => ({
       ...b,
-      ownerName:
-        s.users.find((x) => x.id === b.ownerId)?.username || "已刪除帳號",
+      ownerName: displayName(b.ownerId),
     })),
     professions: s.professions || [],
     dungeons: s.dungeons,
     quantityTypes: s.quantityTypes || [],
     itemPosts: (s.itemPosts || []).map((item) => ({
       ...item,
-      ownerName:
-        s.users.find((x) => x.id === item.ownerId)?.username || "已刪除帳號",
+      ownerName: displayName(item.ownerId),
     })),
     listings: u.admin ? s.listings : [],
     settlements: u.admin ? s.settlements : [],
@@ -259,10 +261,14 @@ function owned(item, user, field = "ownerId") {
   if (!user.admin && item[field] !== user.id) fail("沒有修改權限", 403);
   return item;
 }
-export function action(s, u, type, p, now = Date.now()) {
+export function action(s, u, type, p, now = Date.now(), verified = {}) {
   reset(s, now);
   if (type.startsWith("group.")) fail("群組功能已停用", 410);
   if (type === "user.delete") return removeUser(s, u, p);
+  if (type === "profile.nickname") {
+    u.nickname = text(p.nickname, "暱稱", 30);
+    return;
+  }
   if (type === "onboarding.tourComplete") {
     u.tourCompleted = true;
     return;
@@ -276,7 +282,10 @@ export function action(s, u, type, p, now = Date.now()) {
     if (!/^\d{17,20}$/.test(discordId)) fail("Discord ID 應為 17–20 位數字");
     if (s.users.some((x) => x.id !== u.id && x.discordId === discordId))
       fail("此 Discord ID 已綁定其他帳號");
-    u.discordPendingId = discordId;
+    if (verified.verifiedDiscordId !== discordId)
+      fail("請重新確認 Discord 成員", 403);
+    u.discordId = discordId;
+    delete u.discordPendingId;
     u.discordSetupDone = true;
     return;
   }

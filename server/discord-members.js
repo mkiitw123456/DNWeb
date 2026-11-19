@@ -2,6 +2,23 @@ import { fail, text } from "./domain.js";
 const API = "https://discord.com/api/v10";
 let cache = null,
   loading = null;
+export async function verifyDiscordMember(id, fetcher = fetch) {
+  if (!/^\d{17,20}$/.test(id || "")) fail("請從搜尋結果選擇 Discord 成員");
+  const token = process.env.DISCORD_BOT_TOKEN,
+    guild = process.env.DISCORD_GUILD_ID;
+  if (!token || !/^\d{17,20}$/.test(guild || ""))
+    fail("尚未設定 Discord Bot", 503);
+  const response = await fetcher(`${API}/guilds/${guild}/members/${id}`, {
+    headers: { Authorization: `Bot ${token}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (response.status === 404) fail("這位成員已不在 Discord 伺服器中");
+  if (!response.ok) fail("Discord 驗證暫時無法使用，請稍後再試", 503);
+  const member = await response.json();
+  if (member.user?.id !== id || member.user.bot)
+    fail("請選擇有效的 Discord 成員");
+  return id;
+}
 export async function searchDiscordMembers(
   query,
   fetcher = fetch,

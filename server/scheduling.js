@@ -242,6 +242,7 @@ export function audit(s, u, type, p, now = Date.now()) {
     "activity.adjust": "調整活動積分",
     "activity.config": "修改活動設定",
     "activity.profile": "修改遊戲暱稱",
+    "profile.nickname": "修改顯示暱稱",
     "onboarding.tourComplete": "完成新手導覽",
     "onboarding.discordSkip": "稍後設定 Discord",
     "user.save": p.id ? "修改帳號" : "建立帳號",

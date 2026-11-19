@@ -99,7 +99,7 @@ export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
             await mutate(
               "profile.discordRequest",
               { discordId: selected.id },
-              "Discord 身分已送出，等待管理員確認",
+              "Discord 成員已確認，綁定成功",
             )
           )
             onClose();
@@ -111,7 +111,9 @@ export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
             {selected.username}）
           </p>
         )}
-        <p className="muted">請確認選到自己的帳號，送出後由管理員確認身分。</p>
+        <p className="muted">
+          請確認選到自己的帳號，系統將透過 Bot 確認你仍是伺服器成員並直接綁定。
+        </p>
         {error && (
           <p className="error" role="alert">
             {error}

@@ -199,28 +199,28 @@ test("substring Discord search matches both Wo and lf, uses cached safe display 
   assert.equal((await searchDiscordMembers("lf", fake, now)).members.length, 1);
   assert.equal(calls, 1);
 });
-test("self-entered Discord ID stays pending and cannot impersonate an approved identity", () => {
+test("Discord binding requires server-verified membership and preserves uniqueness", () => {
   const state = initialState(),
-    admin = state.users[0],
     u = register(state, { username: "Person", password: "test" });
   reset(state);
-  action(state, u, "profile.discordRequest", {
-    discordId: "123456789012345679",
-  });
-  assert.equal(u.discordId, "");
-  assert.equal(u.discordPendingId, "123456789012345679");
+  const discordId = "123456789012345679";
   assert.throws(
     () =>
-      action(state, u, "user.discordApprove", {
-        id: u.id,
-        discordId: u.discordPendingId,
+      action(state, u, "profile.discordRequest", {
+        discordId,
+        verifiedDiscordId: discordId,
       }),
     { status: 403 },
   );
-  action(state, admin, "user.discordApprove", {
-    id: u.id,
-    discordId: u.discordPendingId,
+  action(state, u, "profile.discordRequest", { discordId }, Date.now(), {
+    verifiedDiscordId: discordId,
   });
-  assert.equal(u.discordId, "123456789012345679");
+  assert.equal(u.discordId, discordId);
   assert.equal(u.discordPendingId, undefined);
+  const other = register(state, { username: "Other", password: "test" });
+  assert.throws(() =>
+    action(state, other, "profile.discordRequest", { discordId }, Date.now(), {
+      verifiedDiscordId: discordId,
+    }),
+  );
 });

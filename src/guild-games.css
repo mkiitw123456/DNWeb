@@ -86,7 +86,26 @@
   gap: 8px;
 }
 .game-riders input {
-  width: auto;
+  appearance: auto;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  flex: 0 0 20px;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  box-shadow: none;
+}
+.game-riders label {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  gap: 12px;
+}
+.game-riders label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .guild-games fieldset {
   border: 1px solid var(--border);
@@ -102,4 +121,8 @@
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+.game-riders input[type="checkbox"]::after {
+  display: none;
 }

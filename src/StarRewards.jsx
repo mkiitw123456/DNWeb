@@ -1,3 +1,4 @@
+import { playSound } from "./sounds.js";
 import {
   createContext,
   useCallback,
@@ -78,6 +79,7 @@ export default function StarRewardsProvider({ children }) {
     (rect) => {
       const pending = current.current.pending;
       if (!pending || pending.flying) return;
+      playSound("coin");
       const finish = () =>
         update((w) => ({
           ...w,

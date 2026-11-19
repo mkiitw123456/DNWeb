@@ -1,0 +1,91 @@
+.duel-list {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.duel-list article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.duel-list h3 {
+  margin: 8px 0;
+}
+.duel-list small {
+  color: var(--muted);
+}
+.duel-stage {
+  height: 270px;
+  display: grid;
+  place-items: center;
+  perspective: 850px;
+  padding-top: 30px;
+}
+.duel-coin {
+  position: relative;
+  width: 145px;
+  height: 145px;
+  transform-style: preserve-3d;
+}
+.coin-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: linear-gradient(
+    135deg,
+    var(--surface),
+    color-mix(in srgb, var(--accent) 40%, var(--surface))
+  );
+  border: 8px solid color-mix(in srgb, var(--accent) 60%, var(--surface));
+  box-shadow:
+    inset 0 0 0 3px var(--border),
+    0 8px 25px #0003;
+  backface-visibility: hidden;
+  transform: translateZ(3px);
+}
+.coin-back {
+  transform: rotateY(180deg) translateZ(3px);
+}
+.coin-choices {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.coin-choices button {
+  flex: 1;
+}
+.coin-choices [aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+.duel-players {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.duel-players div {
+  flex: 1;
+  min-width: 0;
+}
+.duel-players small {
+  display: block;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.duel-status {
+  text-align: center;
+  font-size: 18px;
+  padding: 20px 0;
+}

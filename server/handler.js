@@ -1,12 +1,16 @@
 import { casinoAction, settleCasino } from "./casino.js";
 import { gameAction } from "./guild-games.js";
+import { duelAction, advanceDuels } from "./duels.js";
 import { voiceView } from "./voice-tracking.js";
 import {
   cleanupDeploymentTest,
   drainUserDeletions,
   compactActivityHistory,
 } from "./activity-maintenance.js";
-import { searchDiscordMembers } from "./discord-members.js";
+import {
+  searchDiscordMembers,
+  verifyDiscordMember,
+} from "./discord-members.js";
 import { waitUntil } from "@vercel/functions";
 import { activityAction, activityView } from "./activities.js";
 import { emojiNamePattern, fetchGuildEmojis } from "./emojis.js";
@@ -200,9 +204,10 @@ export default async function handler(req, res) {
           state: publicState(s, user),
           eventId,
           eventIds,
-          members: s.users.map(({ id, username, active }) => ({
+          members: s.users.map(({ id, username, nickname, active }) => ({
             id,
             username,
+            nickname,
             active,
           })),
         };
@@ -240,9 +245,10 @@ export default async function handler(req, res) {
             .map((x) => x.id),
           user: u,
           state: publicState(s, u),
-          members: s.users.map(({ id, username, active }) => ({
+          members: s.users.map(({ id, username, nickname, active }) => ({
             id,
             username,
+            nickname,
             active,
           })),
         };
@@ -255,21 +261,49 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
-    if (type.startsWith("casino.") || type.startsWith("game.")) {
+    if (
+      type.startsWith("casino.") ||
+      type.startsWith("game.") ||
+      type.startsWith("duel.")
+    ) {
       const result = await transact((s) => {
         const user = s.users.find(
           (x) => x.id === token.id && x.active && x.version === token.version,
         );
         if (!user) fail("登入已過期，請重新登入", 401);
-        const state = type.startsWith("game.")
-          ? gameAction(s, user, type, payload)
-          : casinoAction(s, user, type, payload);
+        const state = type.startsWith("duel.")
+          ? duelAction(s, user, type, payload)
+          : type.startsWith("game.")
+            ? gameAction(s, user, type, payload)
+            : casinoAction(s, user, type, payload);
         const ids = (s.deliveries || [])
           .filter((e) => e.channel === "casino" && e.status === "pending")
           .map((e) => e.id);
         return { state, ids, user };
       });
       background(deliverEvents(result.ids));
+      if (type === "duel.accept") {
+        const endsAt = result.state.rooms.find(
+          (r) => r.id === payload.id,
+        )?.endsAt;
+        if (endsAt)
+          background(
+            (async () => {
+              await new Promise((resolve) =>
+                setTimeout(resolve, Math.max(0, endsAt - Date.now()) + 100),
+              );
+              const ids = await transact((s) => {
+                advanceDuels(s);
+                return (s.deliveries || [])
+                  .filter(
+                    (e) => e.channel === "casino" && e.status === "pending",
+                  )
+                  .map((e) => e.id);
+              });
+              await deliverEvents(ids);
+            })(),
+          );
+      }
       cookie(res, result.user);
       return res.status(200).json(result.state);
     }
@@ -277,6 +311,7 @@ export default async function handler(req, res) {
       background(
         transact((s) => {
           settleCasino(s);
+          advanceDuels(s);
           return s.deliveries
             .filter((e) => e.channel === "casino" && e.status === "pending")
             .map((e) => e.id);
@@ -296,12 +331,15 @@ export default async function handler(req, res) {
         if (!user) fail("登入已過期，請重新登入", 401);
         return {
           user,
-          users: s.users.map(({ id, username, active, discordId }) => ({
-            id,
-            username,
-            active,
-            discordId: discordId || "",
-          })),
+          users: s.users.map(
+            ({ id, username, nickname, active, discordId }) => ({
+              id,
+              username,
+              nickname,
+              active,
+              discordId: discordId || "",
+            }),
+          ),
         };
       });
       if (type === "voice.state")
@@ -332,6 +370,18 @@ export default async function handler(req, res) {
       cookie(res, auth.user);
       return res.status(200).json(result);
     }
+    let verifiedDiscordId = null;
+    if (type === "profile.discordRequest") {
+      await transact((s) => {
+        if (
+          !s.users.some(
+            (x) => x.id === token.id && x.active && x.version === token.version,
+          )
+        )
+          fail("請先登入", 401);
+      });
+      verifiedDiscordId = await verifyDiscordMember(payload.discordId);
+    }
     let emojiCatalog = null;
     if (
       type === "profession.save" &&
@@ -359,15 +409,18 @@ export default async function handler(req, res) {
           return {
             state: publicState(s, u),
             user: { ...u },
-            members: s.users.map(({ id, username, active }) => ({
+            members: s.users.map(({ id, username, nickname, active }) => ({
               id,
               username,
+              nickname,
               active,
             })),
           };
         const previousEvents = new Set(s.deliveries.map((e) => e.id));
         if (emojiCatalog) s.discordEmojis = emojiCatalog;
-        const result = action(s, u, type, payload);
+        const result = action(s, u, type, payload, Date.now(), {
+          verifiedDiscordId,
+        });
         audit(s, u, type, payload);
         const eventIds = s.deliveries
           .filter((e) => !previousEvents.has(e.id))

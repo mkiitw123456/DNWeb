@@ -30,6 +30,7 @@ export default function Lobby({
   request,
   onUnauthorized,
   onActivityChange,
+  mutate,
 }) {
   const [view, setView] = useState(data.activity || null),
     [error, setError] = useState(""),
@@ -145,7 +146,8 @@ export default function Lobby({
         <div>
           <h1>冒險大廳</h1>
           <p className="welcome-short">
-            {view.member.nickname || data.me.username}，歡迎回來。
+            {data.me.nickname || view.member.nickname || data.me.username}
+            ，歡迎回來。
           </p>
         </div>
         <div className="lobby-date">
@@ -209,7 +211,7 @@ export default function Lobby({
               className="nickname-button"
               onClick={() => setProfile(true)}
             >
-              {view.member.nickname || data.me.username}
+              {data.me.nickname || view.member.nickname || data.me.username}
               <Pencil size={14} />
             </button>
           </div>
@@ -507,7 +509,7 @@ export default function Lobby({
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              const r = await perform("activity.profile", {
+              const r = await mutate("profile.nickname", {
                 nickname: new FormData(e.currentTarget).get("nickname"),
               });
               if (r) {
@@ -522,7 +524,9 @@ export default function Lobby({
               name="nickname"
               maxLength={30}
               required
-              defaultValue={view.member.nickname || data.me.username}
+              defaultValue={
+                data.me.nickname || view.member.nickname || data.me.username
+              }
             />
             <Button primary disabled={busy}>
               儲存暱稱

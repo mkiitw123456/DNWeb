@@ -309,9 +309,11 @@ export default function App() {
               </button>
             )}
             <div className="user">
-              <span className="avatar">{data.me.username[0]}</span>
+              <span className="avatar">
+                {(data.me.nickname || data.me.username)[0]}
+              </span>
               <div>
-                {data.me.username}
+                {data.me.nickname || data.me.username}
                 <small>{data.me.admin ? "管理員" : "公會成員"}</small>
               </div>
               <button
@@ -350,10 +352,13 @@ export default function App() {
                   request={request}
                   onUnauthorized={onUnauthorized}
                   onActivityChange={onActivityChange}
+                  mutate={mutate}
                 />
               ) : page === "settings" ? (
                 <SettingsPanel
                   me={data.me}
+                  mutate={mutate}
+                  busy={busy}
                   onTheme={() => setThemeOpen(true)}
                   onDiscord={() => setDiscordOpen(true)}
                   onTour={() => setTourOpen(true)}

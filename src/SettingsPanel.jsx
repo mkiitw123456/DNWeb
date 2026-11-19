@@ -6,12 +6,43 @@ import {
   ChevronRight,
   CheckCircle2,
 } from "lucide-react";
-import { Heading } from "./ui.jsx";
-export default function SettingsPanel({ me, onTheme, onDiscord, onTour }) {
-  const discordSet = !!(me.discordId || me.discordPendingId);
+import { Heading, Field, Button } from "./ui.jsx";
+import { useState } from "react";
+import SoundSettings from "./SoundSettings.jsx";
+export default function SettingsPanel({
+  me,
+  onTheme,
+  onDiscord,
+  onTour,
+  mutate,
+  busy,
+}) {
+  const [nickname, setNickname] = useState(me.nickname || "");
+  const discordSet = !!me.discordId;
   return (
     <section className="settings-panel">
       <Heading title="設定" description="調整你的使用習慣與帳號設定" />
+      <form
+        className="nickname-settings"
+        onSubmit={(e) => {
+          e.preventDefault();
+          mutate("profile.nickname", { nickname }, "暱稱已儲存");
+        }}
+      >
+        <Field
+          label="顯示暱稱"
+          value={nickname}
+          onChange={(e) => setNickname(e.target.value)}
+          required
+          maxLength={30}
+          placeholder={me.username}
+        />
+        <Button primary disabled={busy}>
+          儲存暱稱
+        </Button>
+        <p className="muted">登入帳號不變，公開顯示改用暱稱。</p>
+      </form>
+      <SoundSettings />
       <div className="settings-options">
         <button className="settings-option" onClick={onTheme}>
           <Palette size={23} />

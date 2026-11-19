@@ -336,6 +336,7 @@ export async function activityView(user, users, now = Date.now()) {
           ...x,
           rank: i + 1,
           name:
+            users.find((u) => u.id === x.memberId)?.nickname ||
             x.nickname ||
             users.find((u) => u.id === x.memberId)?.username ||
             "冒險者",
@@ -476,7 +477,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             return {
               memberId: u.id,
               username: u.username,
-              nickname: m.nickname,
+              nickname: u.nickname || m.nickname,
               active: u.active,
               ...m.quizStats,
             };

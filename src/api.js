@@ -1,6 +1,7 @@
 // Start the authenticated bootstrap while React's component modules initialize.
 // Only the HttpOnly cookie authenticates requests; no private state is cached in localStorage.
 const saveActions = new Set([
+  "profile.nickname",
   "discordSettings.save",
   "activity.config",
   "activity.adjust",

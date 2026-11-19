@@ -4,6 +4,7 @@ import { Button, Field, Modal } from "./ui.jsx";
 import { notify } from "./FeedbackHost.jsx";
 import "./casino.css";
 import GuildGames from "./GuildGames.jsx";
+import Duels from "./Duels.jsx";
 
 const time = (value) =>
   new Date(value).toLocaleString("zh-TW", {
@@ -148,7 +149,7 @@ export default function Casino({ me, request, onUnauthorized }) {
     }
   }, [request]);
   useEffect(() => {
-    if (!linked) return;
+    if (!linked || !["pool", "history"].includes(tab)) return;
     let live = true,
       pending = false;
     const poll = async () => {
@@ -174,7 +175,7 @@ export default function Casino({ me, request, onUnauthorized }) {
       clearInterval(timer);
       clearInterval(clockTimer);
     };
-  }, [linked, refresh, onUnauthorized]);
+  }, [linked, refresh, onUnauthorized, tab]);
   async function act(type, payload) {
     if (lock.current) return false;
     lock.current = true;
@@ -239,7 +240,8 @@ export default function Casino({ me, request, onUnauthorized }) {
       <nav className="tabs">
         {[
           ["pool", "獎池"],
-          ["duel", "預測"],
+          ["duel", "對賭"],
+          ["prediction", "預測"],
           ["race", "賽馬"],
           ["history", "歷史紀錄"],
         ].map(([id, label]) => (
@@ -262,7 +264,9 @@ export default function Casino({ me, request, onUnauthorized }) {
           尚未設定抽獎 Webhook，Discord 通知暫時無法傳送，請管理員至後台設定。
         </p>
       )}
-      {tab === "duel" || tab === "race" ? (
+      {tab === "duel" ? (
+        <Duels me={me} request={request} onUnauthorized={onUnauthorized} />
+      ) : tab === "prediction" || tab === "race" ? (
         <GuildGames
           key={tab}
           kind={tab === "race" ? "race" : "prediction"}
