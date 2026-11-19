@@ -281,3 +281,29 @@ test("invalid selection, dates and missing user cannot create ledger entries", a
   const v = await view(other);
   assert.equal(v.member.total, 5);
 });
+
+test("scheduled event deducts its signed reward exactly once and rejects invalid probability totals", async () => {
+  const c = (await view(admin)).adminConfig;
+  const event = c.events[0];
+  event.options[0].outcomes = [{ result: "扣血", chance: 99, stars: -1 }];
+  c.schedule = { "2026-11-16": { event: event.id } };
+  await assert.rejects(
+    () => activityAction(admin, users, "activity.config", c, now),
+    /100%/,
+  );
+  event.options[0].outcomes[0].chance = 100;
+  await activityAction(admin, users, "activity.config", c, now);
+  const p = await payload("event", other);
+  assert.equal(p.contentId, event.id);
+  const before = await view(other);
+  const record = await activityAction(other, users, "activity.submit", p, now);
+  assert.equal(record.delta, -1);
+  assert.equal(record.summary, "扣血");
+  assert.equal(
+    (await activityAction(other, users, "activity.submit", p, now)).id,
+    record.id,
+  );
+  const after = await view(other);
+  assert.equal(after.member.total, before.member.total - 1);
+  assert.equal(after.weekly, before.weekly - 1);
+});

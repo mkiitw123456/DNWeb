@@ -1,4 +1,5 @@
 import { matchesContent } from "./activity-calendar.js";
+import EventBank from "./EventBank.jsx";
 import ActivityCalendar from "./ActivityCalendar.jsx";
 import { useFeedback } from "./FeedbackHost.jsx";
 import QuizScores from "./QuizScores.jsx";
@@ -130,6 +131,7 @@ export default function ActivityAdmin({
             ]
           : [
               ["rules", "活動規則與抽籤"],
+              ["events", "冒險事件題庫"],
               ["calendar", "活動日曆"],
               ["reports", "參與報表與積分調整"],
             ]
@@ -157,7 +159,14 @@ export default function ActivityAdmin({
           {notice}
         </p>
       )}
-      {tab === "calendar" ? (
+      {tab === "events" ? (
+        <EventBank
+          events={draft.events}
+          busy={busy}
+          save={save}
+          onChange={(events) => setDraft((d) => ({ ...d, events }))}
+        />
+      ) : tab === "calendar" ? (
         <ActivityCalendar
           config={draft}
           busy={busy}
@@ -221,14 +230,16 @@ export default function ActivityAdmin({
                           )
                         }
                       />
-                      <NumberField
-                        label="參與積分"
-                        max={100}
-                        value={a.points}
-                        onChange={(e) =>
-                          updateActivity(i, "points", Number(e.target.value))
-                        }
-                      />
+                      {a.type !== "event" && (
+                        <NumberField
+                          label="參與積分"
+                          max={100}
+                          value={a.points}
+                          onChange={(e) =>
+                            updateActivity(i, "points", Number(e.target.value))
+                          }
+                        />
+                      )}
                       {a.type === "quiz" && (
                         <NumberField
                           label="答對加分"

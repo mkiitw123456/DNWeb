@@ -242,7 +242,10 @@ export default function Lobby({
                         <p>{a.description}</p>
                         <div className="activity-foot">
                           <span>
-                            {a.duration} · 參與 +{a.points} 顆星星
+                            {a.duration} ·{" "}
+                            {a.type === "event"
+                              ? "依選擇結果增減星星"
+                              : `參與 +${a.points} 顆星星`}
                             {a.bonus ? `，答對 +${a.bonus}` : ""}
                           </span>
                           <Button
@@ -427,7 +430,10 @@ export default function Lobby({
                 ))}
               </svg>
               <div className="star-earned">
-                <strong>+{result.delta}</strong>
+                <strong>
+                  {result.delta > 0 ? "+" : ""}
+                  {result.delta}
+                </strong>
                 <span>顆星星</span>
               </div>
               <div className="star-reward-story">
@@ -435,20 +441,25 @@ export default function Lobby({
                 {result.resultDetails && <p>{result.resultDetails}</p>}
               </div>
               <p className="star-reward-note">
-                星星已記入帳號，確認後飛入右上角。
+                {result.delta > 0
+                  ? "星星已記入帳號，確認後飛入右上角。"
+                  : `目前累積 ${result.after} 顆星星。`}
               </p>
               <button
                 type="button"
                 className="star-collect"
                 onClick={finishReward}
               >
-                確認收下星星
+                {result.delta > 0 ? "確認收下星星" : "確認結果"}
               </button>
             </div>
           ) : (
             <div className="activity-play">
               <p className="muted">
-                每日 {selected.dailyLimit} 次 · 參與 +{selected.points} 顆星星
+                每日 {selected.dailyLimit} 次 ·{" "}
+                {selected.type === "event"
+                  ? "依選擇結果增減星星"
+                  : `參與 +${selected.points} 顆星星`}
                 {selected.bonus ? `，答對另加 ${selected.bonus} 顆星星` : ""}
               </p>
               {selected.type === "fortune" ? (
@@ -476,6 +487,16 @@ export default function Lobby({
                         onClick={() => setChoice(i)}
                       >
                         {o}
+                        {selected.content.odds?.[i] && (
+                          <small className="event-odds">
+                            {selected.content.odds[i]
+                              .map(
+                                ({ chance, stars }) =>
+                                  `${chance}%：${stars > 0 ? "+" : ""}${stars} 星`,
+                              )
+                              .join(" ／ ")}
+                          </small>
+                        )}
                       </button>
                     ))}
                   </div>

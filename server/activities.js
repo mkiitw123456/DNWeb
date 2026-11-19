@@ -147,6 +147,24 @@ export function normalizeActivityConfig(config) {
   return {
     ...config,
     schedule: config.schedule || {},
+    events: config.events.map((event) => ({
+      ...event,
+      options: event.options.map((option) =>
+        option.outcomes
+          ? option
+          : {
+              text: option.text,
+              outcomes: [
+                {
+                  result: option.result,
+                  chance: 100,
+                  stars: config.activities.find((a) => a.type === "event")
+                    .points,
+                },
+              ],
+            },
+      ),
+    })),
     fortunes: config.fortunes.map((f, i) =>
       typeof f === "string"
         ? { id: `legacy-f${i}`, title: `冒險籤 ${i + 1}`, body: f }
@@ -283,6 +301,9 @@ function visibleActivity(config, a, memberId, period, dayCounts) {
             title: item.title,
             story: item.story,
             options: item.options.map((x) => x.text),
+            odds: item.options.map((x) =>
+              x.outcomes.map(({ chance, stars }) => ({ chance, stars })),
+            ),
           };
   }
   return result;
@@ -347,6 +368,48 @@ export async function activityView(user, users, now = Date.now()) {
     { authenticatedUser: user },
   );
 }
+function validateEvents(events) {
+  if (!Array.isArray(events) || !events.length || events.length > 100)
+    fail("冒險事件題庫需要 1–100 題");
+  return uniqueIds(
+    events.map((event) => {
+      if (
+        !Array.isArray(event?.options) ||
+        event.options.length < 2 ||
+        event.options.length > 6
+      )
+        fail("每題需要 2–6 個選項");
+      return {
+        id: contentId(event.id),
+        title: text(event.title, "事件標題", 120),
+        story: text(event.story, "事件內文", 500),
+        options: event.options.map((option) => {
+          if (
+            !Array.isArray(option?.outcomes) ||
+            !option.outcomes.length ||
+            option.outcomes.length > 8
+          )
+            fail("每個選項需要 1–8 種結果");
+          const outcomes = option.outcomes.map((o) => {
+            if (!Number.isSafeInteger(o?.stars) || Math.abs(o.stars) > 100)
+              fail("結果星數須為 -100 至 100 的整數");
+            const chance = number(o.chance, "機率", 100);
+            if (!chance) fail("結果機率至少為 1%");
+            return {
+              result: text(o.result, "結果文字", 300),
+              chance,
+              stars: o.stars,
+            };
+          });
+          if (outcomes.reduce((sum, o) => sum + o.chance, 0) !== 100)
+            fail(`「${option.text}」的結果機率合計必須為 100%`);
+          return { text: text(option.text, "選項名稱", 120), outcomes };
+        }),
+      };
+    }),
+  );
+}
+
 function validateConfig(input, previous) {
   if (!Array.isArray(input.activities)) fail("活動設定不完整");
   const activities = previous.activities.map((old) => {
@@ -423,14 +486,16 @@ function validateConfig(input, previous) {
       };
     }),
   );
+  const events = validateEvents(input.events ?? previous.events);
   const schedule = validateSchedule(input.schedule ?? previous.schedule ?? {}, {
     fortune: fortunes,
     quiz: questions,
-    event: previous.events,
+    event: events,
   });
   return {
     ...previous,
     quizCategories,
+    events,
     fortunes,
     schedule,
     fortuneIntro: text(
@@ -629,7 +694,14 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             summary = correct ? "答對了！" : "謝謝參與，下次再試試！";
             resultDetails = `${content.question}\n正確答案：${content.options[content.correct]}\n${content.explanation}`;
           } else {
-            summary = content.options[choice].result;
+            const roll = randomInt(100);
+            let limit = 0;
+            const outcome = content.options[choice].outcomes.find((o) => {
+              limit += o.chance;
+              return roll < limit;
+            });
+            summary = outcome.result;
+            delta = outcome.stars;
             resultDetails = content.title;
           }
         }

@@ -739,3 +739,4 @@
     display: none;
   }
 }
+.activity-options .event-odds { display: block; margin-top: .3rem; font-weight: normal; }

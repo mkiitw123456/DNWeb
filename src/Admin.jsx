@@ -6,7 +6,6 @@ import Professions from "./Professions.jsx";
 import DiscordSettings from "./DiscordSettings.jsx";
 import QuantityTypes from "./QuantityTypes.jsx";
 import VoiceStats from "./VoiceStats.jsx";
-import FirebaseUsage from "./FirebaseUsage.jsx";
 import "./guild-games.css";
 import {
   Heading,
@@ -59,7 +58,6 @@ export default function Admin({
           ["quantities", "數量項目"],
           ["discord", "Discord 通知"],
           ["voice", "語音統計"],
-          ["usage", "Firebase 用量"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -74,9 +72,7 @@ export default function Admin({
           </button>
         ))}
       </div>
-      {tab === "usage" ? (
-        <FirebaseUsage request={request} onUnauthorized={onUnauthorized} />
-      ) : tab === "voice" ? (
+      {tab === "voice" ? (
         <VoiceStats request={request} onUnauthorized={onUnauthorized} />
       ) : tab === "activities" || tab === "quiz" ? (
         activity?.adminConfig ? (
