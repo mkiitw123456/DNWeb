@@ -157,6 +157,51 @@ test("batched gear updates validate the whole patch and only change requested sl
   update({ gear: { weapon: null } });
   assert.deepEqual(c.gear, { equipment: "A", weapon: null, accessory: "S" });
 });
+test("quick character patches enforce ownership, validate all fields before commit and retain unrelated values", () => {
+  const s = initialState();
+  const admin = s.users[0];
+  s.dungeons = [
+    { id: "d", name: "副本", max: 2 },
+    { id: "d2", name: "巢穴", max: 5 },
+  ];
+  s.quantityTypes = [{ id: "q", name: "票券" }];
+  action(s, admin, "character.save", {
+    name: "測試",
+    gear: { accessory: "S" },
+  });
+  const c = s.characters[0];
+  const save = (patch, user = admin) =>
+    action(s, user, "character.quickSave", { id: c.id, ...patch });
+  assert.throws(() => save({ runs: { d: 1 } }, { id: "stranger" }), {
+    status: 403,
+  });
+  save({ runs: { d2: "complete" }, quantities: { q: 3 } });
+  for (const patch of [
+    {},
+    { runs: [] },
+    { gear: {} },
+    { quantities: null },
+    { gear: { weapon: "S" }, runs: { d: 3 } },
+    { runs: { d: 1 }, quantities: { q: -1 } },
+    { runs: { missing: 1 } },
+    { runs: { d: "2" } },
+    { gear: { weapon: "L" }, hp: 1 },
+  ])
+    assert.throws(() => save(patch), { status: 400 });
+  assert.throws(() => save({ quantities: { absent: 2 } }), { status: 404 });
+  const changed = save({
+    runs: { d: "complete" },
+    quantities: { q: 0 },
+    gear: { equipment: "A" },
+  });
+  assert.deepEqual(changed.runs, { d2: 5, d: 2 });
+  assert.deepEqual(changed.quantities, { q: 0 });
+  assert.deepEqual(changed.gear, {
+    equipment: "A",
+    weapon: null,
+    accessory: "S",
+  });
+});
 test("cost notes survive sale, edit, claiming and history; old records remain compatible", () => {
   const s = initialState(),
     u = s.users[0];

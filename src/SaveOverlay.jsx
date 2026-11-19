@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 
 export default function SaveOverlay() {
   const [state, setState] = useState(null);
-  const dialog = useRef(null);
-  const previousFocus = useRef(null);
+  const indicator = useRef(null);
   useEffect(() => {
     const active = new Set();
     let failure = "";
+    const warnBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = true;
+    };
     const receive = ({ detail }) => {
       if (detail.state === "pending") {
         if (!active.size) failure = "";
@@ -16,6 +19,8 @@ export default function SaveOverlay() {
         if (detail.state === "error")
           failure = detail.message || "請稍後再試。";
       }
+      if (active.size) window.addEventListener("beforeunload", warnBeforeUnload);
+      else window.removeEventListener("beforeunload", warnBeforeUnload);
       setState({
         kind: active.size ? "pending" : failure ? "error" : "success",
         message: failure,
@@ -23,14 +28,14 @@ export default function SaveOverlay() {
       });
     };
     window.addEventListener("ddstar-save", receive);
-    return () => window.removeEventListener("ddstar-save", receive);
+    return () => {
+      window.removeEventListener("ddstar-save", receive);
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+    };
   }, []);
   useEffect(() => {
     if (!state) return;
-    if (!dialog.current.open) {
-      previousFocus.current = document.activeElement;
-      dialog.current.showModal();
-    }
+    indicator.current?.showPopover?.();
     if (state.kind === "pending") return;
     const timer = setTimeout(
       () => setState(null),
@@ -38,22 +43,13 @@ export default function SaveOverlay() {
     );
     return () => clearTimeout(timer);
   }, [state]);
-  useEffect(() => {
-    if (!state && previousFocus.current?.isConnected) {
-      previousFocus.current.focus();
-      previousFocus.current = null;
-    }
-  }, [state]);
   if (!state) return null;
   return (
-    <dialog
-      ref={dialog}
+    <aside
+      ref={indicator}
+      popover="manual"
       className={`save-overlay save-${state.kind}`}
       aria-label="儲存狀態"
-      onCancel={(event) => {
-        event.preventDefault();
-        if (state.kind !== "pending") setState(null);
-      }}
     >
       <div
         role={state.kind === "error" ? "alert" : "status"}
@@ -70,11 +66,6 @@ export default function SaveOverlay() {
         </strong>
         {state.kind === "error" && <p>{state.message}</p>}
       </div>
-      {state.kind !== "pending" && (
-        <button type="button" onClick={() => setState(null)}>
-          關閉
-        </button>
-      )}
-    </dialog>
+    </aside>
   );
 }

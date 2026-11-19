@@ -2,6 +2,13 @@ import { fail, id, text } from "./domain.js";
 export function isOwner(s, u) {
   return !!u.admin && s.adminOwnerId === u.id;
 }
+export function deliveryRetryable(event, now = Date.now()) {
+  return (
+    ["failed", "unconfigured"].includes(event.status) ||
+    (["pending", "sending"].includes(event.status) &&
+      now - (event.attemptAt || event.createdAt) > 60000)
+  );
+}
 export function raidView(s, r) {
   return {
     ...r,
@@ -79,14 +86,7 @@ export function schedulingAction(s, u, type, p, now) {
     const event = s.deliveries.find((x) => x.id === p.id);
     if (!event || !["log", "important", "casino"].includes(event.channel))
       fail("找不到通知紀錄", 404);
-    if (
-      !["failed", "unconfigured"].includes(event.status) &&
-      !(
-        ["pending", "sending"].includes(event.status) &&
-        now - (event.attemptAt || event.createdAt) > 60000
-      )
-    )
-      fail("此通知不需要重試");
+    if (!deliveryRetryable(event, now)) fail("此通知不需要重試");
     event.status = "pending";
     return true;
   }
@@ -248,6 +248,7 @@ export function audit(s, u, type, p, now = Date.now()) {
     "user.save": p.id ? "修改帳號" : "建立帳號",
     "character.save": p.id ? "修改角色" : "建立角色",
     "character.gear": "更新角色裝備階級",
+    "character.quickSave": "更新角色資訊",
     "character.delete": "刪除角色",
     "character.run": "更新副本次數",
     "character.complete": "完成副本",

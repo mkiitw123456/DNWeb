@@ -4,6 +4,7 @@ import { currentCampaign, scriptCatalog, validateCampaigns } from "./campaigns.j
 import { fail, text, number } from "./domain.js";
 import { activityTransaction, activityQuery } from "./activity-store.js";
 import { aquariumKey, aquariumView, checkInAquarium } from "./aquarium.js";
+import { diffActivityConfig, applyActivityPatch } from "../shared/activity-config-patch.js";
 export function activityPeriods(now = Date.now()) {
   const shifted = new Date(now + 8 * 3600000);
   const day = shifted.toISOString().slice(0, 10);
@@ -633,7 +634,9 @@ function validateConfig(input, previous) {
     version: previous.version + 1,
   };
 }
-export async function activityAction(user, users, type, p, now = Date.now()) {
+export async function activityAction(
+  user, users, type, p, now = Date.now(), queueAudit,
+) {
   if (
     [
       "activity.config",
@@ -693,14 +696,15 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
       fail("日期範圍須介於 1–35 天");
     const rows = await activityQuery("ledger", { from, before, limit: 5001 });
     if (rows.length > 5000) fail("紀錄超過 5,000 筆，請縮小日期範圍");
-    const members = await activityTransaction(async (db) =>
-      Promise.all(
+    const members = await activityTransaction(
+      async (db) => Promise.all(
         users.map(async (u) => ({
           ...((await db.get(`member_${u.id}`)) || defaultMember(u.id)),
           username: u.username,
           active: u.active,
         })),
       ),
+      { authenticatedUser: user },
     );
     return { rows, members };
   }
@@ -712,7 +716,15 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
       if (type === "activity.config") {
         if (p.version !== config.version)
           fail("設定已更新，請重新載入後再修改", 409);
-        const next = validateConfig(p, config);
+        let input = p;
+        if (Object.hasOwn(p, "patch")) {
+          try {
+            input = applyActivityPatch(config, p.patch);
+          } catch (error) {
+            fail(error.message);
+          }
+        }
+        const next = validateConfig(input, config);
         db.set("config", next);
         db.set(`config/versions/v${next.version}`, {
           ...next,
@@ -720,7 +732,13 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           createdAt: now,
         });
         if (config.version === 1) db.set("config/versions/v1", config);
-        return { ok: true };
+        if (!Object.hasOwn(p, "patch")) return { ok: true };
+        return {
+          ok: true,
+          version: next.version,
+          patch: diffActivityConfig(config, next),
+          ...(input.events !== config.events ? { scripts: scriptCatalog(next.events) } : {}),
+        };
       }
       const period =
         type === "activity.submit"
@@ -951,6 +969,6 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
       });
       return record;
     },
-    { authenticatedUser: user },
+    { authenticatedUser: user, queueAudit },
   );
 }

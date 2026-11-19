@@ -8,7 +8,7 @@ const statuses = {
   unconfigured: "未設定 Webhook",
   obsolete: "排班已變更",
 };
-export default function DiscordSettings({ data, mutate, busy }) {
+export default function DiscordSettings({ data, mutate, isSaving }) {
   const [urls, setUrls] = useState({
     log: "",
     important: "",
@@ -55,7 +55,9 @@ export default function DiscordSettings({ data, mutate, busy }) {
                   "Webhook 已更新",
                 )
               )
-                setUrls((v) => ({ ...v, [key]: "" }));
+                setUrls((v) =>
+                  v[key] === urls[key] ? { ...v, [key]: "" } : v,
+                );
             }}
           >
             <h3>{label}</h3>
@@ -74,7 +76,13 @@ export default function DiscordSettings({ data, mutate, busy }) {
               value={urls[key]}
               onChange={(e) => setUrls({ ...urls, [key]: e.target.value })}
             />
-            <Button primary disabled={busy}>
+            <Button
+              primary
+              disabled={isSaving("discordSettings.save", {
+                channel: key,
+                url: urls[key],
+              })}
+            >
               儲存{label}設定
             </Button>
           </form>
@@ -91,7 +99,7 @@ export default function DiscordSettings({ data, mutate, busy }) {
       {(data.deliveries || [])
         .filter(
           (e) =>
-            ["failed", "unconfigured"].includes(e.status) &&
+            (e.retryable ?? ["failed", "unconfigured"].includes(e.status)) &&
             ["log", "important", "casino"].includes(e.channel),
         )
         .slice(-5)
@@ -103,10 +111,13 @@ export default function DiscordSettings({ data, mutate, busy }) {
                 : e.channel === "important"
                   ? "重大通知"
                   : "Log"}
-              ：{statuses[e.status]}
+              ：
+              {["pending", "sending"].includes(e.status)
+                ? "尚未確認是否送達"
+                : statuses[e.status]}
             </span>
             <Button
-              disabled={busy}
+              disabled={isSaving("delivery.retry", { id: e.id })}
               onClick={() =>
                 mutate("delivery.retry", { id: e.id }, "已重試通知")
               }

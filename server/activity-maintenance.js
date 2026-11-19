@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { firestore, transact } from "./store.js";
+import { firestore, readState, transact } from "./store.js";
 import { activityTransaction } from "./activity-store.js";
 import { removeUser, DEPLOYMENT_TEST } from "./user-deletion.js";
 const dayKey = (id, day) =>
@@ -94,7 +94,7 @@ let running;
 export async function drainUserDeletions() {
   if (running) return running;
   running = (async () => {
-    const jobs = await transact((s) => s.pendingUserDeletions || []);
+    const jobs = await readState((s) => s.pendingUserDeletions || []);
     for (const job of jobs) {
       await purgeActivityMember(job.id);
       if (job.discordId)
@@ -123,9 +123,19 @@ export async function drainUserDeletions() {
     running = null;
   }
 }
-let migrated = false;
-export async function cleanupDeploymentTest() {
-  if (migrated) return;
+let deploymentCleanup;
+export function cleanupDeploymentTest() {
+  deploymentCleanup ??= runDeploymentCleanup().catch((error) => {
+    deploymentCleanup = null;
+    throw error;
+  });
+  return deploymentCleanup;
+}
+async function runDeploymentCleanup() {
+  const complete = await readState(
+    (s) => s.deploymentTestCleanupV1 && !s.pendingUserDeletions?.length,
+  );
+  if (complete) return;
   const needed = await transact((s) => {
     if (s.deploymentTestCleanupV1) return !!s.pendingUserDeletions?.length;
     const target = s.users.find((u) => u.id === DEPLOYMENT_TEST.id);
@@ -134,7 +144,6 @@ export async function cleanupDeploymentTest() {
     return !!target;
   });
   if (needed) await drainUserDeletions();
-  migrated = true;
 }
 let maintenanceAt = 0;
 export async function compactActivityHistory(now = Date.now()) {

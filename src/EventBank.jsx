@@ -41,7 +41,6 @@ const removeAt = (items, index) => items.filter((_, i) => i !== index);
 export default function EventBank({
   events,
   onChange,
-  busy,
   save,
   unlimited,
   onUnlimited,
@@ -58,7 +57,7 @@ export default function EventBank({
     <section className="activity-admin">
       <div className="lobby-section-title">
         <h2>冒險事件題庫</h2>
-        <Button primary disabled={busy} onClick={save}>
+        <Button primary onClick={save}>
           儲存題庫
         </Button>
       </div>
@@ -67,7 +66,7 @@ export default function EventBank({
         <input
           type="checkbox"
           checked={unlimited}
-          disabled={busy}
+
           onChange={(e) => onUnlimited(e.target.checked)}
         />
       </label>
@@ -80,16 +79,10 @@ export default function EventBank({
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="actions">
-        <Button
-          disabled={busy || events.length >= 160}
-          onClick={() => add(false)}
-        >
+        <Button disabled={events.length >= 160} onClick={() => add(false)}>
           新增事件
         </Button>
-        <Button
-          disabled={busy || events.length >= 160}
-          onClick={() => add(true)}
-        >
+        <Button disabled={events.length >= 160} onClick={() => add(true)}>
           新增藥水範例
         </Button>
       </div>
@@ -107,7 +100,7 @@ export default function EventBank({
               {event.title || "未命名事件"}
             </button>
             {open === event.id && (
-              <fieldset disabled={busy}>
+              <fieldset>
                 <Field
                   label="事件標題"
                   value={event.title}

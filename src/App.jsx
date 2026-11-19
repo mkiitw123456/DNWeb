@@ -7,7 +7,7 @@ import DiscordSetup from "./DiscordSetup.jsx";
 import GuidedTour from "./GuidedTour.jsx";
 import "./personalization.css";
 import { apiRequest, initialSession } from "./api.js";
-import useGearSaves from "./useGearSaves.js";
+import useCharacterSaves from "./useCharacterSaves.js";
 import {
   useState,
   useEffect,
@@ -33,6 +33,19 @@ const Raids = lazy(() => import("./Raids.jsx"));
 import Lobby from "./Lobby.jsx";
 // Re-enable this flag to restore the retained raid scheduling page.
 const SHOW_RAID_SCHEDULING = false;
+function duplicateWrite(pending, type, payload) {
+  const target = payload.id ?? payload.channel ?? payload.createKey ?? "";
+  const last = pending.findLast((w) => w.type === type && w.target === target);
+  if (!last) return false;
+  // A changed value can be submitted while the previous edit is being saved.
+  // Creates, deletions and other one-shot actions only run once per target.
+  const editable =
+    type === "profile.nickname" ||
+    type === "discordSettings.save" ||
+    type === "webhook.save" ||
+    (type.endsWith(".save") && !!payload.id);
+  return !editable || last.signature === JSON.stringify(payload);
+}
 export default function App() {
   const [data, setData] = useState(null),
     [loading, setLoading] = useState(true),
@@ -46,8 +59,41 @@ export default function App() {
   const lock = useRef(false);
   const revision = useRef(0);
   const refreshShell = useRef(null);
-  const gearSaves = useGearSaves(setData, revision, refreshShell);
-  const { hasPending } = gearSaves;
+  const tail = useRef(Promise.resolve());
+  const writes = useRef([]);
+  const [pendingWrites, setPendingWrites] = useState([]);
+  const authVersion = useRef(0);
+  const sessionMember = useRef(null);
+  const generation = authVersion.current;
+  const invalidate = useCallback((expected) => {
+    if (authVersion.current !== expected) return;
+    authVersion.current++;
+    sessionMember.current = null;
+    revision.current++;
+    setData(null);
+  }, []);
+  const onUnauthorized = useCallback(
+    () => invalidate(generation),
+    [generation, invalidate],
+  );
+  const enqueueWrite = useCallback((work) => {
+    const result = tail.current.then(work);
+    tail.current = result.catch(() => {});
+    return result;
+  }, []);
+  const characterSaves = useCharacterSaves(
+    setData,
+    revision,
+    refreshShell,
+    enqueueWrite,
+    {
+      isCurrent: () => authVersion.current === generation,
+      onUnauthorized,
+    },
+  );
+  const { hasPending } = characterSaves;
+  const isSaving = (type, payload = {}) =>
+    busy || duplicateWrite(pendingWrites, type, payload);
   const [confirmation, setConfirmation] = useState(null);
   const [registering, setRegistering] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false),
@@ -69,14 +115,21 @@ export default function App() {
     const refresh = (initial = false) => {
       if (
         lock.current ||
+        writes.current.length ||
         hasPending.current ||
         (initial !== true && document.hidden)
       )
         return;
       const current = ++revision.current;
+      const expected = authVersion.current;
       (initial === true ? initialSession : request())
         .then((d) => {
           if (live && current === revision.current) {
+            const memberId = d?.me?.id ?? null;
+            if (sessionMember.current !== memberId) {
+              authVersion.current++;
+              sessionMember.current = memberId;
+            }
             setData(d);
             setSessionChecked(true);
           }
@@ -84,7 +137,7 @@ export default function App() {
         .catch((e) => {
           if (live && current === revision.current) {
             if (e.status === 401) {
-              setData(null);
+              invalidate(expected);
               setSessionChecked(true);
             }
             if (e.message !== "請先登入") setError(e.message);
@@ -104,38 +157,101 @@ export default function App() {
       clearInterval(timer);
       window.removeEventListener("focus", refresh);
     };
-  }, [request, hasPending]);
+  }, [request, hasPending, invalidate]);
   useFeedback(error);
   async function mutate(type, payload, message = "已儲存") {
-    if (lock.current) return false;
-    lock.current = true;
+    if (lock.current || duplicateWrite(writes.current, type, payload))
+      return false;
+    const auth = type === "login" || type === "register";
+    if (auth) {
+      lock.current = true;
+      setBusy(true);
+    }
+    const version = authVersion.current;
+    const ticket = {
+      type,
+      target: payload.id ?? payload.channel ?? payload.createKey ?? "",
+      signature: JSON.stringify(payload),
+    };
+    writes.current = [...writes.current, ticket];
+    setPendingWrites(writes.current);
     revision.current++;
-    setBusy(true);
     setError("");
+    characterSaves.flush();
+    let reconcile = false;
     try {
-      await gearSaves.flush();
-      setData(await request(type, payload));
-      notify(message);
-      return true;
+      return await enqueueWrite(async () => {
+        if (authVersion.current !== version) return false;
+        const next = await request(type, payload);
+        if (authVersion.current !== version) return false;
+        revision.current++;
+        if (auth) {
+          authVersion.current++;
+          sessionMember.current = next.me.id;
+        }
+        setData((current) => {
+          if (
+            !next ||
+            !current ||
+            current.me.id !== next.me.id ||
+            current.me.admin !== next.me.admin
+          )
+            return next;
+          return { ...next, activity: next.activity ?? current.activity };
+        });
+        notify(message);
+        return next || true;
+      });
     } catch (e) {
-      if (e.status === 401) setData(null);
-      setError(e.message);
+      if (authVersion.current !== version) return false;
+      if (e.status === 401) invalidate(version);
+      reconcile = !auth && (!e.status || e.status >= 500);
+      if (auth) setError(e.message);
+      else notify(e.message, "error");
       return false;
     } finally {
-      lock.current = false;
-      setBusy(false);
+      writes.current = writes.current.filter((w) => w !== ticket);
+      setPendingWrites(writes.current);
+      if (auth) {
+        lock.current = false;
+        setBusy(false);
+      }
+      if (reconcile) tail.current.then(() => refreshShell.current?.());
     }
   }
-  const onUnauthorized = useCallback(() => setData(null), []);
-  const onActivityChange = useCallback((activity) => {
-    // An activity mutation may complete while an older shell refresh is in flight.
-    revision.current++;
-    setData((current) => (current ? { ...current, activity } : current));
-  }, []);
+  const shellSaving = pendingWrites.length > 0;
+  useEffect(() => {
+    if (!shellSaving) return;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = true;
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [shellSaving]);
+  const onActivityChange = useCallback(
+    (activity) => {
+      // An activity mutation may complete while an older shell refresh is in flight.
+      if (authVersion.current !== generation) return;
+      revision.current++;
+      setData((current) => {
+        if (!current || authVersion.current !== generation) return current;
+        if (activity === null) return { ...current, activity: null };
+        if (
+          current.me.id !== activity?.member?.memberId ||
+          (activity.adminConfig && !current.me.admin)
+        )
+          return current;
+        return { ...current, activity };
+      });
+    },
+    [generation],
+  );
   const shared = {
     data,
     mutate,
     busy,
+    isSaving,
     ask,
     request,
     onUnauthorized,
@@ -337,8 +453,10 @@ export default function App() {
                   revision.current++;
                   setBusy(true);
                   try {
-                    await gearSaves.flush();
-                    await request("logout");
+                    characterSaves.flush();
+                    await enqueueWrite(() => request("logout"));
+                    authVersion.current++;
+                    sessionMember.current = null;
                     setPage("lobby");
                     setData(null);
                     setError("");
@@ -357,7 +475,7 @@ export default function App() {
           </div>
         </aside>
         <main className="main">
-          <div key={page} className="view-transition">
+          <div key={`${data.me.id}/${page}`} className="view-transition">
             <Suspense fallback={<div className="loading">正在開啟頁面…</div>}>
               {page === "lobby" ? (
                 <Lobby
@@ -366,12 +484,14 @@ export default function App() {
                   onUnauthorized={onUnauthorized}
                   onActivityChange={onActivityChange}
                   mutate={mutate}
+                  isSaving={isSaving}
                 />
               ) : page === "settings" ? (
                 <SettingsPanel
                   me={data.me}
                   mutate={mutate}
                   busy={busy}
+                  isSaving={isSaving}
                   onTheme={() => setThemeOpen(true)}
                   onDiscord={() => setDiscordOpen(true)}
                   onTour={() => setTourOpen(true)}
@@ -385,8 +505,8 @@ export default function App() {
               ) : page === "characters" ? (
                 <Characters
                   {...shared}
-                  pendingGear={gearSaves.pending}
-                  changeGear={gearSaves.changeGear}
+                  pendingChanges={characterSaves.pending}
+                  change={characterSaves.change}
                 />
               ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
                 <Raids {...shared} />

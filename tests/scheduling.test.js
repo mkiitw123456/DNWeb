@@ -203,6 +203,24 @@ test("webhooks and emojis validate; secrets never appear in public state or logs
     { status: 409 },
   );
 });
+test("a webhook claim interrupted by shutdown is visibly retryable after its lease ends", () => {
+  const { s, owner } = fixture();
+  const now = Date.now();
+  audit(s, owner, "profile.nickname", {}, now);
+  const event = s.deliveries[0];
+  event.status = "sending";
+  event.attemptAt = now;
+  const visible = () =>
+    publicState(s, owner).deliveries.find((e) => e.id === event.id);
+  assert.equal(visible().retryable, false);
+  assert.throws(() =>
+    action(s, owner, "delivery.retry", { id: event.id }, now),
+  );
+  event.attemptAt = now - 61000;
+  assert.equal(visible().retryable, true);
+  action(s, owner, "delivery.retry", { id: event.id }, now);
+  assert.equal(event.status, "pending");
+});
 test("templates preserve eight positions without date, remain admin-only, and never overwrite source raids", () => {
   const { s, owner, a, draft } = fixture();
   action(s, owner, "raid.save", draft);

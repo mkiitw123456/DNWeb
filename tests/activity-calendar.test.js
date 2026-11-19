@@ -14,6 +14,7 @@ import {
   monthCells,
   shiftMonth,
 } from "../src/activity-calendar.js";
+import { diffActivityConfig, applyActivityPatch, rebaseActivityDraft } from "../shared/activity-config-patch.js";
 const admin = { id: "a", username: "A", admin: true, active: true },
   user = { id: "u", username: "U", active: true },
   other = { id: "o", username: "O", active: true },
@@ -29,6 +30,39 @@ before(async () => {
 after(() => rm(folder, { recursive: true, force: true }));
 const config = async () =>
   structuredClone((await activityView(admin, users, now)).adminConfig);
+test("a small admin edit sends only changed rows, preserves newer typing and rejects stale or invalid patches", async () => {
+  const initial = await config();
+  const submitted = {
+    ...initial,
+    fortunes: initial.fortunes.map((f, i) => i === 0 ? { ...f, title: "  季節籤  " } : f),
+  };
+  const patch = diffActivityConfig(initial, submitted);
+  assert.deepEqual(Object.keys(patch.changes), []);
+  assert.deepEqual(patch.rows, { fortunes: [submitted.fortunes[0]] });
+  assert.ok(JSON.stringify(patch).length * 10 < JSON.stringify(initial).length);
+  const payload = { version: initial.version, patch };
+  const receipt = await activityAction(admin, users, "activity.config", payload, now);
+  const confirmed = { ...applyActivityPatch(initial, receipt.patch), version: receipt.version };
+  assert.equal(confirmed.fortunes[0].title, "季節籤");
+  assert.equal(confirmed.events, initial.events);
+  assert.equal(confirmed.version, initial.version + 1);
+  const laterDraft = { ...submitted, fortuneIntro: "下一個草稿" };
+  const rebased = rebaseActivityDraft(laterDraft, submitted, confirmed);
+  assert.equal(rebased.fortunes, confirmed.fortunes);
+  assert.equal(rebased.fortuneIntro, "下一個草稿");
+  assert.equal(rebaseActivityDraft(confirmed, confirmed, confirmed), confirmed);
+  assert.deepEqual(await config(), confirmed);
+  await assert.rejects(() => activityAction(admin, users, "activity.config", payload, now), { status: 409 });
+  for (const badPatch of [
+    { changes: { version: 234 }, rows: {} },
+    { changes: {}, rows: { fortunes: [{ ...submitted.fortunes[0], id: "absent" }] } },
+    { changes: {}, rows: { fortunes: [submitted.fortunes[0], submitted.fortunes[0]] } },
+  ]) {
+    await assert.rejects(() => activityAction(admin, users, "activity.config", {
+      version: confirmed.version, patch: badPatch,
+    }, now), { status: 400 });
+  }
+});
 test("legacy fortunes retain every body and get stable editable titles and IDs", () => {
   const c = defaultActivityConfig();
   c.fortunes = ["舊籤文一", "舊籤文二"];

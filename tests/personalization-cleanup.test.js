@@ -72,6 +72,20 @@ test("deletion rejects ordinary users, self, owner, mistyped names and unauthori
   );
   assert.equal(s.users.length, 3);
 });
+test("audited activity changes revalidate the session version and admin role at commit", async () => {
+  const write = (user) =>
+    activityTransaction(
+      () => assert.fail("stale authority must not enter the mutation"),
+      {
+        authenticatedUser: user,
+        queueAudit: () => assert.fail("no audit expected"),
+      },
+    );
+  await assert.rejects(write({ ...peer, admin: true }), { status: 403 });
+  await assert.rejects(write({ ...peer, version: peer.version + 1 }), {
+    status: 401,
+  });
+});
 test("named deployment cleanup removes only exact account and all points, receipts, history, counters; retries are safe", async () => {
   const first = await participate(member);
   await participate(peer);

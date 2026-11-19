@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-test("Character writes return committed state without waiting for slow Discord; failed delivery remains retryable", async () => {
+test("Character writes and account/admin forms return committed data while Discord remains blocked", async () => {
   const folder = await mkdtemp(join(tmpdir(), "dn-character-latency-"));
   process.env.LOCAL_DATA_DIR = folder;
   process.env.INITIAL_ADMIN_PASSWORD = "isolated-latency-test";
@@ -85,6 +85,7 @@ test("Character writes return committed state without waiting for slow Discord; 
     assert.equal(result.status, 200);
     const character = result.data.characters.find((c) => c.name === "延遲測試");
     assert.ok(character);
+    assert.equal(result.data.savedRecordId, character.id);
     const legacy = await call(
       "character.gear",
       { id: character.id, slot: "weapon", grade: "A" },
@@ -116,10 +117,56 @@ test("Character writes return committed state without waiting for slow Discord; 
     assert.equal(stored.runs.d, 3);
     assert.equal(stored.quantities.q, 7);
     assert.deepEqual(stored.gear, receipt.data.gear);
+    const quickSave = (patch) =>
+      call("character.quickSave", { id: character.id, ...patch }, login.cookie);
+    const mixed = await quickSave({
+      runs: { d: 1 },
+      quantities: { q: 4 },
+      gear: { weapon: null },
+    });
+    assert.equal(mixed.status, 200);
+    assert.deepEqual(mixed.data, {
+      id: character.id,
+      runs: { d: 1 },
+      quantities: { q: 4 },
+      gear: { ...receipt.data.gear, weapon: null },
+      week: character.week,
+    });
+    assert.equal((await quickSave({ runs: { d: "complete" } })).data.runs.d, 3);
+    assert.equal(
+      (await quickSave({ runs: { d: 0 }, quantities: { q: 1.5 } })).status,
+      400,
+    );
+    const saved = await transact((s) =>
+      s.characters.find((c) => c.id === character.id),
+    );
+    assert.equal(saved.runs.d, 3);
+    assert.equal(saved.quantities.q, 4);
     console.log(
       "Committed character save response with blocked Discord:",
       Math.round(performance.now() - start),
       "ms (local test)",
+    );
+    const savedForms = await Promise.race([
+      Promise.all([
+        call("profile.nickname", { nickname: "新暱稱" }, login.cookie),
+        call("dungeon.save", { name: "新副本", max: 3 }, login.cookie),
+      ]),
+      new Promise((resolve) => (timer = setTimeout(() => resolve(null), 700))),
+    ]);
+    clearTimeout(timer);
+    assert.ok(
+      savedForms,
+      "Ordinary form saves must not wait for audit delivery",
+    );
+    assert.ok(savedForms.every((reply) => reply.status === 200));
+    assert.doesNotMatch(JSON.stringify(savedForms), /fake-log|fake-important/);
+    assert.equal(savedForms[0].data.me.nickname, "新暱稱");
+    assert.ok(savedForms[1].data.dungeons.some((d) => d.name === "新副本"));
+    assert.ok(
+      await transact((s) =>
+        s.deliveries.some((e) => e.message.content.includes("修改副本")),
+      ),
     );
     release();
     for (let i = 0; i < 100; i++) {
@@ -132,13 +179,37 @@ test("Character writes return committed state without waiting for slow Discord; 
       await new Promise((r) => setTimeout(r, 10));
     }
     assert.ok(sent >= 12);
-    assert.ok(
-      await transact((s) =>
-        s.deliveries.some(
-          (e) => e.channel === "important" && e.status === "failed",
-        ),
+    const failed = await transact((s) =>
+      s.deliveries.find(
+        (e) =>
+          e.channel === "important" &&
+          e.status === "failed" &&
+          e.message.content.includes("修改副本"),
       ),
     );
+    assert.ok(failed);
+    let finishAudit;
+    const slowAudit = new Promise((resolve) => (finishAudit = resolve));
+    try {
+      globalThis.fetch = async (_url, options) => {
+        if (JSON.parse(options.body).content !== failed.message.content)
+          await slowAudit;
+        return { ok: true };
+      };
+      const retried = await Promise.race([
+        call("delivery.retry", { id: failed.id }, login.cookie),
+        new Promise(
+          (resolve) => (timer = setTimeout(() => resolve(null), 700)),
+        ),
+      ]);
+      clearTimeout(timer);
+      assert.equal(
+        retried?.data.deliveries.find((e) => e.id === failed.id)?.status,
+        "sent",
+      );
+    } finally {
+      finishAudit();
+    }
   } finally {
     release();
     await new Promise((r) => setTimeout(r, 50));

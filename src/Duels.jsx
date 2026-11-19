@@ -1,3 +1,4 @@
+import useSubmitDialog from "./useSubmitDialog.js";
 import { useEffect, useRef, useState } from "react";
 import { Star, Moon, Trophy, Clock3, Users } from "lucide-react";
 import { Button, Field, Modal } from "./ui.jsx";
@@ -116,13 +117,11 @@ function Coin({ room, now, side = "star" }) {
 export default function Duels({ me, request, onUnauthorized }) {
   const [state, setState] = useState({ rooms: [] }),
     [selected, setSelected] = useState(null),
-    [creating, setCreating] = useState(false),
     [busy, setBusy] = useState(false),
-    [title, setTitle] = useState(""),
-    [side, setSide] = useState("star"),
     [clock, setClock] = useState(Date.now()),
     [error, setError] = useState("");
   const [filter, setFilter] = useState("active");
+  const createRoom = useSubmitDialog();
   const offset = useRef(0),
     locked = useRef(false),
     seq = useRef(0),
@@ -237,7 +236,7 @@ export default function Duels({ me, request, onUnauthorized }) {
     <section className="duels">
       <div className="section-title">
         <h2>星月對決</h2>
-        <Button primary onClick={() => setCreating(true)}>
+        <Button primary onClick={() => createRoom.open({ submissionId: crypto.randomUUID(), title: "", side: "star" })}>
           建立房間
         </Button>
       </div>
@@ -258,7 +257,7 @@ export default function Duels({ me, request, onUnauthorized }) {
             <button
               key={id}
               aria-pressed={filter === id}
-              onClick={() => setFilter(id)}
+              onClick={() => { createRoom.close(); setFilter(id); }}
             >
               {label}
               <span>
@@ -297,7 +296,7 @@ export default function Duels({ me, request, onUnauthorized }) {
                 <h3>{r.title}</h3>
                 {r.winnerName && <p>獲勝者：{r.winnerName}</p>}
               </div>
-              <Button onClick={() => setSelected(r.id)}>觀看</Button>
+              <Button onClick={() => { createRoom.close(); setSelected(r.id); }}>觀看</Button>
             </article>
           ))}
         {!state.rooms.some(
@@ -312,16 +311,13 @@ export default function Duels({ me, request, onUnauthorized }) {
           </p>
         )}
       </div>
-      {creating && (
-        <Modal title="建立星月對決" onClose={() => !busy && setCreating(false)}>
-          <Coin now={now} side={side} />
+      {createRoom.draft && (
+        <Modal title="建立星月對決" onClose={createRoom.close}>
+          <Coin now={now} side={createRoom.draft.side} />
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await act("duel.create", { title, side })) {
-                setCreating(false);
-                setTitle("");
-              }
+              await createRoom.submit((draft) => act("duel.create", draft));
             }}
           >
             <div className="coin-choices">
@@ -329,8 +325,8 @@ export default function Duels({ me, request, onUnauthorized }) {
                 <Button
                   type="button"
                   key={s}
-                  aria-pressed={side === s}
-                  onClick={() => setSide(s)}
+                  aria-pressed={createRoom.draft.side === s}
+                  onClick={() => createRoom.setDraft({ ...createRoom.draft, side: s })}
                 >
                   {s === "star" ? "★ 星星" : "☾ 月亮"}
                 </Button>
@@ -340,8 +336,8 @@ export default function Duels({ me, request, onUnauthorized }) {
               label="房間標題"
               required
               maxLength={80}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={createRoom.draft.title}
+              onChange={(e) => createRoom.setDraft({ ...createRoom.draft, title: e.target.value })}
               placeholder="例如：淨水 5 個"
             />
             <div className="form-actions">

@@ -1,3 +1,4 @@
+import useSubmitDialog from "./useSubmitDialog.js";
 import { wheelProgress } from "./wheel-motion.js";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
@@ -128,11 +129,9 @@ export default function Casino({ me, request, onUnauthorized }) {
   const [tab, setTab] = useState("pool"),
     [state, setState] = useState(null),
     [error, setError] = useState("");
-  const [creating, setCreating] = useState(false),
-    [selected, setSelected] = useState(null),
+  const [selected, setSelected] = useState(null),
     [busy, setBusy] = useState(false);
-  const [title, setTitle] = useState(""),
-    [startsAt, setStartsAt] = useState("");
+  const createRoom = useSubmitDialog();
   const [clock, setClock] = useState(Date.now());
   const [completedDraw, setCompletedDraw] = useState(null);
   const offset = useRef(0),
@@ -237,7 +236,7 @@ export default function Casino({ me, request, onUnauthorized }) {
           <p className="muted">公會遊戲 · 房主人工審核 · 台灣時間</p>
         </div>
         {tab === "pool" && (
-          <Button primary onClick={() => setCreating(true)}>
+          <Button primary onClick={() => createRoom.open({ submissionId: crypto.randomUUID(), title: "", startsAt: "" })}>
             建立獎池
           </Button>
         )}
@@ -252,7 +251,7 @@ export default function Casino({ me, request, onUnauthorized }) {
         ].map(([id, label]) => (
           <button
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => { createRoom.close(); setTab(id); }}
             className={tab === id ? "active" : ""}
           >
             {label}
@@ -306,7 +305,7 @@ export default function Casino({ me, request, onUnauthorized }) {
                     {r.entries.filter((e) => e.status === "approved").length}{" "}
                     人已確認
                   </p>
-                  <Button onClick={() => setSelected(r.id)}>
+                  <Button onClick={() => { createRoom.close(); setSelected(r.id); }}>
                     觀看{r.status === "open" ? "／報名" : "結果"}
                   </Button>
                 </article>
@@ -326,42 +325,32 @@ export default function Casino({ me, request, onUnauthorized }) {
             )}
         </>
       )}
-      {creating && (
+      {createRoom.draft && (
         <Modal
           title="建立獎池"
-          onClose={() => {
-            if (!busy) setCreating(false);
-          }}
+          onClose={createRoom.close}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (
-                await act("casino.create", {
-                  title,
-                  startsAt: startsAt + ":00+08:00",
-                })
-              ) {
-                setCreating(false);
-                setTitle("");
-                setStartsAt("");
-              }
+              await createRoom.submit((draft) =>
+                act("casino.create", { ...draft, startsAt: draft.startsAt + ":00+08:00" }));
             }}
           >
             <Field
               label="獎池標題"
               placeholder="例如：金幣 100"
-              value={title}
+              value={createRoom.draft.title}
               maxLength={80}
               required
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => createRoom.setDraft({ ...createRoom.draft, title: e.target.value })}
             />
             <Field
               label="開獎時間（台灣時間）"
               type="datetime-local"
-              value={startsAt}
+              value={createRoom.draft.startsAt}
               required
-              onChange={(e) => setStartsAt(e.target.value)}
+              onChange={(e) => createRoom.setDraft({ ...createRoom.draft, startsAt: e.target.value })}
             />
             <p className="hint">
               建立後房主自動加入；其他成員需由房主在開獎前確認參加資格。時間須在一分鐘後至七天內。

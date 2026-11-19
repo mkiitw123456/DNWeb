@@ -1,3 +1,4 @@
+import useSubmitDialog from "./useSubmitDialog.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 import { notify } from "./FeedbackHost.jsx";
@@ -24,11 +25,11 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
   const [state, setState] = useState(null),
     [error, setError] = useState(""),
     [selected, setSelected] = useState(null),
-    [creating, setCreating] = useState(false),
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState("");
-  const [draft, setDraft] = useState({ title: "", closesAt: "", riders: [] }),
-    [entry, setEntry] = useState({ optionId: "", amount: 1 }),
+  const createRoom = useSubmitDialog();
+  const { draft, setDraft } = createRoom;
+  const [entry, setEntry] = useState({ optionId: "", amount: 1 }),
     [result, setResult] = useState({ winner: "", places: ["", "", ""] }),
     [confirm, setConfirm] = useState(null);
   const lock = useRef(false),
@@ -112,8 +113,7 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
         <Button
           primary
           onClick={() => {
-            setDraft({ title: "", closesAt: "", riders: [] });
-            setCreating(true);
+            createRoom.open({ submissionId: crypto.randomUUID(), title: "", closesAt: "", riders: [] });
           }}
         >
           建立房間
@@ -139,6 +139,7 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
             className="guild-game-card"
             key={r.id}
             onClick={() => {
+              createRoom.close();
               setSelected(r.id);
               setEntry({ optionId: "", amount: 1 });
               setResult({ winner: "", places: ["", "", ""] });
@@ -165,22 +166,21 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
           目前沒有房間，建立第一場公會活動吧。
         </div>
       )}
-      {creating && (
+      {draft && (
         <Modal
           title={kind === "race" ? "建立賽馬場" : "建立預測房間"}
-          onClose={() => setCreating(false)}
+          onClose={createRoom.close}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (
-                await act("game.create", {
-                  ...draft,
+              await createRoom.submit((submitted) =>
+                act("game.create", {
+                  ...submitted,
                   kind,
-                  closesAt: draft.closesAt + ":00+08:00",
+                  closesAt: submitted.closesAt + ":00+08:00",
                 })
-              )
-                setCreating(false);
+              );
             }}
           >
             <Field
@@ -234,7 +234,7 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
               </fieldset>
             )}
             <div className="form-actions">
-              <Button type="button" onClick={() => setCreating(false)}>
+              <Button type="button" onClick={createRoom.close}>
                 取消
               </Button>
               <Button primary disabled={busy}>

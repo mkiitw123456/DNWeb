@@ -15,6 +15,15 @@ function range(mode = "week") {
   else now.setUTCDate(now.getUTCDate() - ((now.getUTCDay() + 6) % 7));
   return { from: now.toISOString().slice(0, 10), to };
 }
+function BankEntry({ title, className = "quiz-editor", children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className={className} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{title}</summary>
+      {open && children()}
+    </details>
+  );
+}
 function csvDownload(rows, filename) {
   const cell = (x) =>
     '"' +
@@ -36,7 +45,7 @@ function csvDownload(rows, filename) {
 export default function ActivityAdmin({
   request,
   mode = "activities",
-  config,
+  editor,
   users,
   refresh,
   onUnauthorized,
@@ -44,16 +53,18 @@ export default function ActivityAdmin({
   const [tab, setTab] = useState(mode === "quiz" ? "questions" : "rules"),
     [categories, setCategories] = useState([]),
     [fortuneSearch, setFortuneSearch] = useState(""),
-    [draft, setDraft] = useState(() => structuredClone(config)),
     [dates, setDates] = useState(() => range()),
     [report, setReport] = useState(null),
     [reportDates, setReportDates] = useState(null),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [reportQuery, setReportQuery] = useState(null);
+  const { draft, setDraft, save } = editor;
   useFeedback(error, notice);
   const lock = useRef(false),
-    adjustment = useRef(null);
+    adjustment = useRef(null),
+    reportRevision = useRef(0);
   async function run(type, payload) {
     if (lock.current) return null;
     lock.current = true;
@@ -64,6 +75,9 @@ export default function ActivityAdmin({
       return await request(type, payload);
     } catch (e) {
       setError(e.message);
+      // Validation and access failures have not changed the ledger. Let the
+      // admin correct the form; keep the same submission ID on ambiguous errors.
+      if (e.status >= 400 && e.status < 500) adjustment.current = null;
       if (e.status === 401) onUnauthorized();
       return null;
     } finally {
@@ -72,10 +86,20 @@ export default function ActivityAdmin({
     }
   }
   async function loadReport() {
-    const r = await run("activity.report", dates);
-    if (r) {
+    const sequence = ++reportRevision.current;
+    setReportQuery(dates);
+    setError("");
+    try {
+      const r = await request("activity.report", dates);
+      if (sequence !== reportRevision.current) return;
       setReport(r);
       setReportDates({ ...dates });
+    } catch (e) {
+      if (sequence !== reportRevision.current) return;
+      setError(e.message);
+      if (e.status === 401) onUnauthorized();
+    } finally {
+      if (sequence === reportRevision.current) setReportQuery(null);
     }
   }
   const updateActivity = (i, key, value) =>
@@ -93,23 +117,6 @@ export default function ActivityAdmin({
         n === i ? { ...q, [key]: value } : q,
       ),
     }));
-  };
-  const save = async () => {
-    const r = await run("activity.config", {
-      ...draft,
-      quizCategories: (draft.quizCategories ?? allCategories).filter((c) =>
-        allCategories.includes(c),
-      ),
-    });
-    if (r) {
-      try {
-        const v = await refresh();
-        setDraft(structuredClone(v.adminConfig));
-        setNotice("活動設定與日曆已儲存，新提交會使用新版設定。");
-      } catch (e) {
-        setError(e.message);
-      }
-    }
   };
   const summarize = (m) => {
     const rows = report.rows.filter((r) => r.memberId === m.memberId),
@@ -151,11 +158,22 @@ export default function ActivityAdmin({
           </button>
         ))}
       </div>
-      {error && (
+      {(error || editor.error) && (
         <p className="error" role="alert">
-          {error}
+          {error || editor.error}
         </p>
       )}
+      {editor.conflict && (
+        <div>
+          <p>其他管理員已儲存新版設定。保留草稿會把你修改的題目或欄位帶到最新版，請核對後再儲存。</p>
+          <div className="actions">
+            <Button disabled={editor.saving} onClick={() => editor.reloadLatest(true)}>載入新版並保留草稿</Button>
+            <Button disabled={editor.saving} onClick={() => editor.reloadLatest(false)}>放棄草稿，使用新版</Button>
+          </div>
+        </div>
+      )}
+      {editor.saving ? <small role="status">正在儲存活動設定…</small>
+        : editor.dirty && <small role="status">有尚未儲存的修改</small>}
       {notice && (
         <p className="activity-success" role="status">
           {notice}
@@ -166,7 +184,6 @@ export default function ActivityAdmin({
           scripts={draft.scripts ?? []}
           schedule={draft.campaignSchedule ?? []}
           onChange={(campaignSchedule) => setDraft((d) => ({ ...d, campaignSchedule }))}
-          busy={busy}
           save={save}
         />
       ) : tab === "events" ? (
@@ -176,14 +193,12 @@ export default function ActivityAdmin({
           onUnlimited={(eventUnlimited) =>
             setDraft((d) => ({ ...d, eventUnlimited }))
           }
-          busy={busy}
           save={save}
           onChange={(events) => setDraft((d) => ({ ...d, events }))}
         />
       ) : tab === "calendar" ? (
         <ActivityCalendar
           config={draft}
-          busy={busy}
           onSave={save}
           onChange={(schedule) => setDraft((d) => ({ ...d, schedule }))}
         />
@@ -200,7 +215,7 @@ export default function ActivityAdmin({
             <>
               <div className="lobby-section-title">
                 <h2>每日活動規則</h2>
-                <Button primary disabled={busy}>
+                <Button primary>
                   <Save size={16} />
                   儲存設定
                 </Button>
@@ -341,11 +356,12 @@ export default function ActivityAdmin({
                         f.title + " " + f.body,
                         fortuneSearch,
                       )) && (
-                      <details
+                      <BankEntry
                         className="quiz-editor fortune-editor"
                         key={f.id}
+                        title={f.title || "新籤文（點擊編輯）"}
                       >
-                        <summary>{f.title || "新籤文（點擊編輯）"}</summary>
+                        {() => (
                         <div className="quiz-editor-fields">
                           <Field
                             label={`籤文 ${i + 1} 標題`}
@@ -394,7 +410,8 @@ export default function ActivityAdmin({
                             移除籤文 {i + 1}
                           </Button>
                         </div>
-                      </details>
+                        )}
+                      </BankEntry>
                     ),
                 )}
               </div>
@@ -488,8 +505,8 @@ export default function ActivityAdmin({
                     (!categories.length ||
                       categories.includes(q.category) ||
                       !q.question) && (
-                      <details key={i} className="quiz-editor">
-                        <summary>{q.question || "新題目（點擊編輯）"}</summary>
+                      <BankEntry key={q.id} title={q.question || "新題目（點擊編輯）"}>
+                        {() => (
                         <div className="quiz-editor-fields">
                           <div className="lobby-section-title">
                             <h3>題目 {i + 1}</h3>
@@ -610,14 +627,15 @@ export default function ActivityAdmin({
                             }
                           />
                         </div>
-                      </details>
+                        )}
+                      </BankEntry>
                     ),
                 )}
               </div>
             </>
           )}
           <div className="activity-settings-actions">
-            <Button primary disabled={busy}>
+            <Button primary>
               <Save size={16} />
               儲存設定
             </Button>
@@ -652,7 +670,7 @@ export default function ActivityAdmin({
               value={dates.to}
               onChange={(e) => setDates({ ...dates, to: e.target.value })}
             />
-            <Button disabled={busy} primary>
+            <Button disabled={reportQuery?.from === dates.from && reportQuery?.to === dates.to} primary>
               查詢報表
             </Button>
             <Button type="button" onClick={() => setDates(range())}>
@@ -855,6 +873,7 @@ export default function ActivityAdmin({
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (lock.current) return;
                 const form = e.currentTarget;
                 if (!adjustment.current) {
                   const f = new FormData(form);
@@ -865,17 +884,22 @@ export default function ActivityAdmin({
                     reason: f.get("reason"),
                   };
                 }
-                const r = await run("activity.adjust", adjustment.current);
+                const submitted = adjustment.current;
+                const r = await run("activity.adjust", submitted);
                 if (r) {
                   adjustment.current = null;
-                  form.reset();
+                  if (form.elements.memberId.value === submitted.memberId &&
+                      Number(form.elements.delta.value) === submitted.delta &&
+                      form.elements.reason.value === submitted.reason) form.reset();
                   setNotice("積分已調整並留下稽核紀錄。");
+                  reportRevision.current++;
+                  setReportQuery(null);
                   setReport(null);
                   refresh().catch((e) => setError(e.message));
                 }
               }}
             >
-              <fieldset disabled={busy || !!adjustment.current}>
+              <fieldset disabled={!busy && !!adjustment.current}>
                 <Field label="成員帳號">
                   <select name="memberId" required>
                     <option value="">選擇成員</option>

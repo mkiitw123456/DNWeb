@@ -1,7 +1,9 @@
 import { useFeedback } from "./FeedbackHost.jsx";
 import ActivityAdmin from "./ActivityAdmin.jsx";
 import { matchesContent } from "./activity-calendar.js";
-import { useState, useEffect, useCallback } from "react";
+import useRecordEditor from "./useRecordEditor.js";
+import { useState, useEffect, useCallback, useRef } from "react";
+import useActivityConfigEditor from "./useActivityConfigEditor.js";
 import { Plus, SquarePen, Trash2 } from "lucide-react";
 import Professions from "./Professions.jsx";
 import DiscordSettings from "./DiscordSettings.jsx";
@@ -20,6 +22,7 @@ export default function Admin({
   data,
   mutate,
   busy,
+  isSaving,
   ask,
   request,
   onUnauthorized,
@@ -30,23 +33,34 @@ export default function Admin({
   useFeedback(activityError);
   const [deleting, setDeleting] = useState(null),
     [deleteName, setDeleteName] = useState("");
+  const activityRevision = useRef(0);
   const refreshActivity = useCallback(async () => {
+    const sequence = ++activityRevision.current;
     const v = await request("activity.state");
-    setActivity(v);
-    onActivityChange(v);
+    if (sequence === activityRevision.current) {
+      setActivity(v);
+      onActivityChange(v);
+    }
     return v;
   }, [request, onActivityChange]);
+  const configEditor = useActivityConfigEditor(activity?.adminConfig, request, (adminConfig) => {
+    activityRevision.current++;
+    setActivity((view) => ({ ...view, adminConfig }));
+    // The next lobby visit fetches playable activities under the new rule version.
+    onActivityChange(null);
+  }, onUnauthorized);
   const [tab, setTab] = useState("users"),
     [memberSearch, setMemberSearch] = useState(""),
-    [editing, setEditing] = useState(null),
     [url, setUrl] = useState("");
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
+  const editorType = tab === "users" ? "user.save" : "dungeon.save";
   useEffect(() => {
-    if (tab === "activities" || tab === "quiz")
+    if (!activity && (tab === "activities" || tab === "quiz"))
       refreshActivity().catch((e) => {
         setActivityError(e.message);
         if (e.status === 401) onUnauthorized();
       });
-  }, [tab, refreshActivity, onUnauthorized]);
+  }, [tab, activity, refreshActivity, onUnauthorized]);
   const visibleMembers =
     tab === "users" && memberSearch.trim()
       ? data.users.filter((u) =>
@@ -75,7 +89,7 @@ export default function Admin({
             key={id}
             onClick={() => {
               setTab(id);
-              setEditing(null);
+              openEditor(null);
             }}
           >
             {name}
@@ -85,12 +99,12 @@ export default function Admin({
       {tab === "voice" ? (
         <VoiceStats request={request} onUnauthorized={onUnauthorized} />
       ) : tab === "activities" || tab === "quiz" ? (
-        activity?.adminConfig ? (
+        configEditor.draft ? (
           <ActivityAdmin
             key={tab}
             mode={tab}
             request={request}
-            config={activity.adminConfig}
+            editor={configEditor}
             users={data.users}
             refresh={refreshActivity}
             onUnauthorized={onUnauthorized}
@@ -105,7 +119,7 @@ export default function Admin({
             <Button
               primary
               onClick={() =>
-                setEditing({
+                openEditor({
                   username: "",
                   password: "",
                   discordId: "",
@@ -145,7 +159,7 @@ export default function Admin({
                 <Button
                   disabled={u.admin && !data.canDelegate}
                   aria-label={`編輯帳號 ${u.username}`}
-                  onClick={() => setEditing({ ...u, password: "" })}
+                  onClick={() => openEditor({ ...u, password: "" })}
                 >
                   <SquarePen size={16} />
                   編輯
@@ -154,7 +168,7 @@ export default function Admin({
                   u.id !== data.adminOwnerId &&
                   (!u.admin || data.canDelegate) && (
                     <Button
-                      disabled={busy}
+                      disabled={isSaving("user.delete", { id: u.id })}
                       aria-label={`刪除帳號 ${u.username}`}
                       onClick={() => {
                         setDeleting(u);
@@ -167,7 +181,7 @@ export default function Admin({
                   )}
                 {data.canDelegate && u.id !== data.me.id && u.active && (
                   <Button
-                    disabled={busy}
+                    disabled={isSaving("user.role", { id: u.id })}
                     onClick={async () => {
                       if (
                         await ask(
@@ -218,7 +232,7 @@ export default function Admin({
         <section className="admin-panel">
           <div className="section-title">
             <h2>副本清單</h2>
-            <Button primary onClick={() => setEditing({ name: "", max: 7 })}>
+            <Button primary onClick={() => openEditor({ name: "", max: 7 })}>
               <Plus size={17} />
               新增副本
             </Button>
@@ -232,13 +246,13 @@ export default function Admin({
               <span className="muted">每週 {d.max} 場</span>
               <Button
                 aria-label={`編輯副本 ${d.name}`}
-                onClick={() => setEditing({ ...d })}
+                onClick={() => openEditor({ ...d })}
               >
                 <SquarePen size={16} />
               </Button>
               <Button
                 aria-label={`刪除副本 ${d.name}`}
-                disabled={busy}
+                disabled={isSaving("dungeon.delete", { id: d.id })}
                 onClick={async () => {
                   if (await ask("刪除副本及所有角色對應的次數？"))
                     mutate("dungeon.delete", { id: d.id }, "副本已刪除");
@@ -250,11 +264,11 @@ export default function Admin({
           ))}
         </section>
       ) : tab === "discord" ? (
-        <DiscordSettings data={data} mutate={mutate} busy={busy} />
+        <DiscordSettings data={data} mutate={mutate} isSaving={isSaving} />
       ) : tab === "quantities" ? (
-        <QuantityTypes data={data} mutate={mutate} busy={busy} ask={ask} />
+        <QuantityTypes data={data} mutate={mutate} isSaving={isSaving} ask={ask} />
       ) : tab === "professions" ? (
-        <Professions data={data} mutate={mutate} busy={busy} ask={ask} />
+        <Professions data={data} mutate={mutate} isSaving={isSaving} ask={ask} />
       ) : (
         <section className="admin-panel narrow">
           <h2>Discord 售出通知</h2>
@@ -275,7 +289,7 @@ export default function Admin({
             onSubmit={async (e) => {
               e.preventDefault();
               if (await mutate("webhook.save", { url }, "Discord 設定已儲存"))
-                setUrl("");
+                setUrl((current) => current === url ? "" : current);
             }}
           >
             <Field
@@ -289,7 +303,7 @@ export default function Admin({
             <p className="hint">
               網址僅儲存在伺服器，不會回傳到瀏覽器。留白儲存會移除後台設定，改使用部署環境變數（若有）。
             </p>
-            <Button primary disabled={busy}>
+            <Button primary disabled={isSaving("webhook.save", {url})}>
               儲存通知設定
             </Button>
           </form>
@@ -306,27 +320,21 @@ export default function Admin({
                 ? "編輯副本"
                 : "新增副本"
           }
-          onClose={() => setEditing(null)}
+          onClose={() => openEditor(null)}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (
-                await mutate(
-                  tab === "users" ? "user.save" : "dungeon.save",
-                  editing,
-                )
-              )
-                setEditing(null);
+              await saveEditor(mutate, editorType);
             }}
           >
             {tab === "activities" || tab === "quiz" ? (
-              activity?.adminConfig ? (
+              configEditor.draft ? (
                 <ActivityAdmin
                   key={tab}
                   mode={tab}
                   request={request}
-                  config={activity.adminConfig}
+                  editor={configEditor}
                   users={data.users}
                   refresh={refreshActivity}
                   onUnauthorized={onUnauthorized}
@@ -403,7 +411,7 @@ export default function Admin({
                 />
               </>
             )}
-            <FormActions busy={busy} onClose={() => setEditing(null)} />
+            <FormActions busy={isSaving(editorType, editing)} onClose={() => openEditor(null)} />
           </form>
         </Modal>
       )}
@@ -411,7 +419,7 @@ export default function Admin({
         <Modal
           title="永久刪除帳號"
           onClose={() => {
-            if (!busy) setDeleting(null);
+            if (!isSaving("user.delete", { id: deleting.id })) setDeleting(null);
           }}
         >
           <p>
@@ -438,7 +446,7 @@ export default function Admin({
               autoComplete="off"
               required
             />
-            <Button primary disabled={busy || deleteName !== deleting.username}>
+            <Button primary disabled={isSaving("user.delete", { id: deleting.id }) || deleteName !== deleting.username}>
               永久刪除
             </Button>
           </form>

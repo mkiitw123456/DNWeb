@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { initialState } from "./domain.js";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 let queue = Promise.resolve(),
   db;
 export async function firestore() {
@@ -15,21 +16,72 @@ export async function firestore() {
   }
   return db;
 }
+async function localState(folder) {
+  try {
+    return JSON.parse(await readFile(`${folder}/state.json`, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return initialState();
+    throw error;
+  }
+}
+// An authorization lookup only needs a fresh snapshot. Using a transaction
+// here would contend with writes to the shared guild document.
+export async function readState(select) {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const snap = await (await firestore()).doc("dnweb/state").get();
+    return select(snap.exists ? snap.data() : initialState());
+  }
+  if (process.env.VERCEL)
+    throw Object.assign(new Error("尚未設定 Firebase 服務帳戶"), {
+      status: 503,
+    });
+  await queue;
+  return select(await localState(process.env.LOCAL_DATA_DIR || ".local"));
+}
+export function firestoreFieldUpdates(
+  before,
+  after,
+  { FieldPath, FieldValue },
+) {
+  const updates = [];
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (!Object.hasOwn(after, key)) {
+      updates.push(new FieldPath(key), FieldValue.delete());
+    } else if (
+      !Object.hasOwn(before, key) ||
+      !isDeepStrictEqual(before[key], after[key])
+    ) {
+      // A whole field is replaced, including removed keys inside a nested map.
+      updates.push(new FieldPath(key), after[key]);
+    }
+  }
+  return updates;
+}
 export async function transact(fn, { backup = false } = {}) {
   const backupId = backup
     ? `before-account-cleanup-${Date.now()}-${randomUUID()}`
     : null;
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const fieldTypes = await import("firebase-admin/firestore");
     const ref = (await firestore()).doc("dnweb/state");
     return ref.firestore.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const state = snap.exists ? snap.data() : initialState();
-      const original = backup ? structuredClone(state) : null;
-      const before = JSON.stringify(state);
+      // Snapshot.data() decodes a fresh object with native Firestore types.
+      const original = snap.exists
+        ? snap.data()
+        : backup
+          ? structuredClone(state)
+          : null;
       const result = await fn(state);
       if (backup)
         tx.create(ref.firestore.doc(`dnweb_backups/${backupId}`), original);
-      if (!snap.exists || JSON.stringify(state) !== before) tx.set(ref, state);
+      if (!snap.exists) {
+        tx.set(ref, state);
+      } else {
+        const updates = firestoreFieldUpdates(original, state, fieldTypes);
+        if (updates.length) tx.update(ref, ...updates);
+      }
       return result;
     });
   }
@@ -40,13 +92,7 @@ export async function transact(fn, { backup = false } = {}) {
   const operation = queue.then(async () => {
     const folder = process.env.LOCAL_DATA_DIR || ".local";
     await mkdir(folder, { recursive: true });
-    let state;
-    try {
-      state = JSON.parse(await readFile(`${folder}/state.json`, "utf8"));
-    } catch (e) {
-      if (e.code !== "ENOENT") throw e;
-      state = initialState();
-    }
+    const state = await localState(folder);
     const original = backup ? JSON.stringify(state) : null;
     const result = await fn(state);
     if (backup)

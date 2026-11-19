@@ -110,7 +110,7 @@ export function FormActions({ busy, onClose, showCancel = true }) {
     <div className="form-actions">
       {showCancel && (
         <Button type="button" onClick={onClose}>
-          取消
+          {busy ? "關閉" : "取消"}
         </Button>
       )}
       <Button primary disabled={busy}>

@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import { firestore } from "./store.js";
+import { firestore, transact } from "./store.js";
 let queue = Promise.resolve();
 function documentPath(key) {
   // Mirror Firestore path validation in the local adapter too.
@@ -11,25 +11,29 @@ function documentPath(key) {
     throw new Error("Invalid activity document path");
   return `guild_activity/${key}`;
 }
+function checkActivitySession(guild, user) {
+  const current = guild?.users?.find((u) => u.id === user.id);
+  if (!current?.active || current.version !== user.version)
+    throw Object.assign(new Error("請重新登入"), { status: 401 });
+  if (!!current.admin !== !!user.admin)
+    throw Object.assign(new Error("帳號權限已更新，請重新載入"), {
+      status: 403,
+    });
+}
 // Independent documents keep growing activity history out of dnweb/state.
-export async function activityTransaction(fn, { authenticatedUser } = {}) {
+export async function activityTransaction(
+  fn,
+  { authenticatedUser, queueAudit } = {},
+) {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     return db.runTransaction(async (tx) => {
       const writes = [];
+      let guild;
       if (authenticatedUser) {
         const main = await tx.get(db.doc("dnweb/state"));
-        if (
-          !main
-            .data()
-            ?.users?.some(
-              (u) =>
-                u.id === authenticatedUser.id &&
-                u.active &&
-                u.version === authenticatedUser.version,
-            )
-        )
-          throw Object.assign(new Error("請重新登入"), { status: 401 });
+        guild = main.data();
+        checkActivitySession(guild, authenticatedUser);
       }
       const result = await fn({
         quizRecords: async (memberId) =>
@@ -50,6 +54,14 @@ export async function activityTransaction(fn, { authenticatedUser } = {}) {
       });
       for (const [key, value] of writes)
         tx.set(db.doc(documentPath(key)), value);
+      if (queueAudit) {
+        // This document has already been read for authorization. Commit the
+        // outbox with the activity, including on Firestore transaction retries.
+        const jobs = writes.length ? queueAudit(guild) : [];
+        if (writes.length)
+          tx.update(db.doc("dnweb/state"), { deliveries: guild.deliveries });
+        return { result, jobs };
+      }
       return result;
     });
   }
@@ -57,7 +69,7 @@ export async function activityTransaction(fn, { authenticatedUser } = {}) {
     throw Object.assign(new Error("尚未設定 Firebase 服務帳戶"), {
       status: 503,
     });
-  const operation = queue.then(async () => {
+  async function runLocal(guild) {
     const folder = process.env.LOCAL_DATA_DIR || ".local";
     await mkdir(folder, { recursive: true });
     let state = {};
@@ -94,12 +106,22 @@ export async function activityTransaction(fn, { authenticatedUser } = {}) {
         dirty = true;
       },
     });
+    const jobs = queueAudit && dirty ? queueAudit(guild) : [];
     if (dirty) {
       await writeFile(`${folder}/activities.tmp`, JSON.stringify(state));
       await rename(`${folder}/activities.tmp`, `${folder}/activities.json`);
     }
+    if (queueAudit) return { result, jobs };
     return result;
-  });
+  }
+  const operation = queue.then(() =>
+    queueAudit
+      ? transact((guild) => {
+          checkActivitySession(guild, authenticatedUser);
+          return runLocal(guild);
+        })
+      : runLocal(),
+  );
   queue = operation.catch(() => {});
   return operation;
 }

@@ -1,5 +1,6 @@
 import { useStarRewards, STAR_ASSET } from "./StarRewards.jsx";
 import Aquarium from "./Aquarium.jsx";
+import useSubmitDialog from "./useSubmitDialog.js";
 import { playSound } from "./sounds.js";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -42,6 +43,7 @@ export default function Lobby({
   onUnauthorized,
   onActivityChange,
   mutate,
+  isSaving,
 }) {
   const [view, setView] = useState(data.activity || null),
     [error, setError] = useState(""),
@@ -51,8 +53,8 @@ export default function Lobby({
     [encounterPhase, setEncounterPhase] = useState("waiting"),
     [choice, setChoice] = useState(null),
     [inEncounter, setInEncounter] = useState(false),
-    [result, setResult] = useState(null),
-    [profile, setProfile] = useState(false);
+    [result, setResult] = useState(null);
+  const profile = useSubmitDialog();
   const { hold, collect } = useStarRewards();
   const collectReward = (event) => {
     const button =
@@ -86,28 +88,31 @@ export default function Lobby({
     return v;
   }, [request, onActivityChange]);
   useEffect(() => {
-    if (data.activity) setView(data.activity);
-  }, [data.activity]);
-  useEffect(() => {
     let live = true;
-    (data.activity ? Promise.resolve(data.activity) : request("activity.state"))
-      .then((v) => {
-        if (live) setView(v);
-      })
-      .catch((e) => {
+    if (data.activity) {
+      setView(data.activity);
+    } else {
+      setView(null);
+      refresh().catch((e) => {
         if (live) handleError(e);
       });
+    }
+    return () => {
+      live = false;
+      viewRequest.current++;
+    };
+  }, [data.activity, refresh, handleError]);
+  useEffect(() => {
     const focus = () => {
       if (!lock.current && !document.hidden) refresh().catch(handleError);
     };
     window.addEventListener("focus", focus);
     const timer = setInterval(focus, 60000);
     return () => {
-      live = false;
       clearInterval(timer);
       window.removeEventListener("focus", focus);
     };
-  }, [request, refresh, handleError]);
+  }, [refresh, handleError]);
   const perform = async (type, payload) => {
     if (lock.current) return null;
     lock.current = true;
@@ -129,6 +134,7 @@ export default function Lobby({
     }
   };
   const open = (a) => {
+    profile.close();
     settledView.current = null;
     pending.current = null;
     setError("");
@@ -316,7 +322,7 @@ export default function Lobby({
             <span>遊戲暱稱</span>
             <button
               className="nickname-button"
-              onClick={() => setProfile(true)}
+              onClick={() => profile.open({ nickname: data.me.nickname || view.member.nickname || data.me.username })}
             >
               {data.me.nickname || view.member.nickname || data.me.username}
               <Pencil size={14} />
@@ -406,7 +412,7 @@ export default function Lobby({
                       <span className="rank">{row.rank}</span>
                       <div>
                         <strong>
-                          {row.name}
+                          {(row.memberId === data.me.id && data.me.nickname) || row.name}
                           {row.memberId === data.me.id ? "（你）" : ""}
                         </strong>
                         <small>{row.count} 次參與</small>
@@ -770,8 +776,8 @@ export default function Lobby({
           )}
         </Modal>
       )}
-      {profile && (
-        <Modal title="設定遊戲暱稱" onClose={() => setProfile(false)}>
+      {profile.draft && (
+        <Modal title="設定遊戲暱稱" onClose={profile.close}>
           <p className="muted">
             請使用夥伴認得的遊戲暱稱。星星綁定帳號，改名不影響歷史紀錄；同名成員仍是不同帳號。
           </p>
@@ -779,14 +785,7 @@ export default function Lobby({
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              const r = await mutate("profile.nickname", {
-                nickname: new FormData(e.currentTarget).get("nickname"),
-              });
-              if (r) {
-                notify("遊戲暱稱已儲存");
-                setProfile(false);
-                refresh().catch(handleError);
-              }
+              await profile.submit((payload) => mutate("profile.nickname", payload, "遊戲暱稱已儲存"));
             }}
           >
             <Field
@@ -794,11 +793,10 @@ export default function Lobby({
               name="nickname"
               maxLength={30}
               required
-              defaultValue={
-                data.me.nickname || view.member.nickname || data.me.username
-              }
+              value={profile.draft.nickname}
+              onChange={(e) => profile.setDraft({ nickname: e.target.value })}
             />
-            <Button primary disabled={busy}>
+            <Button primary disabled={isSaving("profile.nickname", profile.draft)}>
               儲存暱稱
             </Button>
           </form>

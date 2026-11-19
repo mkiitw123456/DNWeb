@@ -8,7 +8,7 @@ const kinds = [
   ["event", "冒險隨機事件", "events"],
 ];
 const titleOf = (x) => x.title || x.question;
-export default function ActivityCalendar({ config, onChange, onSave, busy }) {
+export default function ActivityCalendar({ config, onChange, onSave }) {
   const today = new Date(Date.now() - 3600000).toISOString().slice(0, 10);
   const [day, setDay] = useState(today),
     [month, setMonth] = useState(today.slice(0, 7)),
@@ -30,7 +30,7 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
         <h2>
           <CalendarDays size={20} /> 活動日曆
         </h2>
-        <Button primary disabled={busy} onClick={onSave}>
+        <Button primary onClick={onSave}>
           <Save size={16} />
           儲存日曆
         </Button>
@@ -42,7 +42,7 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
       <div className="calendar-toolbar">
         <Button
           aria-label="上一個月"
-          disabled={busy}
+
           onClick={() => setMonth(shiftMonth(month, -1))}
         >
           <ChevronLeft size={18} />
@@ -57,13 +57,12 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
         />
         <Button
           aria-label="下一個月"
-          disabled={busy}
+
           onClick={() => setMonth(shiftMonth(month, 1))}
         >
           <ChevronRight size={18} />
         </Button>
         <Button
-          disabled={busy}
           onClick={() => {
             setDay(today);
             setMonth(today.slice(0, 7));
@@ -84,7 +83,7 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
             <button
               type="button"
               key={date}
-              disabled={busy}
+
               className={`calendar-day${day === date ? " selected" : ""}`}
               aria-pressed={day === date}
               aria-label={`${date}，${Object.keys(schedule[date] || {}).length} 項指定活動`}
@@ -139,7 +138,6 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
                 }
               />
               <Button
-                disabled={busy}
                 aria-pressed={!chosen[kind]}
                 onClick={() => select(kind, null)}
               >
@@ -150,7 +148,7 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
                   <button
                     type="button"
                     key={x.id}
-                    disabled={busy}
+
                     aria-pressed={chosen[kind] === x.id}
                     onClick={() => select(kind, x.id)}
                   >
@@ -165,7 +163,7 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
         })}
       </div>
       <div className="form-actions">
-        <Button primary disabled={busy} onClick={onSave}>
+        <Button primary onClick={onSave}>
           儲存日曆
         </Button>
       </div>

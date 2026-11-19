@@ -1,6 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -398,6 +399,124 @@ test("raid API enforces delegation, persists templates and records creation logs
   assert.equal((await call("raid.save", draft, b.cookie)).status, 403);
 });
 
+test("editor create retries are scoped to actor and type and replay neither writes nor notifications", async () => {
+  const owner = await call("login", {
+    username: "MrAirWolf",
+    password: "test-password",
+  });
+  const { cookie } = owner;
+  const createKey = randomUUID();
+  const rows = [
+    [
+      "user.save",
+      "users",
+      {
+        username: "EditorRetryUser",
+        password: "unique-retry-test-value",
+        credentialInput: randomUUID(),
+      },
+    ],
+    ["character.save", "characters", { name: "資料重送角色" }],
+    ["dungeon.save", "dungeons", { name: "資料重送副本", max: 2 }],
+    ["quantityType.save", "quantityTypes", { name: "資料重送計數" }],
+    [
+      "profession.save",
+      "professions",
+      { name: "資料重送職業", icon: "/icons/Swordsman.png" },
+    ],
+  ];
+  for (const [type, collection, fields] of rows) {
+    const createAttempt = randomUUID();
+    const payload = { ...fields, createKey, createAttempt };
+    const [one, two] = await Promise.all([
+      call(type, payload, cookie),
+      call(type, payload, cookie),
+    ]);
+    assert.equal(one.status, 200);
+    assert.equal(two.status, 200);
+    assert.ok(one.data.savedRecordId);
+    assert.equal(two.data.savedRecordId, one.data.savedRecordId);
+    assert.equal(
+      one.data.savedCreateAttempt || two.data.savedCreateAttempt,
+      createAttempt,
+    );
+    assert.equal(
+      two.data[collection].filter(
+        (x) => (x.name || x.username) === (fields.name || fields.username),
+      ).length,
+      1,
+    );
+    const data = () =>
+      readFile(join(folder, "state.json"), "utf8").then(JSON.parse);
+    const before = await data();
+    const replay = await call(
+      type,
+      { ...payload, createAttempt: randomUUID(), name: "未經更新不得生效" },
+      cookie,
+    );
+    assert.equal(replay.data.savedCreateAttempt, createAttempt);
+    assert.equal(
+      replay.data.savedCredentialInput,
+      fields.credentialInput || null,
+    );
+    assert.equal(replay.data.editorCreateReceipts, undefined);
+    const after = await data();
+    assert.deepEqual(after[collection], before[collection]);
+    assert.deepEqual(
+      after.deliveries.map((e) => e.id),
+      before.deliveries.map((e) => e.id),
+    );
+    assert.deepEqual(after.editorCreateReceipts, before.editorCreateReceipts);
+    assert.ok(
+      !JSON.stringify(after.editorCreateReceipts).includes(
+        "unique-retry-test-value",
+      ),
+    );
+  }
+  const other = await call("register", {
+    username: "OtherEditor",
+    password: "retry-member",
+  });
+  const payload = {
+    createKey,
+    createAttempt: randomUUID(),
+    name: "資料重送角色",
+  };
+  const extra = await call("character.save", payload, other.cookie);
+  assert.equal(extra.status, 200);
+  assert.notEqual(
+    extra.data.savedRecordId,
+    (await call("character.save", payload, cookie)).data.savedRecordId,
+  );
+  assert.equal(
+    (await call("dungeon.save", { ...payload, max: 2 }, other.cookie)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(
+        "character.delete",
+        { id: extra.data.savedRecordId },
+        other.cookie,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await call("character.save", payload, other.cookie)).status,
+    409,
+  );
+  assert.equal(
+    (
+      await call(
+        "character.save",
+        { ...payload, createKey: [createKey] },
+        cookie,
+      )
+    ).status,
+    400,
+  );
+});
 test("account cleanup backs up full data, promotes existing successor and signs out removed administrator", async () => {
   const logged = await call("login", {
     username: "MrAirWolf",

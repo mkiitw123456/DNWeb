@@ -980,58 +980,63 @@ input[type="checkbox"]::after {
       0 4px 4px #28a9ff inset;
   }
 }
-dialog.save-overlay {
+.save-overlay {
   --save-color: #38bdf8;
-  width: min(360px, calc(100vw - 40px));
-  max-height: calc(100dvh - 40px);
-  padding: 32px;
-  text-align: center;
-  background: rgb(16 23 34 / 48%);
+  position: fixed;
+  inset: auto auto max(16px, env(safe-area-inset-bottom)) 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 14px;
+  pointer-events: none;
+  z-index: 100;
+  background: rgb(16 23 34 / 88%);
   color: #f1f5f9;
   border: 1px solid var(--save-color);
-  border-radius: 20px;
-  box-shadow: 0 0 36px color-mix(in srgb, var(--save-color) 20%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px #0004;
   transition:
     border-color 0.3s,
     box-shadow 0.3s;
 }
-dialog.save-overlay::backdrop {
-  background: #000a;
+.save-overlay > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 8px;
 }
-dialog.save-success {
+.save-success {
   --save-color: #4ade80;
 }
-dialog.save-error {
+.save-error {
   --save-color: #fb7185;
 }
 .save-spinner {
   display: block;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 22px;
+  width: 19px;
+  height: 19px;
+  grid-row: 1 / -1;
   border-radius: 50%;
   box-shadow:
     0 2px 2px #fff inset,
-    0 8px 14px var(--save-color) inset,
-    0 12px 18px color-mix(in srgb, var(--save-color) 55%, transparent) inset;
+    0 3px 5px var(--save-color) inset,
+    0 4px 6px color-mix(in srgb, var(--save-color) 55%, transparent) inset;
   animation: save-loader-rotate 1.5s linear infinite;
   transition: box-shadow 0.35s;
 }
 .save-overlay strong {
   display: block;
   color: var(--save-color);
-  font-size: 21px;
+  font-size: 14px;
   transition: color 0.35s;
 }
 .save-overlay p {
-  margin: 14px 0 0;
+  grid-column: 2;
+  margin: 0;
+  font-size: 13px;
   color: #e2e8f0;
   overflow-wrap: anywhere;
-}
-.save-overlay button {
-  margin-top: 20px;
-  color: #f1f5f9;
-  border-color: #64748b;
 }
 @keyframes save-loader-rotate {
   from {
@@ -1052,7 +1057,7 @@ dialog.save-error {
       0 3px 5px #ff5f9f inset,
       0 4px 4px #0693ff inset;
   }
-  dialog.save-overlay,
+  .save-overlay,
   .save-spinner,
   .save-overlay strong {
     transition: none;

@@ -1,9 +1,9 @@
-import { useState } from "react";
+import useRecordEditor from "./useRecordEditor.js";
 import { Button, Field, Modal, FormActions } from "./ui.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
 import { professionIcons } from "../shared/professions.js";
-export default function Professions({ data, mutate, busy, ask }) {
-  const [editing, setEditing] = useState(null);
+export default function Professions({ data, mutate, isSaving, ask }) {
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
   return (
     <section className="admin-panel">
       <div className="section-title">
@@ -11,7 +11,7 @@ export default function Professions({ data, mutate, busy, ask }) {
         <Button
           primary
           onClick={() =>
-            setEditing({ name: "", icon: professionIcons[0].icon })
+            openEditor({ name: "", icon: professionIcons[0].icon })
           }
         >
           新增職業
@@ -34,7 +34,7 @@ export default function Professions({ data, mutate, busy, ask }) {
           </span>
           <Button
             onClick={() =>
-              setEditing({
+              openEditor({
                 ...p,
                 discordEmoji:
                   p.discordEmoji?.replace(/^<a?:([^:]+):\d+>$/, ":$1:") || "",
@@ -45,7 +45,7 @@ export default function Professions({ data, mutate, busy, ask }) {
             編輯
           </Button>
           <Button
-            disabled={busy}
+            disabled={isSaving("profession.delete", { id: p.id })}
             onClick={async () => {
               if (await ask(`刪除「${p.name}」？角色會改為未設定職業。`))
                 mutate("profession.delete", { id: p.id });
@@ -58,12 +58,12 @@ export default function Professions({ data, mutate, busy, ask }) {
       {editing && (
         <Modal
           title={editing.id ? "編輯職業" : "新增職業"}
-          onClose={() => setEditing(null)}
+          onClose={() => openEditor(null)}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await mutate("profession.save", editing)) setEditing(null);
+              await saveEditor(mutate, "profession.save");
             }}
           >
             <Field
@@ -100,7 +100,10 @@ export default function Professions({ data, mutate, busy, ask }) {
               ID。名稱須符合大小寫；機器人需已加入放置貼圖的伺服器。也可貼上完整代碼，留白可清除。
             </p>
             <ProfessionIcon profession={editing} />
-            <FormActions busy={busy} onClose={() => setEditing(null)} />
+            <FormActions
+              busy={isSaving("profession.save", editing)}
+              onClose={() => openEditor(null)}
+            />
           </form>
         </Modal>
       )}

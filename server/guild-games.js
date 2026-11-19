@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { changedRoomDraft, roomCreateId } from "./room-create.js";
 import { fail, text } from "./domain.js";
 import { queueDelivery } from "./scheduling.js";
 import { allocatePool, allocatePlaces } from "./prize-allocation.js";
@@ -100,7 +100,16 @@ export function settleGame(room, result) {
 export function gameAction(s, u, type, p = {}, now = Date.now()) {
   if (!linked(u)) fail("請先完成 Discord 身分綁定", 403);
   advanceGames(s, now);
-  if (type === "game.create") {
+  const createId = type === "game.create" && roomCreateId(type, u.id, p.submissionId);
+  const existing = createId && s.gameRooms.find((r) => r.id === createId);
+  if (existing) {
+    if (
+      existing.title !== text(p.title, "標題", 80) ||
+      existing.kind !== p.kind ||
+      existing.closesAt !== Date.parse(p.closesAt) ||
+      (p.kind === "race" && JSON.stringify(existing.options.map((o) => o.id)) !== JSON.stringify(p.riders))
+    ) changedRoomDraft();
+  } else if (createId) {
     if (!["prediction", "race"].includes(p.kind)) fail("玩法無效");
     if (
       s.gameRooms.length >= 30 ||
@@ -135,7 +144,7 @@ export function gameAction(s, u, type, p = {}, now = Date.now()) {
       });
     }
     const room = {
-      id: randomUUID(),
+      id: createId,
       kind: p.kind,
       title: text(p.title, "標題", 80),
       ownerId: u.id,

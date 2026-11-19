@@ -1,12 +1,12 @@
-import { useState } from "react";
+import useRecordEditor from "./useRecordEditor.js";
 import { Button, Field, Modal, FormActions } from "./ui.jsx";
-export default function QuantityTypes({ data, mutate, busy, ask }) {
-  const [editing, setEditing] = useState(null);
+export default function QuantityTypes({ data, mutate, isSaving, ask }) {
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
   return (
     <section className="admin-panel">
       <div className="section-title">
         <h2>自訂數量項目</h2>
-        <Button primary onClick={() => setEditing({ name: "" })}>
+        <Button primary onClick={() => openEditor({ name: "" })}>
           新增數量項目
         </Button>
       </div>
@@ -16,9 +16,9 @@ export default function QuantityTypes({ data, mutate, busy, ask }) {
       {data.quantityTypes.map((t) => (
         <div className="admin-row" key={t.id}>
           <strong>{t.name}</strong>
-          <Button onClick={() => setEditing({ ...t })}>編輯</Button>
+          <Button onClick={() => openEditor({ ...t })}>編輯</Button>
           <Button
-            disabled={busy}
+            disabled={isSaving("quantityType.delete", { id: t.id })}
             onClick={async () => {
               if (await ask(`刪除「${t.name}」及所有角色對應的數量？`))
                 mutate("quantityType.delete", { id: t.id });
@@ -34,12 +34,12 @@ export default function QuantityTypes({ data, mutate, busy, ask }) {
       {editing && (
         <Modal
           title={editing.id ? "編輯數量項目" : "新增數量項目"}
-          onClose={() => setEditing(null)}
+          onClose={() => openEditor(null)}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await mutate("quantityType.save", editing)) setEditing(null);
+              await saveEditor(mutate, "quantityType.save");
             }}
           >
             <Field
@@ -49,7 +49,10 @@ export default function QuantityTypes({ data, mutate, busy, ask }) {
               value={editing.name}
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
             />
-            <FormActions busy={busy} onClose={() => setEditing(null)} />
+            <FormActions
+              busy={isSaving("quantityType.save", editing)}
+              onClose={() => openEditor(null)}
+            />
           </form>
         </Modal>
       )}

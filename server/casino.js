@@ -1,4 +1,5 @@
-import { randomInt, randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
+import { changedRoomDraft, roomCreateId } from "./room-create.js";
 import { fail, text } from "./domain.js";
 import { queueDelivery } from "./scheduling.js";
 
@@ -79,7 +80,12 @@ export function settleCasino(s, now = Date.now()) {
 export function casinoAction(s, u, type, p = {}, now = Date.now()) {
   if (!linked(u)) fail("請先完成 Discord 身分綁定後使用賭場", 403);
   settleCasino(s, now);
-  if (type === "casino.create") {
+  const createId = type === "casino.create" && roomCreateId(type, u.id, p.submissionId);
+  const existing = createId && s.casinoRooms.find((r) => r.id === createId);
+  if (existing) {
+    if (existing.title !== text(p.title, "獎池標題", 80) || existing.startsAt !== Date.parse(p.startsAt))
+      changedRoomDraft();
+  } else if (createId) {
     const title = text(p.title, "獎池標題", 80);
     const startsAt = Date.parse(p.startsAt);
     if (
@@ -96,7 +102,7 @@ export function casinoAction(s, u, type, p = {}, now = Date.now()) {
     )
       fail("每人最多同時建立三個獎池");
     s.casinoRooms.push({
-      id: randomUUID(),
+      id: createId,
       title,
       startsAt,
       ownerId: u.id,

@@ -15,7 +15,7 @@ export default function SettingsPanel({
   onDiscord,
   onTour,
   mutate,
-  busy,
+  isSaving,
 }) {
   const [nickname, setNickname] = useState(me.nickname || "");
   const discordSet = !!me.discordId;
@@ -37,7 +37,7 @@ export default function SettingsPanel({
           maxLength={30}
           placeholder={me.username}
         />
-        <Button primary disabled={busy}>
+        <Button primary disabled={isSaving("profile.nickname", { nickname })}>
           儲存暱稱
         </Button>
         <p className="muted">登入帳號不變，公開顯示改用暱稱。</p>

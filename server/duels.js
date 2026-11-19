@@ -1,4 +1,5 @@
-import { randomInt, randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
+import { changedRoomDraft, roomCreateId } from "./room-create.js";
 import { fail, text } from "./domain.js";
 import { queueDelivery } from "./scheduling.js";
 const name = (u) => u?.nickname || u?.username || "已刪除帳號";
@@ -49,7 +50,12 @@ export function duelAction(s, u, type, p = {}, now = Date.now()) {
   if (!u?.active || !/^\d{17,20}$/.test(u.discordId || ""))
     fail("請先綁定 Discord 身分", 403);
   advanceDuels(s, now);
-  if (type === "duel.create") {
+  const createId = type === "duel.create" && roomCreateId(type, u.id, p.submissionId);
+  const existing = createId && s.duels.find((r) => r.id === createId);
+  if (existing) {
+    if (existing.title !== text(p.title, "房間標題", 80) || existing.side !== p.side)
+      changedRoomDraft();
+  } else if (createId) {
     if (!["star", "moon"].includes(p.side)) fail("請選擇星星或月亮");
     if (
       s.duels.filter(
@@ -60,7 +66,7 @@ export function duelAction(s, u, type, p = {}, now = Date.now()) {
       fail("最多同時開啟三個房間");
     if (s.duels.length >= 200) fail("目前房間已滿，請稍後再試");
     const r = {
-      id: randomUUID(),
+      id: createId,
       ownerId: u.id,
       title: text(p.title, "房間標題", 80),
       side: p.side,

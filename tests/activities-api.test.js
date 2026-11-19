@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 let child, folder, admin, member;
@@ -100,6 +100,18 @@ test("HTTP submissions ignore spoofed owner and points; concurrent requests rema
   assert.equal(results[0].body.id, results[1].body.id);
   assert.equal(results[0].body.memberId, member.body.me.id);
   assert.equal(results[0].body.delta, 5);
+  const persisted = JSON.parse(
+    await readFile(join(folder, "state.json"), "utf8"),
+  );
+  assert.equal(
+    persisted.deliveries.filter(
+      (e) =>
+        e.actorId === member.body.me.id &&
+        e.message.content.includes("【參與活動】"),
+    ).length,
+    1,
+    "The committed reward and its notification are only issued once",
+  );
   const myHistory = await call(
     "activity.history",
     { memberId: admin.body.me.id },

@@ -10,7 +10,12 @@ import { discordEnabled } from "./discord.js";
 import { professionIcons } from "../shared/professions.js";
 import { gearGrades, gearSlots } from "../shared/gear.js";
 import { communityAction } from "./community.js";
-import { isOwner, raidView, schedulingAction } from "./scheduling.js";
+import {
+  deliveryRetryable,
+  isOwner,
+  raidView,
+  schedulingAction,
+} from "./scheduling.js";
 import { cleanupAccounts } from "./account-cleanup.js";
 export const id = () => randomUUID();
 export function fail(message, status = 400) {
@@ -243,13 +248,14 @@ export function publicState(s, u) {
       ? (s.deliveries || [])
           .slice(-30)
           .reverse()
-          .map(({ id, channel, status, createdAt, attemptAt, message }) => ({
-            id,
-            channel,
-            status,
-            createdAt,
-            attemptAt: attemptAt || null,
-            summary: message.content.split("\n")[0],
+          .map((event) => ({
+            id: event.id,
+            channel: event.channel,
+            status: event.status,
+            createdAt: event.createdAt,
+            attemptAt: event.attemptAt || null,
+            summary: event.message.content.split("\n")[0],
+            retryable: deliveryRetryable(event),
           }))
       : [],
     groups: [],
@@ -280,6 +286,16 @@ function owned(item, user, field = "ownerId") {
   if (!item) fail("找不到資料", 404);
   if (!user.admin && item[field] !== user.id) fail("沒有修改權限", 403);
   return item;
+}
+function dungeonCount(state, id, count, complete) {
+  const dungeon = state.dungeons.find((d) => d.id === id);
+  if (!dungeon) fail("副本不存在");
+  return complete ? dungeon.max : number(count, "已完成次數", dungeon.max);
+}
+function quantityCount(state, id, quantity) {
+  if (!state.quantityTypes.some((t) => t.id === id))
+    fail("數量項目不存在", 404);
+  return number(quantity, "數量");
 }
 export function action(s, u, type, p, now = Date.now(), verified = {}) {
   reset(s, now);
@@ -340,9 +356,13 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
       )
     )
       fail("項目名稱已存在");
-    if (old) old.name = name;
-    else s.quantityTypes.push({ id: id(), name });
-    return;
+    if (old) {
+      old.name = name;
+      return;
+    }
+    const item = { id: id(), name };
+    s.quantityTypes.push(item);
+    return item.id;
   }
   if (type === "quantityType.delete") {
     admin();
@@ -355,9 +375,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
       s.characters.find((x) => x.id === p.id),
       u,
     );
-    if (!s.quantityTypes.some((x) => x.id === p.typeId))
-      fail("數量項目不存在", 404);
-    c.quantities[p.typeId] = number(p.quantity, "數量");
+    c.quantities[p.typeId] = quantityCount(s, p.typeId, p.quantity);
     return;
   }
   if (type === "itemPost.save") {
@@ -456,7 +474,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     const item = { id: old?.id || id(), name, icon, discordEmoji };
     if (old) Object.assign(old, item);
     else s.professions.push(item);
-    return;
+    return old ? undefined : item.id;
   }
   if (type === "profession.delete") {
     admin();
@@ -505,7 +523,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     };
     if (old) Object.assign(old, item);
     else s.users.push(item);
-    return;
+    return old ? undefined : item.id;
   }
   if (type === "dungeon.save") {
     admin();
@@ -520,7 +538,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     else s.dungeons.push(item);
     for (const c of s.characters)
       c.runs[item.id] = Math.min(c.runs[item.id] || 0, item.max);
-    return;
+    return old ? undefined : item.id;
   }
   if (type === "dungeon.delete") {
     admin();
@@ -555,7 +573,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     };
     if (old) Object.assign(old, item);
     else s.characters.push(item);
-    return;
+    return old ? undefined : item.id;
   }
   if (type === "character.gear") {
     const c = owned(
@@ -574,6 +592,46 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     c.gear = applyGear(c.gear, { [p.slot]: p.grade });
     return;
   }
+  if (type === "character.quickSave") {
+    const c = owned(
+      s.characters.find((x) => x.id === p.id),
+      u,
+    );
+    const changes = {};
+    for (const [field, edits] of Object.entries(p)) {
+      if (field === "id") continue;
+      if (!["gear", "runs", "quantities"].includes(field))
+        fail("角色更新欄位不正確");
+      if (
+        !edits ||
+        typeof edits !== "object" ||
+        Array.isArray(edits) ||
+        !Object.keys(edits).length
+      )
+        fail("角色更新內容無效");
+      if (field === "gear") {
+        changes.gear = applyGear(c.gear, edits);
+        continue;
+      }
+      const counts = { ...c[field] };
+      for (const [key, value] of Object.entries(edits)) {
+        counts[key] =
+          field === "runs"
+            ? dungeonCount(s, key, value, value === "complete")
+            : quantityCount(s, key, value);
+      }
+      changes[field] = counts;
+    }
+    if (!Object.keys(changes).length) fail("請至少選擇一個要更新的角色欄位");
+    Object.assign(c, changes);
+    return {
+      id: c.id,
+      gear: applyGear(c.gear),
+      quantities: c.quantities,
+      runs: c.runs,
+      week: c.week,
+    };
+  }
   if (type === "character.delete") {
     owned(
       s.characters.find((x) => x.id === p.id),
@@ -587,12 +645,12 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
       s.characters.find((x) => x.id === p.id),
       u,
     );
-    const d = s.dungeons.find((x) => x.id === p.dungeonId);
-    if (!d) fail("副本不存在");
-    c.runs[d.id] =
-      type === "character.complete"
-        ? d.max
-        : number(p.count, "已完成次數", d.max);
+    c.runs[p.dungeonId] = dungeonCount(
+      s,
+      p.dungeonId,
+      p.count,
+      type === "character.complete",
+    );
     return;
   }
   if (type === "listing.save") {

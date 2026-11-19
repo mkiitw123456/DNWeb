@@ -16,9 +16,10 @@ import { waitUntil } from "@vercel/functions";
 import { activityAction, activityView } from "./activities.js";
 import { emojiNamePattern, fetchGuildEmojis } from "./emojis.js";
 import { audit } from "./scheduling.js";
-import { deliverEvents } from "./deliveries.js";
+import { claimDeliveries, sendClaimedDeliveries } from "./deliveries.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { transact } from "./store.js";
+import { readState, transact } from "./store.js";
+import { findEditorCreate, rememberEditorCreate } from "./editor-creates.js";
 import {
   action,
   fail,
@@ -154,6 +155,23 @@ function background(job) {
   );
   if (process.env.VERCEL) waitUntil(safe);
 }
+function auditJobs(s, user, type, payload) {
+  s.deliveries ??= [];
+  const previous = new Set(s.deliveries.map((e) => e.id));
+  audit(s, user, type, payload);
+  return claimDeliveries(
+    s,
+    s.deliveries.filter((e) => !previous.has(e.id)).map((e) => e.id),
+  );
+}
+function pendingCasinoJobs(s) {
+  return claimDeliveries(
+    s,
+    (s.deliveries || [])
+      .filter((e) => e.channel === "casino" && e.status === "pending")
+      .map((e) => e.id),
+  );
+}
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -172,16 +190,14 @@ export default async function handler(req, res) {
     if (type === "logout") {
       const token = session(req);
       if (token) {
-        const ids = await transact((s) => {
+        const jobs = await transact((s) => {
           const u = s.users.find(
             (x) => x.id === token.id && x.active && x.version === token.version,
           );
           if (!u) return [];
-          const prior = new Set((s.deliveries || []).map((x) => x.id));
-          audit(s, u, "logout", {});
-          return s.deliveries.filter((x) => !prior.has(x.id)).map((x) => x.id);
+          return auditJobs(s, u, "logout", {});
         });
-        background(deliverEvents(ids));
+        background(sendClaimedDeliveries(jobs));
       }
 
       res.setHeader(
@@ -195,16 +211,13 @@ export default async function handler(req, res) {
       const result = await transact((s) => {
         const user = register(s, payload);
         reset(s);
-        const prior = new Set(s.deliveries.map((x) => x.id));
-        const eventId = audit(s, user, "register", { username: user.username });
-        const eventIds = s.deliveries
-          .filter((x) => !prior.has(x.id))
-          .map((x) => x.id);
+        const jobs = auditJobs(s, user, "register", {
+          username: user.username,
+        });
         return {
           user,
           state: publicState(s, user),
-          eventId,
-          eventIds,
+          jobs,
           members: s.users.map(({ id, username, nickname, active }) => ({
             id,
             username,
@@ -213,12 +226,7 @@ export default async function handler(req, res) {
           })),
         };
       });
-      if (result.eventId) {
-        const delivery = deliverEvents(result.eventIds).catch((e) =>
-          console.error("Registration notification failed", e),
-        );
-        if (process.env.VERCEL) waitUntil(delivery);
-      }
+      background(sendClaimedDeliveries(result.jobs));
       result.state.activity = await activityView(result.user, result.members);
       cookie(res, result.user);
       return res.status(200).json(result.state);
@@ -238,12 +246,8 @@ export default async function handler(req, res) {
         );
         if (!u || !matches(payload.password, u.password)) return null;
         reset(s);
-        const prior = new Set(s.deliveries.map((x) => x.id));
-        audit(s, u, "login", {});
         return {
-          eventIds: s.deliveries
-            .filter((x) => !prior.has(x.id))
-            .map((x) => x.id),
+          jobs: auditJobs(s, u, "login", {}),
           user: u,
           state: publicState(s, u),
           members: s.users.map(({ id, username, nickname, active }) => ({
@@ -255,7 +259,7 @@ export default async function handler(req, res) {
         };
       });
       if (!result) fail("帳號或密碼錯誤", 401);
-      background(deliverEvents(result.eventIds || []));
+      background(sendClaimedDeliveries(result.jobs));
       result.state.activity = await activityView(result.user, result.members);
       cookie(res, result.user);
       return res.status(200).json(result.state);
@@ -277,12 +281,9 @@ export default async function handler(req, res) {
           : type.startsWith("game.")
             ? gameAction(s, user, type, payload)
             : casinoAction(s, user, type, payload);
-        const ids = (s.deliveries || [])
-          .filter((e) => e.channel === "casino" && e.status === "pending")
-          .map((e) => e.id);
-        return { state, ids, user };
+        return { state, jobs: pendingCasinoJobs(s), user };
       });
-      background(deliverEvents(result.ids));
+      background(sendClaimedDeliveries(result.jobs));
       if (type === "duel.accept") {
         const endsAt = result.state.rooms.find(
           (r) => r.id === payload.id,
@@ -293,32 +294,17 @@ export default async function handler(req, res) {
               await new Promise((resolve) =>
                 setTimeout(resolve, Math.max(0, endsAt - Date.now()) + 100),
               );
-              const ids = await transact((s) => {
+              const jobs = await transact((s) => {
                 advanceDuels(s);
-                return (s.deliveries || [])
-                  .filter(
-                    (e) => e.channel === "casino" && e.status === "pending",
-                  )
-                  .map((e) => e.id);
+                return pendingCasinoJobs(s);
               });
-              await deliverEvents(ids);
+              await sendClaimedDeliveries(jobs);
             })(),
           );
       }
       cookie(res, result.user);
       return res.status(200).json(result.state);
     }
-    if (type === "state")
-      background(
-        transact((s) => {
-          settleCasino(s);
-          advanceDuels(s);
-          return s.deliveries
-            .filter((e) => e.channel === "casino" && e.status === "pending")
-            .map((e) => e.id);
-        }).then(deliverEvents),
-      );
-
     if (
       type.startsWith("activity.") ||
       type === "aquarium.checkIn" ||
@@ -327,7 +313,7 @@ export default async function handler(req, res) {
       type === "discord.members" ||
       type === "maintenance.retryDeletions"
     ) {
-      const auth = await transact((s) => {
+      const auth = await readState((s) => {
         const user = s.users.find(
           (x) => x.id === token.id && x.active && x.version === token.version,
         );
@@ -356,28 +342,28 @@ export default async function handler(req, res) {
       }
       if (type === "discord.members")
         return res.status(200).json(await searchDiscordMembers(payload.query));
-      const result = await activityAction(auth.user, auth.users, type, payload);
-      if (
-        [
-          "activity.submit",
-          "activity.adjust",
-          "activity.config",
-          "activity.profile",
-        ].includes(type)
-      ) {
-        const ids = await transact((s) => {
-          const prior = new Set((s.deliveries || []).map((x) => x.id));
-          audit(s, auth.user, type, payload);
-          return s.deliveries.filter((x) => !prior.has(x.id)).map((x) => x.id);
-        });
-        background(deliverEvents(ids));
-      }
+      const audited = [
+        "activity.submit",
+        "activity.adjust",
+        "activity.config",
+        "activity.profile",
+      ].includes(type);
+      const queueAudit = (s) => auditJobs(s, auth.user, type, payload);
+      const response = await activityAction(
+        auth.user,
+        auth.users,
+        type,
+        payload,
+        Date.now(),
+        audited ? queueAudit : undefined,
+      );
+      if (audited) background(sendClaimedDeliveries(response.jobs));
       cookie(res, auth.user);
-      return res.status(200).json(result);
+      return res.status(200).json(audited ? response.result : response);
     }
     let verifiedDiscordId = null;
     if (type === "profile.discordRequest") {
-      await transact((s) => {
+      await readState((s) => {
         if (
           !s.users.some(
             (x) => x.id === token.id && x.active && x.version === token.version,
@@ -393,15 +379,16 @@ export default async function handler(req, res) {
       typeof payload.discordEmoji === "string" &&
       emojiNamePattern.test(payload.discordEmoji.trim())
     ) {
-      const guildId = await transact((s) => {
+      const guildId = await readState((s) => {
         const user = s.users.find(
           (x) => x.id === token.id && x.active && x.version === token.version,
         );
         if (!user) fail("登入已過期，請重新登入", 401);
         if (!user.admin) fail("僅管理員可操作", 403);
+        if (findEditorCreate(s, user, type, payload)) return null;
         return s.discordEmojiGuildId || process.env.DISCORD_GUILD_ID;
       });
-      emojiCatalog = await fetchGuildEmojis(guildId);
+      if (guildId !== null) emojiCatalog = await fetchGuildEmojis(guildId);
     }
     const result = await transact(
       (s) => {
@@ -410,10 +397,15 @@ export default async function handler(req, res) {
         );
         if (!u) fail("登入已過期，請重新登入", 401);
         reset(s);
-        if (type === "state")
+        if (type === "state") {
+          settleCasino(s);
+          advanceDuels(s);
+          const casinoJobs = pendingCasinoJobs(s);
           return {
             state: publicState(s, u),
             user: { ...u },
+            pendingDeletions: !!s.pendingUserDeletions?.length,
+            jobs: casinoJobs,
             members: s.users.map(({ id, username, nickname, active }) => ({
               id,
               username,
@@ -421,6 +413,9 @@ export default async function handler(req, res) {
               active,
             })),
           };
+        }
+        const replay = findEditorCreate(s, u, type, payload);
+        if (replay) return { state: replay, user: { ...u }, jobs: [] };
         const previousEvents = new Set(s.deliveries.map((e) => e.id));
         if (emojiCatalog) s.discordEmojis = emojiCatalog;
         const result = action(s, u, type, payload, Date.now(), {
@@ -431,13 +426,32 @@ export default async function handler(req, res) {
           .filter((e) => !previousEvents.has(e.id))
           .map((e) => e.id);
         if (type === "delivery.retry") eventIds.push(payload.id);
+        const jobs = claimDeliveries(s, eventIds);
         if (!s.users.some((x) => x.id === u.id))
-          return { state: null, user: null };
+          return { state: null, user: null, jobs };
+        const state =
+          type === "character.quickSave" ||
+          (type === "character.gear" && result)
+            ? result
+            : publicState(s, u);
+        if (
+          !payload.id &&
+          type.endsWith(".save") &&
+          typeof result === "string"
+        ) {
+          state.savedRecordId = result;
+          rememberEditorCreate(s, u, type, payload, result);
+        }
         return {
-          state:
-            type === "character.gear" && result ? result : publicState(s, u),
+          state,
           user: { ...u },
-          eventIds,
+          jobs,
+          requestedDelivery:
+            type === "delivery.retry"
+              ? payload.id
+              : type === "raid.notify"
+                ? s.raids.find((r) => r.id === payload.id)?.notificationEventId
+                : null,
           notificationId: ["listing.sell", "notification.retry"].includes(type)
             ? result
             : null,
@@ -445,32 +459,30 @@ export default async function handler(req, res) {
       },
       { backup: type === "maintenance.cleanup" },
     );
-    if (type === "user.delete") await drainUserDeletions();
-    if (type === "state")
-      background(Promise.all([drainUserDeletions(), compactActivityHistory()]));
-    if (result.eventIds?.length) {
-      if (type.startsWith("character.")) {
-        // Character state is already committed. Discord delivery must not delay
-        // the response; persisted delivery records still support failed retries.
-        background(deliverEvents(result.eventIds));
-      } else {
-        await deliverEvents(result.eventIds);
-        result.state = await transact((s) =>
-          publicState(
-            s,
-            s.users.find((x) => x.id === token.id),
-          ),
-        );
-      }
+    if (type === "state") {
+      if (result.pendingDeletions) background(drainUserDeletions());
+      background(compactActivityHistory());
     }
-    if (result.notificationId) {
-      await notify(result.notificationId);
-      result.state = await transact((s) =>
-        publicState(
-          s,
-          s.users.find((x) => x.id === token.id),
-        ),
-      );
+    // The outbox and its claims are committed with the edit. Network delivery
+    // happens afterwards; only explicit notification commands await its result.
+    const jobs = result.jobs || [];
+    const requestedJob = jobs.find(
+      (job) => job.id === result.requestedDelivery,
+    );
+    background(
+      sendClaimedDeliveries(jobs.filter((job) => job !== requestedJob)),
+    );
+    if (type === "user.delete") await drainUserDeletions();
+    if (requestedJob || result.notificationId || type === "user.delete") {
+      if (requestedJob) await sendClaimedDeliveries([requestedJob]);
+      if (result.notificationId) await notify(result.notificationId);
+      result.state = await readState((s) => {
+        const user = s.users.find(
+          (u) => u.id === token.id && u.active && u.version === token.version,
+        );
+        if (!user) fail("登入已過期，請重新登入", 401);
+        return publicState(s, user);
+      });
     }
     if (type === "state" && req.url?.includes("bootstrap=1"))
       result.state.activity = await activityView(result.user, result.members);

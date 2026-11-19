@@ -6,7 +6,6 @@ export default function CampaignSettings({
   schedule,
   onChange,
   save,
-  busy,
 }) {
   const today = new Date(Date.now() - 3600000).toISOString().slice(0, 10);
   const currentDay = schedule
@@ -30,7 +29,7 @@ export default function CampaignSettings({
     <section className="activity-admin">
       <div className="lobby-section-title">
         <h2>正式劇本</h2>
-        <Button primary disabled={busy} onClick={save}>
+        <Button primary onClick={save}>
           儲存檔期
         </Button>
       </div>
@@ -44,7 +43,7 @@ export default function CampaignSettings({
       {schedule.map((entry, i) => {
         const script = scripts.find((s) => s.id === entry.scriptId);
         return (
-          <fieldset key={i} className="activity-rule" disabled={busy}>
+          <fieldset key={i} className="activity-rule">
             <legend>
               {entry.startDay === currentDay
                 ? "本期劇本"
@@ -85,7 +84,7 @@ export default function CampaignSettings({
       })}
       <div className="actions">
         <Button
-          disabled={busy || !scripts.length || schedule.length >= 100}
+          disabled={!scripts.length || schedule.length >= 100}
           onClick={add}
         >
           <CalendarDays size={15} /> 新增檔期

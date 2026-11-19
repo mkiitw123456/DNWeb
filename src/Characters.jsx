@@ -4,20 +4,22 @@ import { Heading, Button, Field, Modal, FormActions, Empty } from "./ui.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
 import GearPicker from "./GearPicker.jsx";
 import CharacterCard from "./CharacterCard.jsx";
+import useRecordEditor from "./useRecordEditor.js";
 export default function Characters({
   data,
   mutate,
   busy,
   ask,
-  pendingGear,
-  changeGear,
+  isSaving,
+  pendingChanges,
+  change,
 }) {
-  const [editing, setEditing] = useState(null);
+  const { editing, setEditing, openEditor, saveEditor } = useRecordEditor();
   const [guideOpen, setGuideOpen] = useState(false);
   const characters = data.characters.filter((c) => c.ownerId === data.me.id);
   const showGuide = guideOpen;
   const add = () =>
-    setEditing({
+    openEditor({
       name: "",
       gear: {},
       ownerId: data.me.id,
@@ -110,11 +112,10 @@ export default function Characters({
               quantityTypes={data.quantityTypes}
               canEdit={true}
               busy={busy}
-              mutate={mutate}
-              pendingGear={pendingGear[c.id]}
-              onGearChange={changeGear}
+              pending={pendingChanges[c.id]}
+              change={change}
               onEdit={() =>
-                setEditing({
+                openEditor({
                   id: c.id,
                   name: c.name,
                   ownerId: c.ownerId,
@@ -134,12 +135,12 @@ export default function Characters({
       {editing && (
         <Modal
           title={editing.id ? "編輯角色" : "新增角色"}
-          onClose={() => setEditing(null)}
+          onClose={() => openEditor(null)}
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await mutate("character.save", editing)) setEditing(null);
+              await saveEditor(mutate, "character.save");
             }}
           >
             <Field
@@ -191,7 +192,7 @@ export default function Characters({
               <GearPicker
                 gear={{
                   ...characters.find((c) => c.id === editing.id)?.gear,
-                  ...pendingGear[editing.id],
+                  ...pendingChanges[editing.id]?.gear,
                   ...editing.gear,
                 }}
                 disabled={busy}
@@ -206,7 +207,9 @@ export default function Characters({
             {editing.id && (
               <Button
                 type="button"
-                disabled={busy}
+                disabled={
+                  busy || isSaving("character.delete", { id: editing.id })
+                }
                 onClick={async () => {
                   if (
                     (await ask("確定刪除此角色？")) &&
@@ -216,14 +219,19 @@ export default function Characters({
                       "角色已刪除",
                     ))
                   )
-                    setEditing(null);
+                    setEditing((current) =>
+                      current?.id === editing.id ? null : current,
+                    );
                 }}
               >
                 <Trash2 size={16} />
                 刪除角色
               </Button>
             )}
-            <FormActions busy={busy} onClose={() => setEditing(null)} />
+            <FormActions
+              busy={busy || isSaving("character.save", editing)}
+              onClose={() => openEditor(null)}
+            />
           </form>
         </Modal>
       )}

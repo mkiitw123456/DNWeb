@@ -1,5 +1,5 @@
 import { useFeedback } from "./FeedbackHost.jsx";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button, Field, Modal } from "./ui.jsx";
 export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
   const [query, setQuery] = useState(""),
@@ -8,6 +8,7 @@ export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
     [error, setError] = useState(""),
     [searching, setSearching] = useState(false);
   useFeedback(error);
+  const searchRevision = useRef(0);
   return (
     <Modal
       title="設定 Discord 身分"
@@ -32,28 +33,32 @@ export default function DiscordSetup({ data, request, mutate, busy, onClose }) {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const sequence = ++searchRevision.current;
             setSearching(true);
             setResults(null);
             setSelected(null);
             setError("");
             try {
-              setResults(await request("discord.members", { query }));
+              const matches = await request("discord.members", { query });
+              if (searchRevision.current === sequence) setResults(matches);
             } catch (e) {
-              setError(e.message);
+              if (searchRevision.current === sequence) setError(e.message);
             } finally {
-              setSearching(false);
+              if (searchRevision.current === sequence) setSearching(false);
             }
           }}
         >
           <Field
             label="你在 Discord 伺服器中的名稱"
-            disabled={searching || busy}
+            disabled={busy}
             placeholder="例如 Wo 或 lf"
             minLength={2}
             maxLength={80}
             required
             value={query}
             onChange={(e) => {
+              searchRevision.current++;
+              setSearching(false);
               setQuery(e.target.value);
               setSelected(null);
               setError("");
