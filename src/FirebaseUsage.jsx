@@ -84,7 +84,7 @@ export default function FirebaseUsage({ request, onUnauthorized }) {
                         </small>
                       </>
                     ) : (
-                      <p>{messages[m.status]}</p>
+                      <div><p>{messages[m.status]}</p>{m.diagnostic && <small>{m.diagnostic}</small>}</div>
                     )}
                   </article>
                 ))}

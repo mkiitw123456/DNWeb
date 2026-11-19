@@ -70,6 +70,11 @@ export async function readUsage(
           );
           if (!response.ok) {
             row.status = response.status === 403 ? "permission" : "unavailable";
+            const body = await response.json?.().catch(() => null);
+            const error = body?.error;
+            const reason = error?.details?.find((d) => d.reason)?.reason;
+            row.diagnostic = [`HTTP ${response.status}`, reason, error?.message]
+              .filter(Boolean).join(" · ").slice(0, 700);
             return row;
           }
           const data = await response.json();
@@ -139,7 +144,8 @@ export async function firebaseUsage(user, now = Date.now()) {
     }
     const value = await readUsage(project, access_token, now);
     value.serviceAccount = account.client_email;
-    cache = { key, at: now, value };
+    if (value.metrics.every((m) => ["ok", "no_data"].includes(m.status)))
+      cache = { key, at: now, value };
     return value;
   })();
   pending = { key, promise };
