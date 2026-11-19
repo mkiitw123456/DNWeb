@@ -73,6 +73,9 @@ export async function readUsage(
             const body = await response.json?.().catch(() => null);
             const error = body?.error;
             const reason = error?.details?.find((d) => d.reason)?.reason;
+            if (response.status === 403 && (reason === "BILLING_DISABLED" ||
+                /requires billing to be enabled/i.test(error?.message || "")))
+              row.status = "billing";
             row.diagnostic = [`HTTP ${response.status}`, reason, error?.message]
               .filter(Boolean).join(" · ").slice(0, 700);
             return row;

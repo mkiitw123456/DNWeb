@@ -7,6 +7,7 @@ const date = (n) =>
     hour12: false,
   });
 const messages = {
+  billing: "Google 要求這個專案啟用帳單才能透過 API 查詢用量。你可以使用下方的 Firebase 官方用量頁。",
   permission: "權限不足或 Monitoring API 尚未啟用",
   unavailable: "暫時無法取得資料",
   no_data: "此時段尚無監控資料",
@@ -84,7 +85,12 @@ export default function FirebaseUsage({ request, onUnauthorized }) {
                         </small>
                       </>
                     ) : (
-                      <div><p>{messages[m.status]}</p>{m.diagnostic && <small>{m.diagnostic}</small>}</div>
+                      <div>
+                        <p>{messages[m.status]}</p>
+                        {m.diagnostic && (
+                          <details><summary>Google 回應詳情</summary><small>{m.diagnostic}</small></details>
+                        )}
+                      </div>
                     )}
                   </article>
                 ))}
