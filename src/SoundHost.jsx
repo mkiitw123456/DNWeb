@@ -4,8 +4,8 @@ export default function SoundHost() {
   useEffect(() => {
     const unlock = () => unlockSound();
     const click = (e) => {
-      if (e.target.closest?.("button:not(:disabled), a[href]"))
-        playSound("click");
+      const target = e.target.closest?.("button:not(:disabled), a[href]");
+      if (target && !target.hasAttribute("data-own-sound")) playSound("click");
     };
     const notice = (e) =>
       playSound(e.detail.kind === "error" ? "error" : "success");

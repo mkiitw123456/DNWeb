@@ -25,8 +25,8 @@ app.all(
     res.send(Buffer.from(await response.arrayBuffer()));
   },
 );
+app.all("/api/app", express.json({ limit: "1mb" }), handler);
 app.use(express.json({ limit: "64kb" }));
-app.all("/api/app", handler);
 app.all("/api/casino-tick", casinoTick);
 app.all("/api/voice-ingest", voiceIngest);
 const vite = await createViteServer({

@@ -7,8 +7,11 @@ import {
   activityAction,
   activityView,
   activityPeriods,
+  normalizeActivityConfig,
+  defaultActivityConfig,
 } from "../server/activities.js";
-let folder;
+import { journeyEvents } from "../server/journey.js";
+let folder, firstEventDelta;
 const member = {
     id: "member-a",
     username: "Explorer",
@@ -102,6 +105,7 @@ test("parallel different submission IDs cannot bypass daily limits; other member
     ),
   );
   assert.equal(results.filter((x) => x.status === "fulfilled").length, 1);
+  firstEventDelta = results.find((x) => x.status === "fulfilled").value.delta;
   assert.equal(
     results.filter((x) => x.status === "rejected" && x.reason.status === 409)
       .length,
@@ -146,10 +150,10 @@ test("quiz is scored by server, returns explanation after submission, and reject
 test("next day and next week reset allowances and weekly scores, preserve total and history", async () => {
   let v = await view(member, now + 86400000);
   assert.ok(v.activities.every((a) => a.used === 0));
-  assert.equal(v.member.total, 17);
+  assert.equal(v.member.total, 12 + firstEventDelta);
   v = await view(member, now + 7 * 86400000);
   assert.equal(v.weekly, 0);
-  assert.equal(v.member.total, 17);
+  assert.equal(v.member.total, 12 + firstEventDelta);
   await activityAction(
     member,
     users,
@@ -158,7 +162,7 @@ test("next day and next week reset allowances and weekly scores, preserve total 
     now + 7 * 86400000,
   );
   v = await view(member, now + 7 * 86400000);
-  assert.equal(v.member.total, 22);
+  assert.equal(v.member.total, 17 + firstEventDelta);
   assert.equal(v.weekly, 5);
 });
 test("nickname edits keep member identity, history, totals and current leaderboard", async () => {
@@ -171,7 +175,7 @@ test("nickname edits keep member identity, history, totals and current leaderboa
   );
   const v = await view();
   assert.equal(v.member.nickname, "冒險者小狼");
-  assert.equal(v.member.total, 22);
+  assert.equal(v.member.total, 17 + firstEventDelta);
   assert.equal(
     v.leaderboard.find((x) => x.memberId === member.id).name,
     "冒險者小狼",
@@ -191,8 +195,8 @@ test("admin correction is audited, idempotent, does not count as participation, 
   const before = (await view()).member;
   const r = await activityAction(admin, users, "activity.adjust", p, now);
   await activityAction(admin, users, "activity.adjust", p, now);
-  assert.equal(r.before, 22);
-  assert.equal(r.after, 19);
+  assert.equal(r.before, 17 + firstEventDelta);
+  assert.equal(r.after, 14 + firstEventDelta);
   assert.equal(r.operatorId, admin.id);
   assert.equal(r.reason, p.reason);
   assert.equal((await view()).member.count, before.count);
@@ -353,6 +357,7 @@ test("journey advances across days and retries, with a server-validated optional
       (o) => o.result === record.summary && o.stars === record.delta,
     ),
   );
+  assert.equal(record.outcomeTier, record.delta < 0 ? "low" : "high");
   const tomorrow = now + 86400000;
   const next = await event(tomorrow);
   assert.equal(next.content.id, "journey-3");
@@ -367,4 +372,59 @@ test("journey advances across days and retries, with a server-validated optional
   await assert.rejects(() => play(hidden, 2, tomorrow));
   await play(hidden, 1, tomorrow);
   assert.equal((await event(tomorrow)).content, undefined);
+});
+
+test("every journey choice has a distinct favorable and adverse outcome", () => {
+  const chapters = journeyEvents();
+  const stories = new Set();
+  for (const chapter of chapters) {
+    const normal = chapter.options.filter((o) => o.revealChance === undefined);
+    assert.equal(normal.length, 2);
+    for (const option of normal) {
+      const [high, low] = option.outcomes;
+      assert.ok(high.chance > 0 && low.chance > 0);
+      assert.equal(high.chance + low.chance, 100);
+      assert.ok(high.stars > low.stars);
+      for (const outcome of [high, low]) {
+        assert.ok(outcome.result.length > 5 && !stories.has(outcome.result));
+        stories.add(outcome.result);
+      }
+    }
+  }
+  assert.equal(stories.size, 240);
+});
+
+test("journey odds upgrade only original rewards, keeps removed chapters removed and expires old previews", () => {
+  const chapters = journeyEvents();
+  const [left, right, rare] = chapters[1].options;
+  const oldOption = (o, stars) => ({
+    ...o,
+    outcomes: [{ result: o.outcomes[0].result, chance: 100, stars }],
+  });
+  const saved = {
+    ...defaultActivityConfig(),
+    journeyInstalled: true,
+    version: 11,
+    events: [
+      {
+        ...chapters[1],
+        title: "自訂標題",
+        options: [
+          oldOption(right, 8),
+          { ...rare, revealChance: 75 },
+          oldOption(left, 3),
+        ],
+      },
+    ],
+  };
+  const config = normalizeActivityConfig(saved);
+  assert.equal(config.version, 12);
+  assert.equal(config.events.length, 1);
+  assert.equal(config.events[0].title, "自訂標題");
+  assert.deepEqual(config.events[0].options, [
+    saved.events[0].options[0],
+    saved.events[0].options[1],
+    left,
+  ]);
+  assert.deepEqual(config, normalizeActivityConfig(config));
 });

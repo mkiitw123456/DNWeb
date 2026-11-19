@@ -1,4 +1,5 @@
 import { useStarRewards, STAR_ASSET } from "./StarRewards.jsx";
+import { playSound } from "./sounds.js";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -16,6 +17,15 @@ import {
 import { Button, Field, Modal } from "./ui.jsx";
 import "./activities.css";
 const icons = { fortune: Sparkles, quiz: BookOpen, event: Map };
+function resultSound(record) {
+  if (record.delta < 0) return "penalty";
+  if (record.quizCorrect === false) return "smallGain";
+  if (record.delta === 0) return "unchanged";
+  if (record.quizCorrect === true || record.outcomeTier === "high")
+    return "jackpot";
+  if (record.outcomeTier === "low") return "smallGain";
+  return "steady";
+}
 export const taiwanTime = (n) =>
   new Date(n).toLocaleString("zh-TW", {
     timeZone: "Asia/Taipei",
@@ -150,10 +160,13 @@ export default function Lobby({
     }
   };
   useEffect(() => {
-    if (!(selected?.content?.extraIndex >= 0)) return;
-    const timer = setTimeout(() => setRevealExtra(true), 380);
+    if (result || !(selected?.content?.extraIndex >= 0)) return;
+    const timer = setTimeout(() => {
+      setRevealExtra(true);
+      playSound("reveal");
+    }, 380);
     return () => clearTimeout(timer);
-  }, [selected]);
+  }, [selected, result]);
   const submit = async () => {
     if (!pending.current)
       pending.current = {
@@ -166,6 +179,7 @@ export default function Lobby({
       };
     const r = await perform("activity.submit", pending.current);
     if (r) {
+      playSound(resultSound(r));
       hold(r);
       setResult(r);
       pending.current = null;
@@ -508,6 +522,7 @@ export default function Lobby({
                 <button
                   type="button"
                   className="star-collect"
+                  data-own-sound={result.delta > 0 ? true : undefined}
                   disabled={busy}
                   onClick={
                     selected.unlimited ? continueAdventure : finishReward
@@ -530,6 +545,7 @@ export default function Lobby({
                   <button
                     type="button"
                     className="adventure-return"
+                    data-own-sound={result.delta > 0 ? true : undefined}
                     disabled={busy}
                     onClick={finishReward}
                   >
@@ -577,10 +593,19 @@ export default function Lobby({
                       !revealExtra ? null : (
                         <button
                           key={i}
+                          data-own-sound
                           disabled={busy || !!pending.current}
                           className={`${choice === i ? "selected" : ""} ${selected.content.extraIndex === i ? "event-extra" : ""}`}
                           aria-pressed={choice === i}
-                          onClick={() => setChoice(i)}
+                          onClick={() => {
+                            if (choice !== i)
+                              playSound(
+                                selected.content.extraIndex === i
+                                  ? "chooseExtra"
+                                  : "choose",
+                              );
+                            setChoice(i);
+                          }}
                         >
                           {selected.content.extraIndex === i && (
                             <small>意外的機遇</small>
@@ -588,12 +613,20 @@ export default function Lobby({
                           <span className="adventure-choice-label">{o}</span>
                           {selected.content.odds?.[i] && (
                             <small className="event-odds">
-                              {selected.content.odds[i]
-                                .map(
-                                  ({ chance, stars }) =>
-                                    `${chance}%：${stars > 0 ? "+" : ""}${stars} 星`,
-                                )
-                                .join(" ／ ")}
+                              {selected.content.odds[i].map(
+                                ({ chance, stars }, index) => (
+                                  <span
+                                    key={index}
+                                    className={`adventure-odds-item${stars < 0 ? " adventure-odds-loss" : ""}`}
+                                  >
+                                    <span>{chance}%</span>{" "}
+                                    <strong>
+                                      {stars > 0 ? "+" : ""}
+                                      {stars} 星
+                                    </strong>
+                                  </span>
+                                ),
+                              )}
                             </small>
                           )}
                         </button>

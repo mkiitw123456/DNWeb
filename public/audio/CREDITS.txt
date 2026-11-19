@@ -1,0 +1,8 @@
+Interface Sounds by Kenney, 2020
+https://kenney.nl/assets/interface-sounds
+Creative Commons CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+
+adventure-select.ogg = select_003.ogg
+adventure-reveal.ogg = glass_004.ogg
+adventure-setback.ogg = minimize_002.ogg

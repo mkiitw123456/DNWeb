@@ -2,9 +2,12 @@ import { useState } from "react";
 import { Button, Field, NumberField } from "./ui.jsx";
 import { matchesContent } from "./activity-calendar.js";
 
-const newOption = () => ({
+const newOption = (chance = 50, high = 3, low = 1) => ({
   text: "",
-  outcomes: [{ result: "", chance: 100, stars: 1 }],
+  outcomes: [
+    { result: "", chance, stars: high },
+    { result: "", chance: 100 - chance, stars: low },
+  ],
 });
 function newEvent(example) {
   return {
@@ -28,7 +31,7 @@ function newEvent(example) {
             ],
           },
         ]
-      : [newOption(), newOption()],
+      : [newOption(), newOption(30, 5, -1)],
   };
 }
 const replaceAt = (items, index, value) =>
@@ -258,7 +261,7 @@ export default function EventBank({
                     edit({
                       options: [
                         ...event.options,
-                        { ...newOption(), revealChance: 30 },
+                        { ...newOption(20, 12, -2), revealChance: 30 },
                       ],
                     })
                   }

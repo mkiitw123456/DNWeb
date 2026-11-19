@@ -809,10 +809,24 @@ dialog.adventure-modal .activity-options button.selected::after {
   line-height: 1.45;
 }
 .event-odds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  margin-top: 3px;
   color: var(--panel-muted, var(--muted));
   font-size: 12px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
+}
+.adventure-odds-item {
+  white-space: nowrap;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.adventure-odds-loss {
+  color: color-mix(in srgb, var(--panel-text, var(--text)) 75%, #c25a45);
+  background: color-mix(in srgb, #c25a45 13%, transparent);
 }
 dialog.adventure-modal .activity-options .event-extra {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border));

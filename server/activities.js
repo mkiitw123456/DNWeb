@@ -144,38 +144,68 @@ export const defaultActivityConfig = () => ({
     },
   ],
 });
+function upgradedJourney(config) {
+  const builtins = journeyEvents();
+  const byId = new Map(builtins.map((e) => [e.id, e]));
+  const savedIds = new Set(config.events.map((e) => e.id));
+  const upgraded = config.events.map((event) => {
+    const chapter = byId.get(event.id);
+    if (!chapter) return event;
+    const oldStars = event.id === "journey-1" ? 5 : 3;
+    return {
+      ...event,
+      options: event.options.map((option) => {
+        // Match the original shipped option, including its reward. Never restore removed choices.
+        const replacement = chapter.options.find(
+          (o) => o.revealChance === undefined && o.text === option.text,
+        );
+        const old = option.outcomes?.[0];
+        return replacement &&
+          option.revealChance === undefined &&
+          option.outcomes?.length === 1 &&
+          old.result === replacement.outcomes[0].result &&
+          old.chance === 100 &&
+          old.stars === oldStars
+          ? { ...option, outcomes: replacement.outcomes }
+          : option;
+      }),
+    };
+  });
+  return config.journeyInstalled
+    ? upgraded
+    : [...upgraded, ...builtins.filter((e) => !savedIds.has(e.id))];
+}
+
 export function normalizeActivityConfig(config) {
+  const updated = config.journeyEdition === 2;
   return {
     ...config,
+    // Old open rounds and unsaved admin drafts must refresh before using the new odds.
+    version: updated ? config.version : config.version + 1,
+    journeyEdition: 2,
     schedule: config.schedule || {},
     journeyInstalled: true,
     eventUnlimited: config.eventUnlimited ?? true,
-    events: (config.journeyInstalled
-      ? config.events
-      : [
-          ...config.events,
-          ...journeyEvents().filter(
-            (j) => !config.events.some((e) => e.id === j.id),
-          ),
-        ]
-    ).map((event) => ({
-      ...event,
-      options: event.options.map((option) =>
-        option.outcomes
-          ? option
-          : {
-              text: option.text,
-              outcomes: [
-                {
-                  result: option.result,
-                  chance: 100,
-                  stars: config.activities.find((a) => a.type === "event")
-                    .points,
-                },
-              ],
-            },
-      ),
-    })),
+    events: (updated ? config.events : upgradedJourney(config)).map(
+      (event) => ({
+        ...event,
+        options: event.options.map((option) =>
+          option.outcomes
+            ? option
+            : {
+                text: option.text,
+                outcomes: [
+                  {
+                    result: option.result,
+                    chance: 100,
+                    stars: config.activities.find((a) => a.type === "event")
+                      .points,
+                  },
+                ],
+              },
+        ),
+      }),
+    ),
     fortunes: config.fortunes.map((f, i) =>
       typeof f === "string"
         ? { id: `legacy-f${i}`, title: `冒險籤 ${i + 1}`, body: f }
@@ -696,7 +726,8 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         ),
         day = savedDay || { counts: {} },
         board = savedBoard || { members: {} };
-      let quizCorrect = null;
+      let quizCorrect = null,
+        outcomeTier = null;
       let delta,
         summary,
         activityId = null,
@@ -769,6 +800,17 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             });
             summary = outcome.result;
             delta = outcome.stars;
+            const rewards = choices[choice].outcomes.map((o) => o.stars);
+            const min = Math.min(...rewards),
+              max = Math.max(...rewards);
+            outcomeTier =
+              min === max
+                ? "neutral"
+                : delta === min
+                  ? "low"
+                  : delta === max
+                    ? "high"
+                    : "neutral";
             resultDetails = content.title;
           }
         }
@@ -804,6 +846,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         summary,
         resultDetails,
         delta,
+        ...(outcomeTier ? { outcomeTier } : {}),
         before: previous,
         after: member.total,
         createdAt,
