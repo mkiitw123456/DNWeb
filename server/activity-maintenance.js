@@ -163,7 +163,7 @@ export async function compactActivityHistory(now = Date.now()) {
       const x = d.data();
       if (
         d.id.startsWith("receipt_") &&
-        x.result?.kind === "participation" &&
+        ["participation", "bonus"].includes(x.result?.kind) &&
         x.result.createdAt < cutoff
       ) {
         if (x.result.memberId && x.result.day)
@@ -183,7 +183,7 @@ export async function compactActivityHistory(now = Date.now()) {
           (key.startsWith("records/ledger/") && x.createdAt < cutoff) ||
           (x.expiresAt && x.expiresAt < now) ||
           (key.startsWith("receipt_") &&
-            x.result?.kind === "participation" &&
+            ["participation", "bonus"].includes(x.result?.kind) &&
             x.result.createdAt < cutoff)
         )
           db.delete(key);

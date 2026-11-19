@@ -332,8 +332,8 @@ function selectContent(config, activity, memberId, day, used, progress = 0) {
     ) % list.length
   ];
 }
-function visibleActivity(config, a, memberId, period, dayCounts, progress) {
-  const used = dayCounts[a.id] || 0;
+function visibleActivity(config, a, memberId, period, today, progress) {
+  const used = today?.counts?.[a.id] || 0;
   const result = {
     ...a,
     used,
@@ -350,7 +350,13 @@ function visibleActivity(config, a, memberId, period, dayCounts, progress) {
   if (a.type !== "fortune" && (result.unlimited || used < a.dailyLimit)) {
     const item = selectContent(config, a, memberId, period.day, used, progress);
     const choices =
-      a.type === "event" ? eventChoices(item, memberId, period.day, used) : [];
+      a.type === "event"
+        ? eventChoices(item, memberId, period.day, used).filter(
+            (o) =>
+              o.revealChance === undefined ||
+              today?.bonusRounds?.[a.id] !== used,
+          )
+        : [];
     result.content =
       a.type === "quiz"
         ? {
@@ -364,6 +370,7 @@ function visibleActivity(config, a, memberId, period, dayCounts, progress) {
             title: item.title,
             story: item.story,
             options: choices.map((x) => x.text),
+            choiceKeys: choices.map((x) => item.options.indexOf(x)),
             extraIndex: choices.findIndex((x) => x.revealChance !== undefined),
             odds: choices.map((x) =>
               x.outcomes.map(({ chance, stars }) => ({ chance, stars })),
@@ -413,7 +420,7 @@ export async function activityView(user, users, now = Date.now()) {
               a,
               user.id,
               dailyActivityPeriods(now),
-              today?.counts || {},
+              today,
               member.journeyProgress || 0,
             ),
           ),
@@ -727,7 +734,8 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         day = savedDay || { counts: {} },
         board = savedBoard || { members: {} };
       let quizCorrect = null,
-        outcomeTier = null;
+        outcomeTier = null,
+        bonus = false;
       let delta,
         summary,
         activityId = null,
@@ -754,11 +762,16 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           fail("活動內容或日期已更新，請重新開啟活動", 409);
         const used = day.counts[a.id] || 0;
         const unlimited = a.type === "event" && config.eventUnlimited;
-        if ((unlimited || p.round !== undefined) && p.round !== used)
+        if (
+          (unlimited || p.round !== undefined || p.choiceKey !== undefined) &&
+          p.round !== used
+        )
           fail("這回合已結算，請重新開啟活動", 409);
         if (!unlimited && used >= a.dailyLimit)
           fail("今日已達參與上限，明天再來吧", 409);
         activityId = a.id;
+        if (p.bonus === true && a.type !== "event")
+          fail("此活動沒有機遇關卡", 409);
         title = a.title;
         delta = a.points;
         if (a.type === "fortune") {
@@ -782,25 +795,43 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             a.type === "event"
               ? eventChoices(content, user.id, period.day, used)
               : content.options;
-          const choice = number(p.choice, "選項", choices.length - 1);
           if (a.type === "quiz") {
+            const choice = number(p.choice, "選項", choices.length - 1);
             const correct = choice === content.correct;
             quizCorrect = correct;
             delta += correct ? a.bonus : 0;
             summary = correct ? "答對了！" : "謝謝參與，下次再試試！";
             resultDetails = `${content.question}\n正確答案：${content.options[content.correct]}\n${content.explanation}`;
           } else {
+            // Stable option keys let an open tab keep the same ordinary choice
+            // when another tab consumes the bonus and the visible indexes shift.
+            const option =
+              p.choiceKey === undefined
+                ? choices[number(p.choice, "選項", choices.length - 1)]
+                : content.options[
+                    number(p.choiceKey, "選項", content.options.length - 1)
+                  ];
+            if (!choices.includes(option)) fail("此回合未出現這個選項", 409);
+            bonus = option.revealChance !== undefined;
+            if (p.bonus !== undefined && p.bonus !== bonus)
+              fail("選項已更新，請重新開啟活動", 409);
+            if (bonus) {
+              if (p.round !== used || day.bonusRounds?.[a.id] === used)
+                fail("這次機遇已結算或過期，請繼續主線冒險", 409);
+              day.bonusRounds = { ...day.bonusRounds, [a.id]: used };
+              title = `${a.title} · 意外的機遇`;
+            } else if (!scheduledItem(config, a, period.day, used)) {
+              member.journeyProgress = (member.journeyProgress || 0) + 1;
+            }
             const roll = randomInt(100);
             let limit = 0;
-            if (!scheduledItem(config, a, period.day, used))
-              member.journeyProgress = (member.journeyProgress || 0) + 1;
-            const outcome = choices[choice].outcomes.find((o) => {
+            const outcome = option.outcomes.find((o) => {
               limit += o.chance;
               return roll < limit;
             });
             summary = outcome.result;
             delta = outcome.stars;
-            const rewards = choices[choice].outcomes.map((o) => o.stars);
+            const rewards = option.outcomes.map((o) => o.stars);
             const min = Math.min(...rewards),
               max = Math.max(...rewards);
             outcomeTier =
@@ -814,7 +845,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             resultDetails = content.title;
           }
         }
-        day.counts[a.id] = used + 1;
+        if (!bonus) day.counts[a.id] = used + 1;
       }
       if (quizCorrect !== null) {
         member.quizStats.points += delta;
@@ -823,7 +854,8 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
       }
       const previous = member.total;
       member.total += delta;
-      member.count += type === "activity.submit" ? 1 : 0;
+      const participation = type === "activity.submit" && !bonus;
+      if (participation) member.count++;
       if (type === "activity.submit") member.lastAt = now;
       // Monotonic timestamps ensure stable pagination when requests share a millisecond.
       const createdAt = Math.max(now, (member.lastRecordAt || 0) + 1);
@@ -835,7 +867,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         count: 0,
       };
       weekMember.points += delta;
-      weekMember.count += type === "activity.submit" ? 1 : 0;
+      if (participation) weekMember.count++;
       weekMember.nickname = member.nickname;
       board.members[memberId] = weekMember;
       const record = {
@@ -855,7 +887,8 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         version: config.version,
         contentId,
         quizCorrect,
-        kind: type === "activity.submit" ? "participation" : "adjustment",
+        kind: bonus ? "bonus" : participation ? "participation" : "adjustment",
+        ...(bonus ? { bonus: true } : {}),
         operatorId: user.id,
         reason,
       };

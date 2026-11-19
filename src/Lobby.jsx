@@ -47,8 +47,9 @@ export default function Lobby({
     [busy, setBusy] = useState(false),
     [tab, setTab] = useState("lobby"),
     [selected, setSelected] = useState(null),
-    [revealExtra, setRevealExtra] = useState(false),
+    [encounterPhase, setEncounterPhase] = useState("waiting"),
     [choice, setChoice] = useState(null),
+    [inEncounter, setInEncounter] = useState(false),
     [result, setResult] = useState(null),
     [profile, setProfile] = useState(false);
   const { hold, collect } = useStarRewards();
@@ -130,7 +131,8 @@ export default function Lobby({
     settledView.current = null;
     pending.current = null;
     setError("");
-    setRevealExtra(false);
+    setEncounterPhase("waiting");
+    setInEncounter(false);
     setSelected(a);
     setChoice(null);
     setResult(null);
@@ -159,15 +161,33 @@ export default function Lobby({
       setBusy(false);
     }
   };
+  const hasEncounter = selected?.content?.extraIndex >= 0;
+  const revealing = hasEncounter && encounterPhase !== "ready";
   useEffect(() => {
-    if (result || !(selected?.content?.extraIndex >= 0)) return;
-    const timer = setTimeout(() => {
-      setRevealExtra(true);
+    if (result || !hasEncounter) return;
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const warning = setTimeout(() => {
+      setEncounterPhase("warning");
       playSound("reveal");
-    }, 380);
-    return () => clearTimeout(timer);
-  }, [selected, result]);
+    }, 500);
+    const opening = setTimeout(
+      () => setEncounterPhase(reduced ? "ready" : "opening"),
+      1050,
+    );
+    const ready = reduced
+      ? null
+      : setTimeout(() => setEncounterPhase("ready"), 1630);
+    return () => {
+      clearTimeout(warning);
+      clearTimeout(opening);
+      clearTimeout(ready);
+    };
+  }, [selected, result, hasEncounter]);
   const submit = async () => {
+    if (revealing) return;
+    const index = inEncounter ? selected.content.extraIndex : choice;
     if (!pending.current)
       pending.current = {
         submissionId: crypto.randomUUID(),
@@ -175,7 +195,15 @@ export default function Lobby({
         day: selected.day || view.period.day,
         version: selected.version,
         round: selected.used,
-        ...(selected.content ? { contentId: selected.content.id, choice } : {}),
+        ...(selected.content
+          ? { contentId: selected.content.id, choice: index }
+          : {}),
+        ...(selected.type === "event"
+          ? {
+              choiceKey: selected.content.choiceKeys?.[index],
+              bonus: inEncounter,
+            }
+          : {}),
       };
     const r = await perform("activity.submit", pending.current);
     if (r) {
@@ -435,10 +463,13 @@ export default function Lobby({
               ? "activity-modal adventure-modal"
               : "activity-modal"
           }
-          title={selected.title}
+          title={inEncounter ? "機遇獎勵關卡" : selected.title}
           onClose={() => {
             if (!busy) {
-              if (result) finishReward();
+              if (result?.bonus) continueAdventure();
+              else if (inEncounter && !result && !pending.current)
+                setInEncounter(false);
+              else if (result) finishReward();
               else {
                 setSelected(null);
                 pending.current = null;
@@ -516,7 +547,9 @@ export default function Lobby({
               </p>
               <div
                 className={
-                  selected.unlimited ? "adventure-result-actions" : undefined
+                  selected.unlimited || result.bonus
+                    ? "adventure-result-actions"
+                    : undefined
                 }
               >
                 <button
@@ -525,18 +558,22 @@ export default function Lobby({
                   data-own-sound={result.delta > 0 ? true : undefined}
                   disabled={busy}
                   onClick={
-                    selected.unlimited ? continueAdventure : finishReward
+                    result.bonus || selected.unlimited
+                      ? continueAdventure
+                      : finishReward
                   }
                 >
-                  {selected.unlimited
-                    ? busy
-                      ? "讀取下一話…"
+                  {result.bonus
+                    ? "返回本話，繼續選擇"
+                    : selected.unlimited
+                      ? busy
+                        ? "讀取下一話…"
+                        : result.delta > 0
+                          ? "收下星星，繼續冒險"
+                          : "繼續冒險"
                       : result.delta > 0
-                        ? "收下星星，繼續冒險"
-                        : "繼續冒險"
-                    : result.delta > 0
-                      ? "確認收下星星"
-                      : "確認結果"}
+                        ? "確認收下星星"
+                        : "確認結果"}
                   {selected.unlimited && (
                     <ArrowRight size={16} aria-hidden="true" />
                   )}
@@ -552,6 +589,41 @@ export default function Lobby({
                     回到大廳
                   </button>
                 )}
+              </div>
+            </div>
+          ) : inEncounter ? (
+            <div className="encounter-challenge">
+              <p className="encounter-chapter">{selected.content.title}</p>
+              <h3>{selected.content.options[selected.content.extraIndex]}</h3>
+              <p>
+                每回合限挑戰一次。機遇會另外結算星星，之後回到本話選擇原本的行動。
+              </p>
+              <ul aria-label="機遇挑戰可能結果">
+                {selected.content.odds[selected.content.extraIndex].map(
+                  ({ chance, stars }, i) => (
+                    <li key={i}>
+                      <span>{chance}%</span>
+                      <strong>
+                        {stars < 0 ? "扣除" : "獲得"} {Math.abs(stars)} 星
+                      </strong>
+                    </li>
+                  ),
+                )}
+              </ul>
+              <div className="encounter-challenge-actions">
+                <Button primary disabled={busy} onClick={submit}>
+                  {busy
+                    ? "挑戰中…"
+                    : pending.current
+                      ? "重試同一次挑戰"
+                      : "接受挑戰"}
+                </Button>
+                <Button
+                  disabled={busy || !!pending.current}
+                  onClick={() => setInEncounter(false)}
+                >
+                  返回原選項
+                </Button>
               </div>
             </div>
           ) : (
@@ -582,35 +654,44 @@ export default function Lobby({
                     <p className="muted">{selected.content.category}</p>
                   )}
                   <div
-                    className={
-                      revealExtra
-                        ? "activity-options event-surprise"
-                        : "activity-options"
-                    }
+                    className="activity-options"
+                    data-encounter={hasEncounter ? encounterPhase : undefined}
                   >
-                    {selected.content?.options.map((o, i) =>
-                      selected.content.extraIndex === i &&
-                      !revealExtra ? null : (
+                    {selected.content?.options.map((o, i) => {
+                      const extra = selected.content.extraIndex === i;
+                      const option = (
                         <button
                           key={i}
                           data-own-sound
-                          disabled={busy || !!pending.current}
-                          className={`${choice === i ? "selected" : ""} ${selected.content.extraIndex === i ? "event-extra" : ""}`}
-                          aria-pressed={choice === i}
+                          disabled={
+                            busy ||
+                            !!pending.current ||
+                            (revealing &&
+                              (extra || encounterPhase !== "waiting"))
+                          }
+                          className={`${choice === i ? "selected" : ""} ${extra ? "event-extra" : ""}`}
+                          aria-pressed={extra ? undefined : choice === i}
                           onClick={() => {
                             if (choice !== i)
-                              playSound(
-                                selected.content.extraIndex === i
-                                  ? "chooseExtra"
-                                  : "choose",
-                              );
-                            setChoice(i);
+                              playSound(extra ? "chooseExtra" : "choose");
+                            if (extra) setInEncounter(true);
+                            else setChoice(i);
                           }}
                         >
-                          {selected.content.extraIndex === i && (
-                            <small>意外的機遇</small>
+                          {extra && (
+                            <small className="event-extra-label">
+                              <Sparkles size={13} aria-hidden="true" />{" "}
+                              意外的機遇 · 額外挑戰
+                            </small>
                           )}
                           <span className="adventure-choice-label">{o}</span>
+                          {extra && (
+                            <ArrowRight
+                              className="event-enter-arrow"
+                              size={18}
+                              aria-hidden="true"
+                            />
+                          )}
                           {selected.content.odds?.[i] && (
                             <small className="event-odds">
                               {selected.content.odds[i].map(
@@ -630,15 +711,34 @@ export default function Lobby({
                             </small>
                           )}
                         </button>
-                      ),
-                    )}
+                      );
+                      return extra ? (
+                        <div className="event-rift" key={i}>
+                          <span className="event-warning" role="status">
+                            {encounterPhase === "warning"
+                              ? "可能出現意外的機遇！"
+                              : ""}
+                          </span>
+                          <div
+                            className="event-rift-slot"
+                            aria-hidden={revealing}
+                          >
+                            <div className="event-rift-card">{option}</div>
+                          </div>
+                        </div>
+                      ) : (
+                        option
+                      );
+                    })}
                   </div>
                 </>
               )}
               <Button
                 primary
                 disabled={
-                  busy || (selected.type !== "fortune" && choice === null)
+                  busy ||
+                  revealing ||
+                  (selected.type !== "fortune" && choice === null)
                 }
                 onClick={submit}
               >

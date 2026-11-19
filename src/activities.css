@@ -828,15 +828,94 @@ dialog.adventure-modal .activity-options button.selected::after {
   color: color-mix(in srgb, var(--panel-text, var(--text)) 75%, #c25a45);
   background: color-mix(in srgb, #c25a45 13%, transparent);
 }
-dialog.adventure-modal .activity-options .event-extra {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-  background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 15%, var(--surface)), var(--surface));
+dialog.adventure-modal .activity-options[data-encounter] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
-.event-extra > small:first-child {
-  color: color-mix(in srgb, var(--accent) 55%, var(--panel-text, var(--text)));
+.activity-options[data-encounter] > button ~ button { margin-block-start: 8px; }
+.event-rift { position: relative; min-width: 0; }
+.event-rift-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+}
+[data-encounter="opening"] .event-rift-slot,
+[data-encounter="ready"] .event-rift-slot {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+.event-rift-card { min-height: 0; overflow: hidden; }
+.event-warning:not(:empty) {
+  position: absolute;
+  z-index: 2;
+  inset-inline: 0;
+  top: 4px;
+  width: max-content;
+  max-width: 100%;
+  margin: auto;
+  padding: 5px 16px;
+  border: 1px solid #eab090;
+  border-radius: 5px;
+  background: #451923;
+  color: #fff3d7;
+  box-shadow: 0 3px 16px #170b1280;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-align: center;
+  pointer-events: none;
+}
+dialog.adventure-modal .activity-options[data-encounter] button:disabled {
+  opacity: 1;
+}
+dialog.adventure-modal .activity-options button.event-extra {
+  --panel-text: #fff1e0;
+  --panel-muted: #ead1bc;
+  overflow: hidden;
+  isolation: isolate;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid #d47756;
+  border-inline-start: 3px solid #ffaf6b;
+  background: radial-gradient(ellipse at 90% 110%, #823d33 0, transparent 56%),
+    linear-gradient(110deg, #28161e, #4a2129);
+  color: var(--panel-text);
+  box-shadow: inset 0 0 18px #b846391f;
+}
+dialog.adventure-modal .activity-options button.event-extra::after { content: none; }
+.event-enter-arrow {
+  position: absolute;
+  inset-inline-end: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #ffcd94;
+}
+.event-extra-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #ffcd94;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .08em;
+}
+.event-extra .adventure-odds-item { background: #ffffff12; }
+.event-extra .adventure-odds-loss { background: #ff837226; }
+.event-extra::before {
+  content: "";
+  position: absolute;
+  inset: -30px 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 74% 50%, #ffcf8c 0 1px, transparent 2px),
+    radial-gradient(circle at 89% 24%, #ffa477 0 1.3px, transparent 2px),
+    radial-gradient(circle at 56% 82%, #f9b47d 0 .8px, transparent 1.7px),
+    radial-gradient(circle at 96% 70%, #ffc790 0 .9px, transparent 1.7px);
+  background-size: 100% 48px;
+  opacity: .65;
 }
 dialog.adventure-modal .activity-play > button.primary {
   width: 100%;
@@ -869,12 +948,17 @@ dialog.adventure-modal .activity-play > button.primary {
   .adventure-modal .star-reward-card {
     animation: adventure-page-enter 200ms ease-out both;
   }
-  .event-surprise {
-    animation: adventure-shake 370ms ease-out;
+  dialog.adventure-modal:has([data-encounter="warning"]) {
+    animation: adventure-shake 420ms ease-out;
   }
-  .event-extra {
-    animation: adventure-appear 390ms cubic-bezier(.16, 1, .3, 1) both;
-    transform-origin: center;
+  .event-rift-slot { transition: grid-template-rows 390ms ease-in-out; }
+  [data-encounter="opening"] .event-extra {
+    animation: adventure-appear 310ms 180ms ease-out both;
+  }
+  .event-extra::before { animation: adventure-embers 3.5s linear infinite; }
+  @keyframes adventure-embers {
+    from { transform: translateY(20px); }
+    to { transform: translateY(-28px); }
   }
   @keyframes adventure-page-enter {
     from { opacity: .3; transform: translateY(5px); }
@@ -900,3 +984,39 @@ dialog.adventure-modal .activity-play > button.primary {
     }
   }
 }
+.encounter-challenge {
+  padding: 18px 4px 0;
+  color: var(--panel-text, var(--text));
+}
+.encounter-chapter {
+  color: var(--panel-muted, var(--muted));
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.encounter-challenge h3 {
+  margin: 0;
+  font-size: clamp(21px, 4vw, 27px);
+}
+.encounter-challenge > p:not(.encounter-chapter) {
+  line-height: 1.75;
+}
+.encounter-challenge ul {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0;
+  border: 1px solid #985a49;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #2d1820, #49272b);
+  color: #ffeddd;
+}
+.encounter-challenge li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  font-variant-numeric: tabular-nums;
+}
+.encounter-challenge li + li { border-top: 1px solid #ffffff16; }
+.encounter-challenge-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.encounter-challenge-actions button { flex: 1 0 auto; }

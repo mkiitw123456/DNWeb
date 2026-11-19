@@ -23,7 +23,7 @@ const steps = [
     page: "characters",
     target: ".heading",
     title: "角色與副本進度",
-    text: "在角色資訊新增角色，之後可記錄戰力、數量與每週副本次數。",
+    text: "在角色資訊新增角色，之後可調整裝備階級、數量與每週副本次數。",
   },
   {
     page: "lobby",

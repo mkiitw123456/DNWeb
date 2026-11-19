@@ -1,6 +1,8 @@
-import { SquarePen, Heart, Swords } from "lucide-react";
+import { useState } from "react";
+import { SquarePen } from "lucide-react";
+import GearPicker from "./GearPicker.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
-import { Button, money } from "./ui.jsx";
+import { Button } from "./ui.jsx";
 export default function CharacterCard({
   character: c,
   professions,
@@ -11,6 +13,20 @@ export default function CharacterCard({
   mutate,
   onEdit,
 }) {
+  const [pendingGear, setPendingGear] = useState(null);
+  async function changeGear(slot, grade) {
+    if (busy || pendingGear || (c.gear?.[slot] ?? null) === grade) return;
+    setPendingGear({ [slot]: grade });
+    try {
+      await mutate(
+        "character.gear",
+        { id: c.id, slot, grade },
+        "裝備階級已更新",
+      );
+    } finally {
+      setPendingGear(null);
+    }
+  }
   const profession = professions.find((p) => p.id === c.professionId);
   return (
     <article className="compact-character" aria-label={`角色 ${c.name}`}>
@@ -23,20 +39,12 @@ export default function CharacterCard({
           </Button>
         )}
       </header>
-      <div className="compact-stats">
-        {[
-          [Heart, "血量", c.hp],
-          [Swords, "攻擊", c.attack],
-        ].map(([Icon, label, value]) => (
-          <div key={label}>
-            <span>
-              <Icon size={13} />
-              {label}
-            </span>
-            <strong title={String(value)}>{money(value)}</strong>
-          </div>
-        ))}
-      </div>
+      <GearPicker
+        characterName={c.name}
+        gear={pendingGear ? { ...c.gear, ...pendingGear } : c.gear}
+        disabled={busy || !!pendingGear}
+        onChange={canEdit ? changeGear : undefined}
+      />
       <div
         className={
           dungeons.length > 3

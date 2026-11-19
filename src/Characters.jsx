@@ -1,15 +1,8 @@
 import { useState } from "react";
 import { BookOpen, CalendarDays, Trash2 } from "lucide-react";
-import {
-  Heading,
-  Button,
-  Field,
-  NumberField,
-  Modal,
-  FormActions,
-  Empty,
-} from "./ui.jsx";
+import { Heading, Button, Field, Modal, FormActions, Empty } from "./ui.jsx";
 import ProfessionIcon from "./ProfessionIcon.jsx";
+import GearPicker from "./GearPicker.jsx";
 import CharacterCard from "./CharacterCard.jsx";
 export default function Characters({ data, mutate, busy, ask }) {
   const [editing, setEditing] = useState(null);
@@ -19,8 +12,7 @@ export default function Characters({ data, mutate, busy, ask }) {
   const add = () =>
     setEditing({
       name: "",
-      hp: 0,
-      attack: 0,
+      gear: {},
       ownerId: data.me.id,
       professionId: "",
     });
@@ -28,7 +20,7 @@ export default function Characters({ data, mutate, busy, ask }) {
     <div className="characters-page">
       <Heading
         title="角色資訊"
-        description="管理自己的角色戰力與副本進度"
+        description="管理自己的角色裝備與副本進度"
         onAdd={add}
         addLabel="新增角色"
       />
@@ -51,20 +43,20 @@ export default function Characters({ data, mutate, busy, ask }) {
             <span className="eyebrow">開始你的冒險</span>
             <h2>從第一個角色開始</h2>
             <p>
-              建立角色後，就能在這裡記錄戰力與每週副本進度。這裡只會顯示你自己的角色。
+              建立角色後，就能在這裡記錄裝備階級與每週副本進度。這裡只會顯示你自己的角色。
             </p>
           </div>
           <ol className="onboarding-steps">
             <li>
               <strong>建立角色</strong>
               <p>
-                點「新增角色」，輸入角色名稱，選擇職業。卡片會顯示對應的職業圖示與外框顏色。
+                點「新增角色」，輸入角色名稱，選擇職業。卡片會顯示對應的職業圖示。
               </p>
             </li>
             <li>
-              <strong>填寫角色資訊</strong>
+              <strong>選擇裝備階級</strong>
               <p>
-                輸入血量、攻擊力並儲存。之後可從角色卡片的編輯按鈕隨時調整，也能建立多個角色。
+                分別選擇裝備、武器、飾品的階級。之後點角色卡上的裝備圖示，就能調整並自動儲存。
               </p>
             </li>
             <li>
@@ -112,7 +104,15 @@ export default function Characters({ data, mutate, busy, ask }) {
               canEdit={true}
               busy={busy}
               mutate={mutate}
-              onEdit={() => setEditing({ ...c })}
+              onEdit={() =>
+                setEditing({
+                  id: c.id,
+                  name: c.name,
+                  ownerId: c.ownerId,
+                  professionId: c.professionId,
+                  gear: {},
+                })
+              }
             />
           ))}
         </div>
@@ -177,26 +177,22 @@ export default function Characters({ data, mutate, busy, ask }) {
                 請管理員先到「管理後台 → 職業清單」建立職業。
               </p>
             )}
-            <div className="form-grid">
-              {[
-                ["hp", "血量"],
-                ["attack", "攻擊力"],
-              ].map(([key, label]) => (
-                <NumberField
-                  key={key}
-                  label={label}
-                  max={1e12}
-                  value={editing[key]}
-                  onChange={(e) =>
-                    setEditing({
-                      ...editing,
-                      [key]:
-                        e.target.value === "" ? "" : Number(e.target.value),
-                    })
-                  }
-                />
-              ))}
-            </div>
+            <fieldset>
+              <legend>裝備階級</legend>
+              <GearPicker
+                gear={{
+                  ...characters.find((c) => c.id === editing.id)?.gear,
+                  ...editing.gear,
+                }}
+                disabled={busy}
+                onChange={(slot, grade) =>
+                  setEditing((current) => ({
+                    ...current,
+                    gear: { ...current.gear, [slot]: grade },
+                  }))
+                }
+              />
+            </fieldset>
             {editing.id && (
               <Button
                 type="button"

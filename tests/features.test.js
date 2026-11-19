@@ -66,8 +66,63 @@ test("legacy state migration and profession CRUD preserve characters and enforce
   );
   action(s, admin, "profession.delete", { id: profession.id });
   assert.equal(s.characters[0].professionId, "");
-  assert.equal(s.characters[0].hp, 50);
+  assert.equal(s.characters[0].hp, undefined);
+  assert.equal(s.characters[0].attack, undefined);
   assert.equal(s.characters.length, 1);
+});
+test("gear supports legacy characters, partial edits, clear and owner permissions", () => {
+  const s = initialState(),
+    admin = s.users[0];
+  action(s, admin, "user.save", { username: "Member", password: "test" });
+  const member = s.users[1];
+  action(s, member, "character.save", { name: "舊角色" });
+  const c = s.characters[0];
+  delete c.gear;
+  Object.assign(c, { hp: 250, attack: 111 });
+  const legacy = publicState(s, member).characters[0];
+  assert.deepEqual(legacy.gear, {
+    equipment: null,
+    weapon: null,
+    accessory: null,
+  });
+  assert.equal(legacy.hp, undefined);
+  assert.equal(legacy.attack, undefined);
+  const update = (slot, grade, who = member) =>
+    action(s, who, "character.gear", { id: c.id, slot, grade });
+  update("weapon", "L");
+  action(s, member, "character.save", {
+    id: c.id,
+    name: "新名稱",
+    gear: { equipment: "A" },
+  });
+  update("accessory", "S", admin);
+  assert.deepEqual(c.gear, { equipment: "A", weapon: "L", accessory: "S" });
+  action(s, member, "character.save", { id: c.id, name: "新名稱", hp: 2000 });
+  assert.equal(c.hp, 250);
+  assert.equal(c.gear.weapon, "L");
+  assert.throws(() => update("weapon", "A", { id: "stranger" }), {
+    status: 403,
+  });
+  for (const [slot, grade] of [
+    ["armor", "A"],
+    ["weapon", "B"],
+    ["__proto__", "L"],
+    ["accessory", ""],
+    ["weapon", undefined],
+  ])
+    assert.throws(() => update(slot, grade), { status: 400 });
+  assert.throws(
+    () =>
+      action(s, admin, "character.save", {
+        id: c.id,
+        name: c.name,
+        gear: { weapon: "A", accessory: "SS" },
+      }),
+    { status: 400 },
+  );
+  assert.deepEqual(c.gear, { equipment: "A", weapon: "L", accessory: "S" });
+  update("weapon", null);
+  assert.equal(c.gear.weapon, null);
 });
 test("cost notes survive sale, edit, claiming and history; old records remain compatible", () => {
   const s = initialState(),

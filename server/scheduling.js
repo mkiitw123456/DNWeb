@@ -247,6 +247,7 @@ export function audit(s, u, type, p, now = Date.now()) {
     "onboarding.discordSkip": "稍後設定 Discord",
     "user.save": p.id ? "修改帳號" : "建立帳號",
     "character.save": p.id ? "修改角色" : "建立角色",
+    "character.gear": "更新角色裝備階級",
     "character.delete": "刪除角色",
     "character.run": "更新副本次數",
     "character.complete": "完成副本",

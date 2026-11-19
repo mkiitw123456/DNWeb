@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import { discordEnabled } from "./discord.js";
 import { professionIcons } from "../shared/professions.js";
+import { gearGrades, gearSlots } from "../shared/gear.js";
 import { communityAction } from "./community.js";
 import { isOwner, raidView, schedulingAction } from "./scheduling.js";
 import { cleanupAccounts } from "./account-cleanup.js";
@@ -63,6 +64,20 @@ function costNote(value = "") {
   if (typeof value !== "string" || value.length > 300)
     fail("成本備註最多 300 個字元");
   return value.trim();
+}
+const emptyGear = Object.fromEntries(gearSlots.map(({ id }) => [id, null]));
+function applyGear(current, changes) {
+  const gear = { ...emptyGear, ...current };
+  if (changes === undefined) return gear;
+  if (!changes || typeof changes !== "object" || Array.isArray(changes))
+    fail("裝備階級格式不正確");
+  for (const [slot, grade] of Object.entries(changes)) {
+    if (!Object.hasOwn(emptyGear, slot)) fail("裝備部位不正確");
+    if (grade !== null && !gearGrades.includes(grade))
+      fail("裝備階級須為 A、S 或 L");
+    gear[slot] = grade;
+  }
+  return gear;
 }
 export function periods(now = Date.now()) {
   const day = Math.floor((now - 3600000) / 86400000);
@@ -192,7 +207,12 @@ export function publicState(s, u) {
   };
   return {
     users: s.users.filter((x) => u.admin || x.id === u.id).map(safeUser),
-    characters: s.characters.filter((c) => c.ownerId === u.id),
+    characters: s.characters
+      .filter((c) => c.ownerId === u.id)
+      .map(({ hp, attack, ...c }) => ({
+        ...c,
+        gear: { ...emptyGear, ...c.gear },
+      })),
     raids: (s.raids || []).map((r) => raidView(s, r)),
     raidTemplates: u.admin ? s.raidTemplates || [] : [],
     roster: u.admin
@@ -517,7 +537,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
           u,
         )
       : null;
-    const ownerId = u.admin ? p.ownerId || u.id : u.id;
+    const ownerId = u.admin ? p.ownerId || old?.ownerId || u.id : u.id;
     if (!s.users.some((x) => x.id === ownerId && x.active))
       fail("角色擁有者不存在或已停用");
     const professionId = p.professionId ?? old?.professionId ?? "";
@@ -528,14 +548,22 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
       ownerId,
       professionId,
       name: text(p.name, "角色名稱"),
-      hp: number(p.hp, "血量"),
-      attack: number(p.attack, "攻擊力"),
+      gear: applyGear(old?.gear, p.gear),
       runs: old?.runs || {},
       quantities: old?.quantities || {},
       week: periods(now).week,
     };
     if (old) Object.assign(old, item);
     else s.characters.push(item);
+    return;
+  }
+  if (type === "character.gear") {
+    const c = owned(
+      s.characters.find((x) => x.id === p.id),
+      u,
+    );
+    if (typeof p.slot !== "string") fail("裝備部位不正確");
+    c.gear = applyGear(c.gear, { [p.slot]: p.grade });
     return;
   }
   if (type === "character.delete") {

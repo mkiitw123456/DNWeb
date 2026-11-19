@@ -1,5 +1,6 @@
 import { useFeedback } from "./FeedbackHost.jsx";
 import ActivityAdmin from "./ActivityAdmin.jsx";
+import { matchesContent } from "./activity-calendar.js";
 import { useState, useEffect, useCallback } from "react";
 import { Plus, SquarePen, Trash2 } from "lucide-react";
 import Professions from "./Professions.jsx";
@@ -36,6 +37,7 @@ export default function Admin({
     return v;
   }, [request, onActivityChange]);
   const [tab, setTab] = useState("users"),
+    [memberSearch, setMemberSearch] = useState(""),
     [editing, setEditing] = useState(null),
     [url, setUrl] = useState("");
   useEffect(() => {
@@ -45,6 +47,14 @@ export default function Admin({
         if (e.status === 401) onUnauthorized();
       });
   }, [tab, refreshActivity, onUnauthorized]);
+  const visibleMembers =
+    tab === "users" && memberSearch.trim()
+      ? data.users.filter((u) =>
+          [u.username, u.nickname, u.discordId].some((value) =>
+            matchesContent(value, memberSearch),
+          ),
+        )
+      : data.users;
   return (
     <>
       <Heading title="管理後台" description="管理公會成員、副本與職業圖示" />
@@ -107,12 +117,22 @@ export default function Admin({
               建立帳號
             </Button>
           </div>
+          <Field
+            label="搜尋成員"
+            type="search"
+            value={memberSearch}
+            placeholder="帳號、暱稱或 Discord ID"
+            onChange={(e) => setMemberSearch(e.target.value)}
+          />
           <div className="admin-rows">
-            {data.users.map((u) => (
+            {visibleMembers.map((u) => (
               <div className="admin-row" key={u.id}>
                 <span className="avatar">{u.username[0]}</span>
                 <div>
                   <strong>{u.username}</strong>
+                  {u.nickname && u.nickname !== u.username && (
+                    <small>{u.nickname}</small>
+                  )}
                   <small>
                     {u.discordId
                       ? `Discord · ${u.discordId}`
@@ -166,6 +186,11 @@ export default function Admin({
                 )}
               </div>
             ))}
+            {!visibleMembers.length && (
+              <p role="status" className="muted">
+                找不到符合的成員。
+              </p>
+            )}
           </div>
           <p className="hint">
             停用保留資料；刪除則永久移除帳號、角色、活動積分與紀錄。其他成員的歷史分帳保留金額並匿名處理。

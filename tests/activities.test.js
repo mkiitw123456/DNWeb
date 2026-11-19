@@ -341,6 +341,8 @@ test("journey advances across days and retries, with a server-validated optional
         contentId: a.content.id,
         submissionId: crypto.randomUUID(),
         choice,
+        choiceKey: a.content.choiceKeys[choice],
+        bonus: choice === a.content.extraIndex,
       },
       time,
     );
@@ -351,13 +353,61 @@ test("journey advances across days and retries, with a server-validated optional
   const second = await event(now);
   assert.equal(second.content.extraIndex, 1);
   assert.equal(second.content.options[1], extra.text);
-  const record = await play(second, 1, now);
+  const beforeBonus = await view(admin);
+  const bonusPayload = {
+    activityId: second.id,
+    contentId: second.content.id,
+    day: second.day,
+    version: second.version,
+    round: second.used,
+    choice: 1,
+    choiceKey: second.content.choiceKeys[1],
+    bonus: true,
+    submissionId: crypto.randomUUID(),
+  };
+  const submitBonus = (p) =>
+    activityAction(admin, users, "activity.submit", p, now);
+  const attempts = await Promise.allSettled([
+    submitBonus(bonusPayload),
+    submitBonus({ ...bonusPayload, submissionId: crypto.randomUUID() }),
+  ]);
+  assert.equal(attempts[0].status, "fulfilled");
+  const record = attempts[0].value;
+  assert.equal(attempts[1].reason.status, 409);
+  assert.deepEqual(await submitBonus(bonusPayload), record);
+  assert.equal(record.bonus, true);
+  assert.equal(record.kind, "bonus");
   assert.ok(
     extra.outcomes.some(
       (o) => o.result === record.summary && o.stars === record.delta,
     ),
   );
   assert.equal(record.outcomeTier, record.delta < 0 ? "low" : "high");
+  const afterBonus = await view(admin);
+  assert.equal(afterBonus.member.count, beforeBonus.member.count);
+  assert.equal(afterBonus.weeklyCount, beforeBonus.weeklyCount);
+  assert.equal(
+    afterBonus.member.total,
+    beforeBonus.member.total + record.delta,
+  );
+  assert.equal(afterBonus.weekly, beforeBonus.weekly + record.delta);
+  const main = await event(now);
+  assert.equal(main.content.id, second.content.id);
+  assert.equal(main.used, second.used);
+  assert.equal(main.content.extraIndex, -1);
+  assert.deepEqual(main.content.options, [
+    second.content.options[0],
+    second.content.options[2],
+  ]);
+  const mainResult = await play(main, 1, now);
+  assert.ok(
+    chapters[1].options[1].outcomes.some(
+      (o) => o.result === mainResult.summary,
+    ),
+  );
+  assert.equal(mainResult.kind, "participation");
+  assert.equal((await view(admin)).member.count, beforeBonus.member.count + 1);
+  await assert.rejects(() => play(second, 1, now), { status: 409 });
   const tomorrow = now + 86400000;
   const next = await event(tomorrow);
   assert.equal(next.content.id, "journey-3");
@@ -370,6 +420,27 @@ test("journey advances across days and retries, with a server-validated optional
   const hidden = await event(tomorrow);
   assert.equal(hidden.content.options.length, 2);
   await assert.rejects(() => play(hidden, 2, tomorrow));
+  await assert.rejects(
+    () =>
+      activityAction(
+        admin,
+        users,
+        "activity.submit",
+        {
+          activityId: hidden.id,
+          contentId: hidden.content.id,
+          day: hidden.day,
+          version: hidden.version,
+          round: hidden.used,
+          choice: 1,
+          choiceKey: 2,
+          bonus: true,
+          submissionId: crypto.randomUUID(),
+        },
+        tomorrow,
+      ),
+    { status: 409 },
+  );
   await play(hidden, 1, tomorrow);
   assert.equal((await event(tomorrow)).content, undefined);
 });
