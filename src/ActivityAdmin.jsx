@@ -1,5 +1,6 @@
 import { matchesContent } from "./activity-calendar.js";
 import EventBank from "./EventBank.jsx";
+import CampaignSettings from "./CampaignSettings.jsx";
 import ActivityCalendar from "./ActivityCalendar.jsx";
 import { useFeedback } from "./FeedbackHost.jsx";
 import QuizScores from "./QuizScores.jsx";
@@ -132,6 +133,7 @@ export default function ActivityAdmin({
           : [
               ["rules", "活動規則與抽籤"],
               ["events", "冒險事件題庫"],
+              ["campaigns", "正式劇本"],
               ["calendar", "活動日曆"],
               ["reports", "參與報表與積分調整"],
             ]
@@ -159,7 +161,15 @@ export default function ActivityAdmin({
           {notice}
         </p>
       )}
-      {tab === "events" ? (
+      {tab === "campaigns" ? (
+        <CampaignSettings
+          scripts={draft.scripts ?? []}
+          schedule={draft.campaignSchedule ?? []}
+          onChange={(campaignSchedule) => setDraft((d) => ({ ...d, campaignSchedule }))}
+          busy={busy}
+          save={save}
+        />
+      ) : tab === "events" ? (
         <EventBank
           events={draft.events}
           unlimited={draft.eventUnlimited}

@@ -1,4 +1,5 @@
 import { useStarRewards, STAR_ASSET } from "./StarRewards.jsx";
+import Aquarium from "./Aquarium.jsx";
 import { playSound } from "./sounds.js";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -137,6 +138,15 @@ export default function Lobby({
     setChoice(null);
     setResult(null);
   };
+  const checkIn = async () => {
+    const aquarium = await perform("aquarium.checkIn", { day: view.aquarium.day });
+    if (!aquarium) return;
+    ++viewRequest.current;
+    const updated = { ...view, aquarium };
+    setView(updated);
+    onActivityChange(updated);
+    notify("今日簽到完成");
+  };
   const continueAdventure = async (event) => {
     if (lock.current) return;
     lock.current = true;
@@ -229,8 +239,11 @@ export default function Lobby({
       </section>
     );
   const completed = view.activities.filter(
-    (a) => !a.unlimited && a.used >= a.dailyLimit,
+    (a) => a.finished || (!a.unlimited && a.used >= a.dailyLimit),
   ).length;
+  const canContinue = selected?.unlimited || (selected?.campaign &&
+    selected.used + 1 < selected.dailyLimit &&
+    selected.campaign.progress + 1 < selected.campaign.chapters);
   return (
     <div className="guild-lobby compact-lobby">
       <header className="lobby-heading">
@@ -270,6 +283,9 @@ export default function Lobby({
         </p>
       )}
       <div className="view-transition" key={tab}>
+        {tab === "lobby" && (
+          <Aquarium aquarium={view.aquarium} onCheckIn={checkIn} busy={busy} />
+        )}
         <section
           className="adventure-stats"
           data-tour="stats"
@@ -319,7 +335,7 @@ export default function Lobby({
               <div className="activity-list">
                 {view.activities.map((a) => {
                   const Icon = icons[a.type],
-                    done = !a.unlimited && a.used >= a.dailyLimit;
+                    done = a.finished || (!a.unlimited && a.used >= a.dailyLimit);
                   return (
                     <article
                       key={a.id}
@@ -329,8 +345,8 @@ export default function Lobby({
                         <Icon size={22} />
                       </div>
                       <div className="activity-body">
-                        <h3>{a.title}</h3>
-                        <p>{a.description}</p>
+                        <h3>{a.campaign?.title || a.title}</h3>
+                        <p>{a.campaign ? `劇本進度 · 已完成 ${a.campaign.progress} / ${a.campaign.chapters} 話` : a.description}</p>
                         <div className="activity-foot">
                           <span>
                             {a.duration} ·{" "}
@@ -346,7 +362,7 @@ export default function Lobby({
                             {done ? (
                               <>
                                 <Check size={15} />
-                                今日已完成
+                                {a.finished ? "劇本已通關" : "今日已完成"}
                               </>
                             ) : (
                               <>
@@ -463,7 +479,7 @@ export default function Lobby({
               ? "activity-modal adventure-modal"
               : "activity-modal"
           }
-          title={inEncounter ? "機遇獎勵關卡" : selected.title}
+          title={inEncounter ? "機遇獎勵關卡" : selected.campaign?.title || selected.title}
           onClose={() => {
             if (!busy) {
               if (result?.bonus) continueAdventure();
@@ -547,7 +563,7 @@ export default function Lobby({
               </p>
               <div
                 className={
-                  selected.unlimited || result.bonus
+                  canContinue || result.bonus
                     ? "adventure-result-actions"
                     : undefined
                 }
@@ -558,14 +574,14 @@ export default function Lobby({
                   data-own-sound={result.delta > 0 ? true : undefined}
                   disabled={busy}
                   onClick={
-                    result.bonus || selected.unlimited
+                    result.bonus || canContinue
                       ? continueAdventure
                       : finishReward
                   }
                 >
                   {result.bonus
                     ? "返回本話，繼續選擇"
-                    : selected.unlimited
+                    : canContinue
                       ? busy
                         ? "讀取下一話…"
                         : result.delta > 0
@@ -574,11 +590,11 @@ export default function Lobby({
                       : result.delta > 0
                         ? "確認收下星星"
                         : "確認結果"}
-                  {selected.unlimited && (
+                  {canContinue && (
                     <ArrowRight size={16} aria-hidden="true" />
                   )}
                 </button>
-                {selected.unlimited && (
+                {canContinue && (
                   <button
                     type="button"
                     className="adventure-return"

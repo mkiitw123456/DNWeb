@@ -321,6 +321,7 @@ export default async function handler(req, res) {
 
     if (
       type.startsWith("activity.") ||
+      type === "aquarium.checkIn" ||
       type === "voice.state" ||
       type === "firebase.usage" ||
       type === "discord.members" ||

@@ -1,7 +1,9 @@
 import { randomInt, randomUUID, createHash } from "node:crypto";
 import { journeyEvents } from "./journey.js";
+import { currentCampaign, scriptCatalog, validateCampaigns } from "./campaigns.js";
 import { fail, text, number } from "./domain.js";
 import { activityTransaction, activityQuery } from "./activity-store.js";
+import { aquariumKey, aquariumView, checkInAquarium } from "./aquarium.js";
 export function activityPeriods(now = Date.now()) {
   const shifted = new Date(now + 8 * 3600000);
   const day = shifted.toISOString().slice(0, 10);
@@ -184,6 +186,7 @@ export function normalizeActivityConfig(config) {
     version: updated ? config.version : config.version + 1,
     journeyEdition: 2,
     schedule: config.schedule || {},
+    campaignSchedule: config.campaignSchedule || [],
     journeyInstalled: true,
     eventUnlimited: config.eventUnlimited ?? true,
     events: (updated ? config.events : upgradedJourney(config)).map(
@@ -332,30 +335,51 @@ function selectContent(config, activity, memberId, day, used, progress = 0) {
     ) % list.length
   ];
 }
-function visibleActivity(config, a, memberId, period, today, progress) {
-  const used = today?.counts?.[a.id] || 0;
+function roundRules(config, a, day, today, member) {
+  const campaign = a.type === "event" && currentCampaign(config, day, member);
+  const counter = campaign ? "campaign" : a.id;
+  const used = today?.counts?.[counter] || 0;
+  return {
+    campaign,
+    counter,
+    used,
+    bonusUsed: campaign
+      ? member.campaignBonuses?.[campaign.key] === campaign.progress
+      : today?.bonusRounds?.[a.id] === used,
+    unlimited: !campaign && a.type === "event" && config.eventUnlimited,
+    dailyLimit: campaign ? 3 : a.dailyLimit,
+  };
+}
+function visibleActivity(config, a, memberId, period, today, member) {
+  const { used, dailyLimit, unlimited, bonusUsed, campaign } =
+    roundRules(config, a, period.day, today, member);
   const result = {
     ...a,
     used,
+    dailyLimit,
+    unlimited,
     version: config.version,
     day: period.day,
     resetHour: 9,
-    unlimited: a.type === "event" && config.eventUnlimited,
   };
+  if (campaign) {
+    result.campaign = {
+      title: campaign.title, progress: campaign.progress, chapters: campaign.length,
+    };
+    result.finished = !campaign.chapter;
+  }
   if (a.type === "fortune")
     result.content = {
       intro: config.fortuneIntro || defaultActivityConfig().fortuneIntro,
       body: config.fortuneBody || defaultActivityConfig().fortuneBody,
     };
-  if (a.type !== "fortune" && (result.unlimited || used < a.dailyLimit)) {
-    const item = selectContent(config, a, memberId, period.day, used, progress);
+  if (a.type !== "fortune" && !result.finished && (unlimited || used < dailyLimit)) {
+    const item = campaign?.chapter ||
+      selectContent(config, a, memberId, period.day, used, member.journeyProgress || 0);
     const choices =
       a.type === "event"
-        ? eventChoices(item, memberId, period.day, used).filter(
-            (o) =>
-              o.revealChance === undefined ||
-              today?.bonusRounds?.[a.id] !== used,
-          )
+        ? eventChoices(item, memberId, campaign?.key || period.day, campaign?.progress ?? used)
+            .filter((o) => o.revealChance === undefined || !bonusUsed)
         : [];
     result.content =
       a.type === "quiz"
@@ -381,13 +405,15 @@ function visibleActivity(config, a, memberId, period, today, progress) {
 }
 export async function activityView(user, users, now = Date.now()) {
   const period = activityPeriods(now);
+  const daily = dailyActivityPeriods(now);
   return activityTransaction(
     async (db) => {
-      const [storedConfig, storedMember, today, board] = await Promise.all([
+      const [storedConfig, storedMember, today, board, aquarium] = await Promise.all([
         db.get("config"),
         db.get(`member_${user.id}`),
-        db.get(`day_${keyOf(user.id, dailyActivityPeriods(now).day)}`),
+        db.get(`day_${keyOf(user.id, daily.day)}`),
         db.get(`week_${period.week}`),
+        db.get(aquariumKey(daily.day)),
       ]);
       const config = normalizeActivityConfig(
         storedConfig || defaultActivityConfig(),
@@ -409,6 +435,7 @@ export async function activityView(user, users, now = Date.now()) {
       return {
         period,
         timezone: "Asia/Taipei",
+        aquarium: aquariumView(daily.day, aquarium, today),
         member,
         weekly: own?.points || 0,
         weeklyCount: own?.count || 0,
@@ -419,9 +446,9 @@ export async function activityView(user, users, now = Date.now()) {
               config,
               a,
               user.id,
-              dailyActivityPeriods(now),
+              daily,
               today,
-              member.journeyProgress || 0,
+              member,
             ),
           ),
         discordUrl: config.discordUrl,
@@ -434,7 +461,7 @@ export async function activityView(user, users, now = Date.now()) {
             users.find((u) => u.id === x.memberId)?.username ||
             "冒險者",
         })),
-        adminConfig: user.admin ? config : null,
+        adminConfig: user.admin ? { ...config, scripts: scriptCatalog(config.events) } : null,
       };
     },
     { authenticatedUser: user },
@@ -580,6 +607,7 @@ function validateConfig(input, previous) {
   });
   return {
     ...previous,
+    campaignSchedule: validateCampaigns(input.campaignSchedule ?? previous.campaignSchedule ?? [], events),
     quizCategories,
     eventUnlimited: input.eventUnlimited ?? previous.eventUnlimited,
     events,
@@ -640,6 +668,11 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
     );
   }
   if (type === "activity.state") return activityView(user, users, now);
+  if (type === "aquarium.checkIn") {
+    const { day } = dailyActivityPeriods(now);
+    if (p.day !== day) fail("簽到日期已更新，請重新載入大廳", 409);
+    return checkInAquarium(user, day, `day_${keyOf(user.id, day)}`, now);
+  }
   if (type === "activity.history") fail("個人明細已停用，請查看積分摘要", 410);
   if (type === "activity.report") {
     if (
@@ -760,14 +793,15 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
         if (!a) fail("活動已關閉", 409);
         if (p.version !== config.version || p.day !== period.day)
           fail("活動內容或日期已更新，請重新開啟活動", 409);
-        const used = day.counts[a.id] || 0;
-        const unlimited = a.type === "event" && config.eventUnlimited;
+        const { used, dailyLimit, unlimited, counter, bonusUsed, campaign } =
+          roundRules(config, a, period.day, day, member);
+        if (campaign && !campaign.chapter) fail("你已完成本期劇本", 409);
         if (
-          (unlimited || p.round !== undefined || p.choiceKey !== undefined) &&
+          (campaign || unlimited || p.round !== undefined || p.choiceKey !== undefined) &&
           p.round !== used
         )
           fail("這回合已結算，請重新開啟活動", 409);
-        if (!unlimited && used >= a.dailyLimit)
+        if (!unlimited && used >= dailyLimit)
           fail("今日已達參與上限，明天再來吧", 409);
         activityId = a.id;
         if (p.bonus === true && a.type !== "event")
@@ -780,7 +814,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
           resultDetails = fortune.body;
           contentId = fortune.id;
         } else {
-          const content = selectContent(
+          const content = campaign?.chapter || selectContent(
             config,
             a,
             user.id,
@@ -793,7 +827,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             fail("題目已更新，請重新開啟活動", 409);
           const choices =
             a.type === "event"
-              ? eventChoices(content, user.id, period.day, used)
+              ? eventChoices(content, user.id, campaign?.key || period.day, campaign?.progress ?? used)
               : content.options;
           if (a.type === "quiz") {
             const choice = number(p.choice, "選項", choices.length - 1);
@@ -816,10 +850,16 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             if (p.bonus !== undefined && p.bonus !== bonus)
               fail("選項已更新，請重新開啟活動", 409);
             if (bonus) {
-              if (p.round !== used || day.bonusRounds?.[a.id] === used)
+              if (p.round !== used || bonusUsed)
                 fail("這次機遇已結算或過期，請繼續主線冒險", 409);
-              day.bonusRounds = { ...day.bonusRounds, [a.id]: used };
+              if (campaign) {
+                member.campaignBonuses = { ...member.campaignBonuses, [campaign.key]: campaign.progress };
+              } else {
+                day.bonusRounds = { ...day.bonusRounds, [a.id]: used };
+              }
               title = `${a.title} · 意外的機遇`;
+            } else if (campaign) {
+              member.campaignProgress = { ...member.campaignProgress, [campaign.key]: campaign.progress + 1 };
             } else if (!scheduledItem(config, a, period.day, used)) {
               member.journeyProgress = (member.journeyProgress || 0) + 1;
             }
@@ -845,7 +885,7 @@ export async function activityAction(user, users, type, p, now = Date.now()) {
             resultDetails = content.title;
           }
         }
-        if (!bonus) day.counts[a.id] = used + 1;
+        if (!bonus) day.counts[counter] = used + 1;
       }
       if (quizCorrect !== null) {
         member.quizStats.points += delta;

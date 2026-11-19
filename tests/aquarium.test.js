@@ -1,0 +1,97 @@
+import { after, before, test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { activityAction, activityView } from "../server/activities.js";
+
+let folder;
+before(async () => {
+  folder = await mkdtemp(join(tmpdir(), "dnweb-aquarium-"));
+  process.env.LOCAL_DATA_DIR = folder;
+  process.env.FIREBASE_SERVICE_ACCOUNT_JSON = "";
+});
+after(() => rm(folder, { recursive: true, force: true }));
+
+const users = Array.from({ length: 28 }, (_, i) => ({
+  id: `fish-${i}`,
+  username: `Fish ${i}`,
+  active: true,
+}));
+const view = (user, now) => activityView(user, users, now);
+const checkIn = (user, day, now) =>
+  activityAction(user, users, "aquarium.checkIn", { day }, now);
+
+test("same-day requests share one fish across tabs, preserving daily game counts in either order", async () => {
+  const now = Date.parse("2026-10-15T12:00:00+08:00");
+  const [a, b] = users;
+  const initial = await view(a, now);
+  const day = initial.aquarium.day;
+  const fortune = initial.activities.find((x) => x.id === "fortune");
+  const playFortune = (user) =>
+    activityAction(
+      user,
+      users,
+      "activity.submit",
+      {
+        submissionId: crypto.randomUUID(),
+        activityId: "fortune",
+        version: fortune.version,
+        round: 0,
+        day,
+      },
+      now,
+    );
+
+  assert.equal(initial.aquarium.fishCount, 0);
+  assert.equal(initial.aquarium.checkedInToday, false);
+  const results = await Promise.all(
+    Array.from({ length: 6 }, () => checkIn(a, day, now)),
+  );
+  assert.ok(results.every((r) => r.totalCheckIns === 1 && r.checkedInToday));
+  assert.equal((await view(b, now)).aquarium.checkedInToday, false);
+  await Promise.all([playFortune(a), playFortune(b)]);
+  const retry = await checkIn(a, day, now);
+  assert.equal(retry.totalCheckIns, 1);
+  assert.equal((await checkIn(b, day, now)).totalCheckIns, 2);
+  for (const user of [a, b]) {
+    const updated = await view(user, now);
+    assert.equal(updated.aquarium.totalCheckIns, 2);
+    assert.equal(updated.aquarium.checkedInToday, true);
+    assert.equal(updated.activities.find((x) => x.id === "fortune").used, 1);
+    assert.equal(updated.member.count, 1);
+  }
+});
+
+test("09:00 Taiwan resets daily eligibility and starts an empty tank on the first", async () => {
+  const beforeReset = Date.parse("2027-01-01T08:59:59+08:00");
+  const reset = beforeReset + 1000;
+  const [user] = users;
+  const december = await checkIn(user, "2026-12-31", beforeReset);
+  assert.equal(december.month, "2026-12");
+  assert.equal(december.totalCheckIns, 1);
+  const january = (await view(user, reset)).aquarium;
+  assert.equal(january.day, "2027-01-01");
+  assert.equal(january.fishCount, 0);
+  assert.equal(january.checkedInToday, false);
+  await assert.rejects(checkIn(user, december.day, reset), { status: 409 });
+  assert.equal((await checkIn(user, january.day, reset)).totalCheckIns, 1);
+  const tomorrow = (await view(user, reset + 86400000)).aquarium;
+  assert.equal(tomorrow.totalCheckIns, 1);
+  assert.equal(tomorrow.checkedInToday, false);
+  assert.equal(
+    (await checkIn(user, tomorrow.day, reset + 86400000)).totalCheckIns,
+    2,
+  );
+});
+
+test("a full aquarium continues recording participation, including simultaneous sign-ins", async () => {
+  const now = Date.parse("2027-08-15T11:00:00+08:00");
+  const { day, capacity } = (await view(users[0], now)).aquarium;
+  await Promise.all(users.map((user) => checkIn(user, day, now)));
+  const full = (await view(users[0], now)).aquarium;
+  assert.equal(capacity, 24);
+  assert.equal(full.fishCount, capacity);
+  assert.equal(full.totalCheckIns, users.length);
+  assert.deepEqual(await checkIn(users[0], day, now), full);
+});

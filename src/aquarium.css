@@ -1,0 +1,90 @@
+.guild-aquarium {
+  container: guild-tank / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  margin: 0 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.aquarium-copy {
+  align-self: center;
+  padding: 16px clamp(14px, 3vw, 30px) 17px;
+}
+.aquarium-season, .aquarium-actions, .aquarium-population {
+  display: flex;
+  align-items: center;
+}
+.aquarium-season {
+  gap: 7px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .08em;
+}
+.aquarium-copy h2 {
+  font-size: clamp(20px, 2vw, 26px);
+  letter-spacing: .04em;
+  line-height: 1.2;
+  margin: 6px 0 4px;
+}
+.aquarium-copy p, .aquarium-actions > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.aquarium-copy p { margin: 0; }
+.aquarium-actions { gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.aquarium-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 14px;
+  font-size: 13px;
+}
+.aquarium-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 80%, #345a62 0%, #1a3643 57%, #102531 100%);
+}
+.aquarium-stage::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: .12;
+  background-image: radial-gradient(#b4decf .8px, transparent 1px);
+  background-size: 9px 9px;
+  mask-image: linear-gradient(110deg, black, transparent 50%, black);
+}
+.aquarium-stage canvas {
+  display: block;
+  width: min(90%, 365px);
+  height: auto;
+  image-rendering: pixelated;
+}
+.aquarium-population {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid #43616b;
+  border-radius: 5px;
+  background: #122b37;
+  color: #e3f3e6;
+  font: 600 11px/1.5 ui-monospace, monospace;
+}
+.aquarium-population span { color: #a6c3c8; }
+@container guild-tank (max-width: 530px) {
+  .aquarium-copy, .aquarium-stage { grid-column: 1 / -1; }
+  .aquarium-stage { grid-row: 1; min-height: 104px; }
+  .aquarium-stage canvas { width: 245px; max-width: 94%; }
+  .aquarium-copy { padding: 12px 16px 14px; }
+  .aquarium-actions { margin-top: 8px; }
+}

@@ -72,7 +72,7 @@ export default function EventBank({
         />
       </label>
       <p className="muted">
-        每天首次冒險優先使用日曆指定的事件，其餘回合接續個人旅程。星數照常結算。
+        未開放正式劇本時，每天首次冒險優先使用日曆指定的事件，其餘回合接續個人旅程。星數照常結算。
       </p>
       <Field
         label="搜尋事件"

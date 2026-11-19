@@ -37,7 +37,7 @@ export default function ActivityCalendar({ config, onChange, onSave, busy }) {
       </div>
       <p className="muted">
         每個活動日為台灣時間當日 09:00 至隔日
-        09:00。指定內容對所有人生效，優先於隨機與分類設定；未指定則照原規則隨機出題。已完成的次數不會因修改安排而重置。
+        09:00。指定內容對所有人生效，冒險事件在正式劇本檔期內會依玩家章節進度出題。修改安排會保留當日已完成次數。
       </p>
       <div className="calendar-toolbar">
         <Button
