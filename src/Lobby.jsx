@@ -42,16 +42,21 @@ export default function Lobby({
     [result, setResult] = useState(null),
     [profile, setProfile] = useState(false);
   const { hold, collect } = useStarRewards();
-  const finishReward = (event) => {
+  const collectReward = (event) => {
     const button =
       event?.currentTarget || document.querySelector(".star-collect");
     collect(button?.getBoundingClientRect());
+  };
+  const finishReward = (event) => {
+    collectReward(event);
     setSelected(null);
     pending.current = null;
   };
   useFeedback(error);
   const lock = useRef(false),
-    pending = useRef(null);
+    pending = useRef(null),
+    settledView = useRef(null),
+    viewRequest = useRef(0);
   const handleError = useCallback(
     (e) => {
       setError(e.message);
@@ -60,9 +65,12 @@ export default function Lobby({
     [onUnauthorized],
   );
   const refresh = useCallback(async () => {
+    const sequence = ++viewRequest.current;
     const v = await request("activity.state");
-    setView(v);
-    onActivityChange(v);
+    if (sequence === viewRequest.current) {
+      setView(v);
+      onActivityChange(v);
+    }
     return v;
   }, [request, onActivityChange]);
   useEffect(() => {
@@ -105,12 +113,37 @@ export default function Lobby({
     }
   };
   const open = (a) => {
+    settledView.current = null;
     pending.current = null;
     setError("");
     setRevealExtra(false);
     setSelected(a);
     setChoice(null);
     setResult(null);
+  };
+  const continueAdventure = async (event) => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    collectReward(event);
+    try {
+      const updated = await (settledView.current || refresh());
+      if (!updated) return;
+      const next = updated.activities.find((a) => a.id === selected.id);
+      if (next?.content && (next.unlimited || next.used < next.dailyLimit)) {
+        open(next);
+      } else {
+        setSelected(null);
+        notify("本次冒險已完成");
+      }
+    } catch (e) {
+      handleError(e);
+    } finally {
+      settledView.current = null;
+      lock.current = false;
+      setBusy(false);
+    }
   };
   useEffect(() => {
     if (!(selected?.content?.extraIndex >= 0)) return;
@@ -132,7 +165,11 @@ export default function Lobby({
       hold(r);
       setResult(r);
       pending.current = null;
-      refresh().catch(handleError);
+      settledView.current = refresh().catch((e) => {
+        settledView.current = null;
+        handleError(e);
+        return null;
+      });
     }
   };
   if (!view)
@@ -375,7 +412,11 @@ export default function Lobby({
       </footer>
       {selected && (
         <Modal
-          className="activity-modal"
+          className={
+            selected.type === "event"
+              ? "activity-modal adventure-modal"
+              : "activity-modal"
+          }
           title={selected.title}
           onClose={() => {
             if (!busy) {
@@ -455,13 +496,43 @@ export default function Lobby({
                   ? "星星已記入帳號，確認後飛入右上角。"
                   : `目前累積 ${result.after} 顆星星。`}
               </p>
-              <button
-                type="button"
-                className="star-collect"
-                onClick={finishReward}
+              <div
+                className={
+                  selected.unlimited ? "adventure-result-actions" : undefined
+                }
               >
-                {result.delta > 0 ? "確認收下星星" : "確認結果"}
-              </button>
+                <button
+                  type="button"
+                  className="star-collect"
+                  disabled={busy}
+                  onClick={
+                    selected.unlimited ? continueAdventure : finishReward
+                  }
+                >
+                  {selected.unlimited
+                    ? busy
+                      ? "讀取下一話…"
+                      : result.delta > 0
+                        ? "收下星星，繼續冒險"
+                        : "繼續冒險"
+                    : result.delta > 0
+                      ? "確認收下星星"
+                      : "確認結果"}
+                  {selected.unlimited && (
+                    <ArrowRight size={16} aria-hidden="true" />
+                  )}
+                </button>
+                {selected.unlimited && (
+                  <button
+                    type="button"
+                    className="adventure-return"
+                    disabled={busy}
+                    onClick={finishReward}
+                  >
+                    回到大廳
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="activity-play">
@@ -508,9 +579,9 @@ export default function Lobby({
                           onClick={() => setChoice(i)}
                         >
                           {selected.content.extraIndex === i && (
-                            <small>意外的機遇 · </small>
+                            <small>意外的機遇</small>
                           )}
-                          {o}
+                          <span className="adventure-choice-label">{o}</span>
                           {selected.content.odds?.[i] && (
                             <small className="event-odds">
                               {selected.content.odds[i]
