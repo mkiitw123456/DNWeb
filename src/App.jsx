@@ -55,9 +55,10 @@ export default function App() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const { sync: syncStars } = useStarRewards();
+  const starMember = data?.activity?.member;
   useEffect(() => {
-    syncStars(data?.me.id ?? null, data?.activity?.member?.total);
-  }, [data?.me.id, data?.activity?.member?.total, syncStars]);
+    syncStars(data?.me.id ?? null, starMember?.total, starMember?.lastRecordAt);
+  }, [data?.me.id, starMember?.total, starMember?.lastRecordAt, syncStars]);
   const lock = useRef(false);
   const revision = useRef(0);
   const refreshShell = useRef(null);

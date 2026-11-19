@@ -44,14 +44,23 @@
   font-size: 21px;
   line-height: 1.2;
 }
-.reward-flying-star {
+.reward-flying-star,
+.reward-splitting-star {
   position: absolute;
   left: 0;
   top: 0;
   width: 28px;
   height: 28px;
   object-fit: contain;
+  pointer-events: none;
   will-change: transform, opacity;
+}
+.reward-splitting-star,
+.reward-gain-star {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+.reward-loss-star {
+  filter: saturate(0.85);
 }
 .star-announcement {
   position: absolute;

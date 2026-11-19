@@ -1,204 +1,212 @@
 import { playSound } from "./sounds.js";
+import { animateStarTransfer } from "./star-motion.js";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
-  useMemo,
 } from "react";
 import "./star-rewards.css";
 
 const Context = createContext(null);
 export const useStarRewards = () => useContext(Context);
 export const STAR_ASSET = "/ddstar-reward-star.png";
+
 export default function StarRewardsProvider({ children }) {
   const [wallet, setWallet] = useState({
     user: null,
     total: 0,
     shown: 0,
+    lastRecordAt: 0,
     pending: null,
   });
   const [announcement, setAnnouncement] = useState("");
-  const current = useRef(wallet),
-    layer = useRef(null),
-    target = useRef(null);
-  const jobs = useRef([]),
-    generation = useRef(0);
-  const update = useCallback((fn) => {
-    const next = fn(current.current);
+  const current = useRef(wallet);
+  const layer = useRef(null);
+  const target = useRef(null);
+  const cancelFlight = useRef(null);
+
+  const update = useCallback((next) => {
     current.current = next;
     setWallet(next);
   }, []);
+
   const cancel = useCallback(() => {
-    generation.current++;
-    for (const { element, animation } of jobs.current) {
-      animation.cancel();
-      element.remove();
-    }
-    jobs.current = [];
+    cancelFlight.current?.();
+    cancelFlight.current = null;
   }, []);
+
   const sync = useCallback(
-    (user, total) => {
-      if (user !== current.current.user) {
+    (user, total, lastRecordAt = 0) => {
+      const w = current.current;
+      if (user !== w.user) {
         cancel();
-        update(() => ({
+        setAnnouncement("");
+        update({
           user,
           total: total ?? 0,
           shown: total ?? 0,
+          lastRecordAt,
           pending: null,
-        }));
-        return;
+        });
+      } else if (Number.isFinite(total) && lastRecordAt >= w.lastRecordAt) {
+        // Keep animating the receipt on screen. A later balance from another
+        // tab takes effect after the last particle lands.
+        update({
+          ...w,
+          total,
+          lastRecordAt,
+          shown: w.pending ? w.shown : total,
+        });
       }
-      if (Number.isFinite(total) && !current.current.pending)
-        update((w) => ({ ...w, total, shown: total }));
     },
     [cancel, update],
   );
+
   const hold = useCallback(
     (record) => {
-      if (current.current.pending?.id === record.id) return;
+      const w = current.current;
+      if (w.user !== record.memberId || w.pending?.id === record.id) return;
       cancel();
-      update((w) => ({
+      setAnnouncement("");
+      const createdAt = record.createdAt ?? 0;
+      update({
         ...w,
-        total: record.after,
+        total: w.lastRecordAt > createdAt ? w.total : record.after,
+        lastRecordAt: Math.max(w.lastRecordAt, createdAt),
         shown: record.before,
         pending: {
           id: record.id,
           before: record.before,
-          after: record.after,
           delta: record.delta,
           flying: false,
         },
-      }));
+      });
     },
     [cancel, update],
   );
+
+  const settle = useCallback(
+    (id) => {
+      const w = current.current;
+      if (!w.pending || w.pending.id !== id) return;
+      cancel();
+      update({ ...w, shown: w.total, pending: null });
+      const delta = w.pending.delta;
+      const change =
+        delta > 0
+          ? `獲得 ${delta} 顆星星`
+          : delta < 0
+            ? `扣除 ${-delta} 顆星星`
+            : "星星數量不變";
+      setAnnouncement(`${change}，累積 ${w.total} 顆。`);
+    },
+    [cancel, update],
+  );
+
+  const release = useCallback(
+    (id) => {
+      if (!current.current.pending?.flying) settle(id);
+    },
+    [settle],
+  );
+
   const collect = useCallback(
-    (rect) => {
-      const pending = current.current.pending;
-      if (!pending || pending.flying) return;
-      if (pending.delta > 0) playSound("coin");
-      const finish = () =>
-        update((w) => ({
-          ...w,
-          shown: pending.after,
-          total: pending.after,
-          pending: null,
-        }));
-      const count = Math.max(0, pending.delta);
-      if (!count || !target.current || !layer.current) {
-        finish();
+    (id, emblem) => {
+      const w = current.current;
+      const pending = w.pending;
+      if (!pending || pending.id !== id || pending.flying) return;
+      const delta = pending.delta;
+      if (delta > 0) playSound("coin");
+      const sourceRect = emblem?.getBoundingClientRect();
+      const badge = target.current;
+      const overlay = layer.current;
+      if (
+        !delta ||
+        document.hidden ||
+        !badge?.animate ||
+        !overlay ||
+        (delta > 0 && !sourceRect?.width)
+      ) {
+        settle(id);
         return;
       }
-      update((w) => ({ ...w, pending: { ...w.pending, flying: true } }));
-      layer.current.hidePopover?.();
-      layer.current.showPopover?.();
-      const end = target.current.getBoundingClientRect();
-      const from = {
-        x: rect ? rect.x + rect.width / 2 : innerWidth / 2,
-        y: rect ? rect.y + rect.height / 2 : innerHeight / 2,
-      };
-      const to = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
-      const batch = generation.current;
-      let arrived = 0;
-      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      for (let i = 0; i < count; i++) {
-        const element = document.createElement("img");
-        element.src = STAR_ASSET;
-        element.alt = "";
-        element.className = "reward-flying-star";
-        layer.current.append(element);
-        const spread = ((i % 7) - 3) * 14;
-        const transform = (x, y, scale, rotation) =>
-          `translate3d(${x - 14}px,${y - 14}px,0) scale(${scale}) rotate(${rotation}deg)`;
-        const frames = reduced
-          ? [
-              { transform: transform(to.x, to.y, 0.6, 0), opacity: 0 },
-              {
-                transform: transform(to.x, to.y, 1, 0),
-                opacity: 1,
-                offset: 0.6,
-              },
-              { transform: transform(to.x, to.y, 0.5, 0), opacity: 0 },
-            ]
-          : [
-              { transform: transform(from.x, from.y, 0.3, 0), opacity: 0 },
-              {
-                transform: transform(
-                  from.x + spread,
-                  from.y - 45 - (i % 3) * 14,
-                  1.2,
-                  35,
-                ),
-                opacity: 1,
-                offset: 0.22,
-              },
-              {
-                transform: transform(
-                  from.x + (to.x - from.x) * 0.45 + spread,
-                  to.y + (from.y - to.y) * 0.28,
-                  1,
-                  100,
-                ),
-                opacity: 1,
-                offset: 0.65,
-              },
-              { transform: transform(to.x, to.y, 0.35, 180), opacity: 0 },
-            ];
-        const animation = element.animate(frames, {
-          duration: reduced ? 350 : 850,
-          delay: i * Math.max(12, Math.min(85, 1600 / count)),
-          easing: "cubic-bezier(.3,0,.6,1)",
-          fill: "both",
-        });
-        jobs.current.push({ element, animation });
-        animation.onfinish = () => {
-          element.remove();
-          if (generation.current !== batch) return;
-          arrived++;
-          update((w) => ({ ...w, shown: pending.before + arrived }));
-          target.current?.animate(
+
+      // Keep the animated copy above the native result dialog, even when the
+      // confirmation immediately opens the next chapter or closes the panel.
+      overlay.hidePopover?.();
+      overlay.showPopover?.();
+      const walletRect = badge.getBoundingClientRect();
+      if (!walletRect.width) {
+        settle(id);
+        return;
+      }
+      update({ ...w, pending: { ...pending, flying: true } });
+      const reduced = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      if (delta > 0) emblem.style.visibility = "hidden";
+      let moved = 0;
+      const onStar = () => {
+        const latest = current.current;
+        if (latest.pending?.id !== id) return;
+        moved++;
+        if (!reduced && !badge.getAnimations().length) {
+          badge.animate(
             [
               { transform: "scale(1)" },
-              { transform: "scale(1.18)" },
+              { transform: "scale(1.14)" },
               { transform: "scale(1)" },
             ],
             { duration: 150 },
           );
-          if (arrived === count) {
-            jobs.current = [];
-            finish();
-            setAnnouncement(
-              `已獲得 ${count} 顆星星，累積 ${pending.after} 顆。`,
-            );
-          }
-        };
-      }
+        }
+        if (moved === Math.abs(delta)) settle(id);
+        else
+          update({
+            ...latest,
+            shown: pending.before + Math.sign(delta) * moved,
+          });
+      };
+      cancelFlight.current = animateStarTransfer({
+        layer: overlay,
+        sourceRect,
+        walletRect,
+        asset: STAR_ASSET,
+        delta,
+        reduced,
+        onStar,
+      });
     },
-    [update],
+    [settle, update],
   );
+
   useEffect(() => {
     if (wallet.user && layer.current) {
       layer.current.hidePopover?.();
       layer.current.showPopover?.();
     }
   }, [wallet.user, wallet.pending?.id]);
+
   useEffect(() => {
-    const interrupted = () => {
-      if (!current.current.pending?.flying || !document.hidden) return;
-      const after = current.current.pending.after;
-      cancel();
-      update((w) => ({ ...w, total: after, shown: after, pending: null }));
+    const onVisibility = () => {
+      const pending = current.current.pending;
+      if (pending?.flying && document.hidden) settle(pending.id);
     };
-    document.addEventListener("visibilitychange", interrupted);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      document.removeEventListener("visibilitychange", interrupted);
+      document.removeEventListener("visibilitychange", onVisibility);
       cancel();
     };
-  }, [cancel, update]);
-  const value = useMemo(() => ({ sync, hold, collect }), [sync, hold, collect]);
+  }, [cancel, settle]);
+
+  const value = useMemo(
+    () => ({ sync, hold, collect, release }),
+    [sync, hold, collect, release],
+  );
   return (
     <Context.Provider value={value}>
       {children}

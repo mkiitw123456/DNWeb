@@ -3,7 +3,7 @@ import Aquarium from "./Aquarium.jsx";
 import useSubmitDialog from "./useSubmitDialog.js";
 import { playSound } from "./sounds.js";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import {
   Compass,
   Sparkles,
@@ -55,14 +55,22 @@ export default function Lobby({
     [inEncounter, setInEncounter] = useState(false),
     [result, setResult] = useState(null);
   const profile = useSubmitDialog();
-  const { hold, collect } = useStarRewards();
-  const collectReward = (event) => {
-    const button =
-      event?.currentTarget || document.querySelector(".star-collect");
-    collect(button?.getBoundingClientRect());
+  const { hold, collect, release } = useStarRewards();
+  const rewardEmblem = useRef(null);
+  const heldReward = useRef(null);
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (heldReward.current) release(heldReward.current);
+    };
+  }, [data.me.id, release]);
+  const collectReward = () => {
+    if (result) collect(result.id, rewardEmblem.current);
   };
-  const finishReward = (event) => {
-    collectReward(event);
+  const finishReward = () => {
+    collectReward();
     setSelected(null);
     pending.current = null;
   };
@@ -134,6 +142,10 @@ export default function Lobby({
     }
   };
   const open = (a) => {
+    if (heldReward.current) {
+      release(heldReward.current);
+      heldReward.current = null;
+    }
     profile.close();
     settledView.current = null;
     pending.current = null;
@@ -153,12 +165,12 @@ export default function Lobby({
     onActivityChange(updated);
     notify("今日簽到完成");
   };
-  const continueAdventure = async (event) => {
+  const continueAdventure = async () => {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError("");
-    collectReward(event);
+    collectReward();
     try {
       const updated = await (settledView.current || refresh());
       if (!updated) return;
@@ -222,8 +234,15 @@ export default function Lobby({
           : {}),
       };
     const r = await perform("activity.submit", pending.current);
-    if (r) {
+    if (r && r.memberId === data.me.id) {
+      if (!mounted.current) {
+        // The server may have committed while the member left the lobby.
+        // Invalidate this session's view so the next visit loads the result.
+        onActivityChange(null);
+        return;
+      }
       playSound(resultSound(r));
+      heldReward.current = r.id;
       hold(r);
       setResult(r);
       pending.current = null;
@@ -507,7 +526,7 @@ export default function Lobby({
           {result ? (
             <div className="star-reward-card">
               <div className="star-emblem" aria-hidden="true">
-                <img src={STAR_ASSET} alt="" width="126" height="126" />
+                <img key={result.id} ref={rewardEmblem} src={STAR_ASSET} alt="" width="126" height="126" />
               </div>
               <svg
                 className="reward-laurels"
@@ -565,7 +584,9 @@ export default function Lobby({
               <p className="star-reward-note">
                 {result.delta > 0
                   ? "星星已記入帳號，確認後飛入右上角。"
-                  : `目前累積 ${result.after} 顆星星。`}
+                  : result.delta < 0
+                    ? `確認後，右上角會掉落 ${Math.abs(result.delta)} 顆星星。`
+                    : `目前累積 ${result.after} 顆星星。`}
               </p>
               <div
                 className={

@@ -5,43 +5,28 @@ import { makeSchool, makeSeabed, paintTank, tankHeight, tankWidth } from "./aqua
 import "./aquarium.css";
 
 const motionKey = "ddstar-aquarium-motion";
-const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 
-function readMotionChoice() {
+function shouldPlayAquarium() {
   try {
-    const saved = localStorage.getItem(motionKey);
-    if (saved === "play" || saved === "pause") return saved;
+    return localStorage.getItem(motionKey) !== "pause";
   } catch {
-    // Browser storage is optional for playback.
+    return true;
   }
-  return null;
 }
 
 function useAquariumMotion() {
-  const [choice, setChoice] = useState(readMotionChoice);
-  const [reduced, setReduced] = useState(
-    () => window.matchMedia(reducedMotionQuery).matches,
-  );
+  const [playing, setPlaying] = useState(shouldPlayAquarium);
   useEffect(() => {
-    const media = window.matchMedia(reducedMotionQuery);
-    const syncSystem = () => setReduced(media.matches);
     const syncChoice = (event) => {
-      if (event.key === motionKey || event.key === null) setChoice(readMotionChoice());
+      if (event.key === motionKey || event.key === null) setPlaying(shouldPlayAquarium());
     };
-    syncSystem();
-    media.addEventListener("change", syncSystem);
     window.addEventListener("storage", syncChoice);
-    return () => {
-      media.removeEventListener("change", syncSystem);
-      window.removeEventListener("storage", syncChoice);
-    };
+    return () => window.removeEventListener("storage", syncChoice);
   }, []);
-  const playing = choice ? choice === "play" : !reduced;
   function toggle() {
-    const next = playing ? "pause" : "play";
-    setChoice(next);
+    setPlaying(!playing);
     try {
-      localStorage.setItem(motionKey, next);
+      localStorage.setItem(motionKey, playing ? "pause" : "play");
     } catch {
       // Keep the choice for this visit when storage is unavailable.
     }
