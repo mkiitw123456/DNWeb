@@ -1,13 +1,59 @@
-import { useEffect, useRef } from "react";
-import { Check, Fish, Waves } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Fish, Pause, Play, Waves } from "lucide-react";
 import { Button } from "./ui.jsx";
 import { makeSchool, makeSeabed, paintTank, tankHeight, tankWidth } from "./aquariumScene.js";
 import "./aquarium.css";
 
-function AquariumScene({ count, month }) {
+const motionKey = "ddstar-aquarium-motion";
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
+
+function readMotionChoice() {
+  try {
+    const saved = localStorage.getItem(motionKey);
+    if (saved === "play" || saved === "pause") return saved;
+  } catch {
+    // Browser storage is optional for playback.
+  }
+  return null;
+}
+
+function useAquariumMotion() {
+  const [choice, setChoice] = useState(readMotionChoice);
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia(reducedMotionQuery).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(reducedMotionQuery);
+    const syncSystem = () => setReduced(media.matches);
+    const syncChoice = (event) => {
+      if (event.key === motionKey || event.key === null) setChoice(readMotionChoice());
+    };
+    syncSystem();
+    media.addEventListener("change", syncSystem);
+    window.addEventListener("storage", syncChoice);
+    return () => {
+      media.removeEventListener("change", syncSystem);
+      window.removeEventListener("storage", syncChoice);
+    };
+  }, []);
+  const playing = choice ? choice === "play" : !reduced;
+  function toggle() {
+    const next = playing ? "pause" : "play";
+    setChoice(next);
+    try {
+      localStorage.setItem(motionKey, next);
+    } catch {
+      // Keep the choice for this visit when storage is unavailable.
+    }
+  }
+  return { playing, toggle };
+}
+
+function AquariumScene({ count, month, playing }) {
   const canvas = useRef(null);
   const school = useRef([]);
   const repaint = useRef(null);
+  const enabled = useRef(playing);
 
   useEffect(() => {
     school.current = makeSchool(count, month);
@@ -15,12 +61,16 @@ function AquariumScene({ count, month }) {
   }, [count, month]);
 
   useEffect(() => {
+    enabled.current = playing;
+    repaint.current?.();
+  }, [playing]);
+
+  useEffect(() => {
     const node = canvas.current;
     const ctx = node.getContext("2d");
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
     const bed = makeSeabed();
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let onScreen = true;
     let frame = 0;
     let previous = null;
@@ -37,21 +87,19 @@ function AquariumScene({ count, month }) {
       cancelAnimationFrame(frame);
       previous = null;
       paintTank(ctx, bed, school.current, elapsed);
-      if (onScreen && !document.hidden && !motion.matches) frame = requestAnimationFrame(draw);
+      if (enabled.current && onScreen && !document.hidden) frame = requestAnimationFrame(draw);
     }
     const observer = new IntersectionObserver(([entry]) => {
       onScreen = entry.isIntersecting;
       resume();
     });
     observer.observe(node);
-    motion.addEventListener("change", resume);
     document.addEventListener("visibilitychange", resume);
     repaint.current = resume;
     resume();
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      motion.removeEventListener("change", resume);
       document.removeEventListener("visibilitychange", resume);
       repaint.current = null;
     };
@@ -61,6 +109,7 @@ function AquariumScene({ count, month }) {
 }
 
 export default function Aquarium({ aquarium, onCheckIn, busy }) {
+  const { playing, toggle } = useAquariumMotion();
   if (!aquarium) return null;
   const { month, fishCount, capacity, checkedInToday, totalCheckIns } = aquarium;
   const full = fishCount >= capacity;
@@ -75,11 +124,15 @@ export default function Aquarium({ aquarium, onCheckIn, busy }) {
             {checkedInToday ? <Check size={15} /> : <Fish size={15} />}
             {checkedInToday ? "今日已簽到" : "今日簽到"}
           </Button>
+          <Button type="button" onClick={toggle}>
+            {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+            {playing ? "暫停魚群" : "播放魚群"}
+          </Button>
           <span aria-live="polite">本月 {totalCheckIns} 人次</span>
         </div>
       </div>
       <div className="aquarium-stage">
-        <AquariumScene count={fishCount} month={month} />
+        <AquariumScene count={fishCount} month={month} playing={playing} />
         <span className="aquarium-population" aria-label={`缸內 ${fishCount} 尾魚，上限 ${capacity} 尾`}>
           <Fish size={13} aria-hidden="true" />{fishCount}<span>/ {capacity}</span>
         </span>

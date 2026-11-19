@@ -145,14 +145,21 @@ const fishPalettes = [
   ["#6dd3ad", "#e8f3b4", "#4b9a8c"],
 ];
 
+function startingPhase(sample) {
+  // Spawn on the moving part of each route, facing either direction. At the
+  // ends of the arc, rounding to sprite pixels can hide several small steps.
+  const heading = sample < 0.5 ? 0 : Math.PI;
+  return heading + ((sample * 2) % 1 - 0.5) * (2 * Math.PI / 3);
+}
+
 export function makeSchool(count, month) {
   const rand = randomSource(Number(month.replace("-", "")) || 1);
   return Array.from({ length: count }, (_, index) => ({
-    phase: rand() * Math.PI * 2,
+    phase: startingPhase(rand()),
     height: 41 + rand() * 33,
     center: 94 + rand() * 37,
     radius: 36 + rand() * 32,
-    speed: 0.095 + rand() * 0.11,
+    speed: 0.16 + rand() * 0.11,
     size: index % 3 === 1 ? 0.8 : 1,
     colors: fishPalettes[Math.floor(rand() * fishPalettes.length)],
   }));
