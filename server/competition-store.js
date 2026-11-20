@@ -52,7 +52,7 @@ export async function competitionRequest(token, type, p) {
       ) {
         const updated = state.competitions[0];
         db.set("competition_" + id, updated);
-        if (create || type === "competition.join" || settle) {
+        if (create || type === "competition.join" || type === "competition.removePlayer" || settle) {
           const card = result.rooms[0];
           rooms = room
             ? rooms.map((r) => (r.id === id ? card : r))

@@ -115,7 +115,7 @@ export function competitionAction(s, user, type, p = {}) {
   } else if (type !== "competition.state") {
     if (!room) fail("找不到比賽", 404);
     const poolManager = user.id === room.ownerId || user.admin;
-    const management = ["competition.openPool", "competition.lockPool"].includes(type);
+    const management = ["competition.openPool", "competition.lockPool", "competition.removePlayer"].includes(type);
     if (!["competition.join", "competition.bet"].includes(type) && !(management ? poolManager : user.id === room.ownerId))
       fail("只有房主可以操作", 403);
     if (room.total != null) fail("比賽已結算", 409);
@@ -129,6 +129,14 @@ export function competitionAction(s, user, type, p = {}) {
           name: user.nickname || user.username,
           coins: 0,
         });
+        room.version++;
+      }
+    } else if (type === "competition.removePlayer") {
+      const entry = room.entries.find(e => e.id === p.memberId);
+      if (entry) {
+        if (room.version !== p.version) fail("比賽資料已更新，請重新確認移除", 409);
+        room.entries = room.entries.filter(e => e.id !== entry.id);
+        logEvent(room, (user.nickname || user.username) + " 已移除選手 " + display(s, entry.id, entry.name));
         room.version++;
       }
     } else if (type === "competition.openPool") {

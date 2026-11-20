@@ -40,29 +40,34 @@ test("unlinked members can host and join; only the host scores and settles once 
     assert.equal(view.rooms[0].description, undefined);
     for (let i = 0; i < 3; i++) await call(i, "join", { id });
     await call(2, "join", { id });
+    await assert.rejects(call(2, "removePlayer", {id, memberId:"1", version:3}), {status:403});
+    const removed = await call(0, "removePlayer", {id, memberId:"1", version:3});
+    assert.equal(removed.view.rooms.find(r=>r.id === id).count, 2);
+    assert.equal((await call(2, "state")).view.rooms.find(r=>r.id === id).count, 2);
+    await call(1, "join", {id});
     await assert.rejects(
       call(2, "score", { id, memberId: "2", coins: 8, previous: 0 }),
       { status: 403 },
     );
     await assert.rejects(
-      call(0, "settle", { id, version: 3, total: 101 }),
+      call(0, "settle", { id, version: 5, total: 101 }),
       /月亮幣/,
     );
     for (const [i, coins] of [100, 80, 60].entries())
       await call(0, "score", { id, memberId: String(i), coins, previous: 0 });
-    await assert.rejects(call(0, "settle", { id, version: 3, total: 101 }), {
+    await assert.rejects(call(0, "settle", { id, version: 5, total: 101 }), {
       status: 409,
     });
-    await assert.rejects(call(1, "settle", { id, version: 6, total: 101 }), {
+    await assert.rejects(call(1, "settle", { id, version: 8, total: 101 }), {
       status: 403,
     });
     const { view: final, jobs } = await call(0, "settle", {
       id,
-      version: 6,
+      version: 8,
       total: 101,
     });
     assert.deepEqual(
-      final.room.entries.map((e) => e.payout),
+      [...final.room.entries].sort((a,b)=>a.id.localeCompare(b.id)).map(e => e.payout),
       [42, 34, 25],
     );
     assert.equal(final.rooms[0].count, 3);
@@ -71,7 +76,7 @@ test("unlinked members can host and join; only the host scores and settles once 
     assert.deepEqual(jobs[0].message.allowed_mentions.users, [
       "123456789012345678",
     ]);
-    await assert.rejects(call(0, "settle", { id, version: 6, total: 101 }), {
+    await assert.rejects(call(0, "settle", { id, version: 8, total: 101 }), {
       status: 409,
     });
     assert.equal((await call(2, "state", { id })).view.room.total, 101);
@@ -94,12 +99,17 @@ test("admin opens the pool, spectators join independently and only the host assi
   assert.throws(()=>run(0,"enroll",{username:"missing"}),/找不到/);
   run(0,"enroll",{username:"OTHER"});
   const room=state.competitions[0];
-  assert.equal(room.entries.length,2);assert.equal(room.pool.bets.length,2);
+  run(0,"enroll",{username:"rival"});
+  assert.throws(()=>run(4,"removePlayer",{memberId:"rival",version:0}),{status:409});
+  run(4,"removePlayer",{memberId:"rival",version:room.version});
+  assert.equal(room.entries.length,1);assert.equal(room.pool.bets.length,3);
+  assert.ok(room.pool.bets.some(b=>b.id==="rival"));
   assert.throws(()=>run(2,"score",{memberId:"fan",coins:3,previous:0}),{status:403});
   run(0,"score",{memberId:"fan",coins:3,previous:0});
   run(0,"score",{memberId:"other",coins:2,previous:0});
   assert.throws(()=>run(4,"settle",{version:room.version,total:101}),{status:403});
   run(0,"settle",{version:room.version,total:101});
-  assert.deepEqual(room.pool.bets.map(b=>b.payout),[61,40]);
+  assert.deepEqual(room.pool.bets.map(b=>b.payout),[61,40,0]);
+  assert.throws(()=>run(4,"removePlayer",{memberId:"host",version:room.version}),{status:409});
   assert.equal(room.total,101);assert.match(state.deliveries[0].message.content,/fan/);
 });

@@ -195,10 +195,13 @@ export default function Competitions({ me, request, onUnauthorized }) {
     [form, setForm] = useState(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const [motion, setMotion] = useState(() => {
-    const preference = localStorage.getItem("competitionMotion");
-    return preference === null ? !matchMedia("(prefers-reduced-motion: reduce)").matches : preference === "on";
-  });
+  const [motion, setMotion] = useState(() => !matchMedia("(prefers-reduced-motion: reduce)").matches);
+  useEffect(() => {
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setMotion(!media.matches);
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
   const selected = useRef(null),
     seq = useRef(0),
     lock = useRef(false),
@@ -314,6 +317,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
           lockPool: "投注已截止",
           bet: "已加入獎池",
           enroll: "已納入獎池",
+          removePlayer: "已移除選手",
           score: "月亮幣已更新",
           settle: "比賽已結算，已移至歷史紀錄",
         }[type],
@@ -441,13 +445,12 @@ export default function Competitions({ me, request, onUnauthorized }) {
             )}
             {!open && <strong>已結算 · 總額 {fmt(room.total)}</strong>}
           </div>
-          <section className="match-roster"><h2>參賽選手</h2><p>{room.entries.map(e => e.name).join("、") || "等待第一位選手報名"}</p></section>
+          <section className="match-roster"><h2>參賽選手</h2>{room.entries.length ? <ul className="match-players">{room.entries.map(e =>
+            <li key={e.id}><span>{e.name}</span>{open && (host || me.admin) &&
+              <Button disabled={busy} aria-label={"移除選手 " + e.name} onClick={() => setForm({kind:"removePlayer",memberId:e.id,name:e.name,version:room.version,coins:e.coins})}>移除</Button>}</li>
+          )}</ul> : <p>等待第一位選手報名</p>}</section>
           {room.pool && <section className="match-roster"><h2>獎池投注</h2><p>{room.pool.locked ? "已截止加入" : "接受加入"} · {room.pool.bets.length} 人投注。月亮幣由房主登記。</p></section>}
           {(room.pool || room.total != null || room.entries.some(e => e.coins > 0)) && <>
-          <label className="competition-motion"><input type="checkbox" checked={motion} onChange={e => {
-            setMotion(e.target.checked);
-            localStorage.setItem("competitionMotion", e.target.checked ? "on" : "off");
-          }} />播放比賽動畫</label>
           <div className="competition-grid" data-motion={motion}>
             <Chart entries={room.pool?.bets ?? room.entries} motion={motion} />
             <Ranking
@@ -473,7 +476,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
       {form && (
         <Modal
           title={
-            { create: "建立比賽", enroll:"納入投注成員", openPool:"開啟獎池投注", score: "調整月亮幣", settle: "結算比賽" }[
+            { create: "建立比賽", removePlayer:"移除選手", enroll:"納入投注成員", openPool:"開啟獎池投注", score: "調整月亮幣", settle: "結算比賽" }[
               form.kind
             ]
           }
@@ -491,6 +494,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
                   scheduledAt: form.scheduledAt,
                   submissionId: form.submissionId,
                 });
+              else if (form.kind === "removePlayer") act("removePlayer",{id:room.id,memberId:form.memberId,version:form.version});
               else if (form.kind === "enroll") act("enroll",{id:room.id,username:form.username});
               else if (form.kind === "openPool") act("openPool",{id:room.id});
               else if (form.kind === "score")
@@ -534,7 +538,8 @@ export default function Competitions({ me, request, onUnauthorized }) {
                   onChange={(e) => patch("scheduledAt", e.target.value)}
                 />
               </>
-            ) : form.kind === "enroll" ? <Field label="成員帳號" required value={form.username} onChange={e=>patch("username",e.target.value)}/>
+            ) : form.kind === "removePlayer" ? <p>確定從本場選手名單移除「{form.name}」？{room.pool ? "獎池投注資格與月亮幣會保留。" : form.coins > 0 ? "這筆參賽紀錄的 " + fmt(form.coins) + " 月亮幣也會移除。" : "報名開放期間，成員可以重新報名。"}</p>
+            : form.kind === "enroll" ? <Field label="成員帳號" required value={form.username} onChange={e=>patch("username",e.target.value)}/>
             : form.kind === "openPool" ? <p>開放獎池後將截止選手報名。所有已登入的成員都可以加入獎池，由房主登記月亮幣。</p>
             : form.kind === "score" ? (
               <Field
@@ -574,7 +579,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
               <Button primary disabled={busy}>
                 {busy
                   ? "儲存中…"
-                  : { create: "建立比賽", enroll:"確認納入", openPool:"確認開放", score: "儲存", settle: "確認結算" }[
+                  : { create: "建立比賽", removePlayer:"確認移除", enroll:"確認納入", openPool:"確認開放", score: "儲存", settle: "確認結算" }[
                       form.kind
                     ]}
               </Button>

@@ -117,8 +117,6 @@ dialog.competition-modal {
 }
 .competition-switch { display:flex; gap:8px; margin:8px 0 20px }
 .competition-switch [aria-pressed="true"] { border-color:var(--accent); box-shadow:inset 0 -2px var(--accent) }
- .competition-motion { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin:0 0 10px; font-size:.8rem; color:var(--muted) }
-.competition-motion input { width:auto; accent-color:var(--accent) }
 .competition-ranks { overflow-x:hidden }
 .competition-ranks li { position:relative; overflow:hidden; padding-bottom:12px }
 .competition-share { position:absolute; inset:auto 0 0; height:3px; transform-origin:left; background:var(--team) }
@@ -175,3 +173,9 @@ dialog.competition-modal {
   .match-rules-preview { max-height:6lh }
   .match-rules small { padding-top:10px }
 }
+
+dialog.match-rules-dialog { box-sizing:border-box; width:80vw; max-width:calc(100vw - 24px) }
+@media(max-width:560px) { dialog.match-rules-dialog { width:calc(100vw - 24px) } }
+.match-roster .match-players { list-style:none; display:flex; flex-wrap:wrap; gap:8px 16px; padding:0; margin:10px 0 0 }
+.match-players li { display:flex; align-items:center; gap:8px }
+.match-players button { font-size:.8rem; padding:4px 10px }
