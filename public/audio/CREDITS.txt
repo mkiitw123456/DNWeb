@@ -6,3 +6,7 @@ https://creativecommons.org/publicdomain/zero/1.0/
 adventure-select.ogg = select_003.ogg
 adventure-reveal.ogg = glass_004.ogg
 adventure-setback.ogg = minimize_002.ogg
+
+Aquarium BGM
+Original compositions and arrangements for DDStar. Instrument samples from Versilian Studios Chamber Orchestra 2 Community Edition (CC0 1.0 Universal).
+https://github.com/sgossner/VSCO-2-CE

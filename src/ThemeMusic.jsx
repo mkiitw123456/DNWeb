@@ -2,9 +2,9 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 const playlists = {
   aquarium: [
-    { title: "玻璃水紋", url: "/audio/aquarium-glass.mp3" },
-    { title: "潮間慢舞", url: "/audio/aquarium-tide.mp3" },
-    { title: "深藍晚燈", url: "/audio/aquarium-dusk.mp3" },
+    { title: "晴日小碼頭", url: "/audio/aquarium-glass.mp3?v=chamber2" },
+    { title: "海馬的三拍子", url: "/audio/aquarium-tide.mp3?v=chamber2" },
+    { title: "閉館前的魚缸", url: "/audio/aquarium-dusk.mp3?v=chamber2" },
   ],
 };
 const key = "ddstar-theme-music";
