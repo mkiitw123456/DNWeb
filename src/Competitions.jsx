@@ -202,7 +202,8 @@ export default function Competitions({ me, request, onUnauthorized }) {
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);
   }, []);
-  const selected = useRef(null),
+  const revision = useRef(null),
+    selected = useRef(null),
     seq = useRef(0),
     lock = useRef(false),
     polling = useRef(false);
@@ -234,20 +235,26 @@ export default function Competitions({ me, request, onUnauthorized }) {
   async function load(id = selected.current) {
     const stamp = ++seq.current;
     try {
-      const view = await request("competition.state", { id });
+      const view = id
+        ? await request("competition.room", { id, revision: revision.current })
+        : await request("competition.state", {});
       if (seq.current !== stamp) return;
-      setRooms(view.rooms);
-      setArchivePages(view.archivePages || 0);
-      if (view.room?.total != null && !viewingHistory.current) {
-        close();
-        notify("比賽已結算，可至歷史紀錄查看");
-      } else setRoom(view.room);
       setError("");
-      if (id && !view.room) {
-        selected.current = null;
-        setForm(null);
-        notify("此比賽已移出清單", "error");
+      if (!id) {
+        setRooms(view.rooms);
+        setArchivePages(view.archivePages || 0);
+        return;
       }
+      if (view.unchanged) return;
+      if (!view.room || (view.room.total != null && !viewingHistory.current)) {
+        setRooms(list => list?.filter(r => r.id !== id) ?? null);
+        close();
+        notify(view.room ? "比賽已結算，可至歷史紀錄查看" : "此比賽已移出清單", view.room ? "success" : "error");
+        await load(null);
+        return;
+      }
+      revision.current = view.revision;
+      setRoom(view.room);
     } catch (e) {
       if (seq.current === stamp) {
         setError(e.message);
@@ -280,12 +287,14 @@ export default function Competitions({ me, request, onUnauthorized }) {
     };
   }, [request, onUnauthorized]);
   function watch(id) {
+    revision.current = null;
     selected.current = id;
     setRoom(null);
     setForm(null);
     load(id);
   }
   function close() {
+    revision.current = null;
     selected.current = null;
     seq.current++;
     setRoom(null);
@@ -301,6 +310,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
       if (seq.current !== stamp) return;
       setRooms(view.rooms);
       setArchivePages(view.archivePages || 0);
+      revision.current = null;
       if (type === "settle") close();
       else {
         if (type === "create") { setHistory(false); viewingHistory.current = false; }
@@ -398,7 +408,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
       {history && (nextPage ?? archivePages) > 0 && <Button disabled={paging} onClick={loadOlder}>{paging ? "讀取中…" : "載入更早紀錄"}</Button>}
       </>}
       {room && <article className="match-page">
-        <div className="match-toolbar"><Button className="match-back" disabled={busy} onClick={close}><ArrowLeft size={16}/> 返回比賽清單</Button>
+        <div className="match-toolbar"><Button className="match-back" disabled={busy} onClick={() => { close(); load(null); }}><ArrowLeft size={16}/> 返回比賽清單</Button>
             {open && !room.pool && !room.entries.some((e) => e.id === me.id) && (
               <Button
                 className="match-register primary"

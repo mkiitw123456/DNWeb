@@ -37,6 +37,16 @@ test("unlinked members can host and join; only the host scores and settles once 
     assert.equal((await call(0, "create", draft)).view.rooms.length, 1);
     assert.equal(view.room.scheduledAt, Date.parse("2026-11-20T12:00Z"));
     assert.equal(view.room.description, draft.description);
+    const snapshot = (await call(2, "room", {id})).view;
+    assert.deepEqual(snapshot.room, view.room);
+    assert.equal("rooms" in snapshot, false);
+    assert.deepEqual((await call(2, "room", {id, revision:snapshot.revision})).view, {unchanged:true});
+    await assert.rejects(competitionRequest({...users[2],version:999}, "competition.room", {id,revision:snapshot.revision}), {status:401});
+    await assert.rejects(call(2, "room", {id:"invalid"}), /比賽編號無效/);
+    assert.deepEqual((await call(2, "room", {id:"f".repeat(64)})).view, {room:null});
+    await transact(s => { s.users[0].nickname = "新暱稱"; });
+    assert.equal((await call(2, "room", {id,revision:snapshot.revision})).view.room.ownerName, "新暱稱");
+    await transact(s => { delete s.users[0].nickname; });
     assert.equal(view.rooms[0].description, undefined);
     for (let i = 0; i < 3; i++) await call(i, "join", { id });
     await call(2, "join", { id });

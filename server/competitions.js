@@ -204,15 +204,17 @@ export function competitionAction(s, user, type, p = {}) {
       count: r.entries.length,
       total: r.total,
     })),
-    room: room
-      ? {
-          ...room,
-          ownerName: display(s, room.ownerId, room.ownerName),
-          entries: room.entries.map((e) => ({
-            ...e,
-            name: room.total == null ? display(s, e.id, e.name) : e.name,
-          })),
-        }
-      : null,
+    room: room ? competitionRoomView(s, room) : null,
+  };
+}
+
+export function competitionRoomView(s, room) {
+  return {
+    ...room,
+    ownerName: display(s, room.ownerId, room.ownerName),
+    entries: room.entries.map(e => ({
+      ...e,
+      name: room.total == null ? display(s, e.id, e.name) : e.name,
+    })),
   };
 }

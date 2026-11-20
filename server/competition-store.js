@@ -1,17 +1,46 @@
-import { readState } from "./store.js";
+import { createHash } from "node:crypto";
+import { firestore, readState } from "./store.js";
 import { activityTransaction } from "./activity-store.js";
 import { fail } from "./domain.js";
 import { queueDelivery } from "./scheduling.js";
 import { claimDeliveries } from "./deliveries.js";
 import { roomCreateId } from "./room-create.js";
-import { competitionAction } from "./competitions.js";
+import { competitionAction, competitionRoomView } from "./competitions.js";
+
+function sessionUser(users, token) {
+  const actor = users.find(u => u.id === token.id && u.active && u.version === token.version);
+  if (!actor) fail("登入已過期，請重新登入", 401);
+  return actor;
+}
+
+function validateRoomId(id) {
+  if (typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)) fail("比賽編號無效");
+}
+
+async function roomUpdate(token, { id, revision }) {
+  validateRoomId(id);
+  let users, room;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const db = await firestore();
+    const [guild, match] = await db.getAll(db.doc("dnweb/state"), db.doc("guild_activity/competition_" + id));
+    users = guild.get("users") ?? [];
+    room = match.data();
+  } else {
+    users = await readState(s => s.users);
+    room = await activityTransaction(db => db.get("competition_" + id));
+  }
+  sessionUser(users, token);
+  if (!room) return { room: null };
+  const view = competitionRoomView({ users }, room);
+  // Include resolved nicknames: a profile edit need not bump the room version.
+  const current = createHash("sha256").update(JSON.stringify(view)).digest("base64url");
+  return current === revision ? { unchanged: true } : { room: view, revision: current };
+}
 
 export async function competitionRequest(token, type, p) {
+  if (type === "competition.room") return { view: await roomUpdate(token, p), jobs: [] };
   const { user, users } = await readState((s) => {
-    const actor = s.users.find(
-      (u) => u.id === token.id && u.active && u.version === token.version,
-    );
-    if (!actor) fail("登入已過期，請重新登入", 401);
+    const actor = sessionUser(s.users, token);
     return {
       user: actor,
       users: s.users.map(({ id, nickname, username, discordId, active }) => ({
@@ -26,8 +55,7 @@ export async function competitionRequest(token, type, p) {
   const create = type === "competition.create";
   if (create && !p.submissionId) fail("請重新開啟建立表單");
   const id = create ? roomCreateId(type, user.id, p.submissionId) : p.id;
-  if (id != null && (typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)))
-    fail("比賽編號無效");
+  if (id != null) validateRoomId(id);
   let notices = [];
   const settle = type === "competition.settle";
   const response = await activityTransaction(
