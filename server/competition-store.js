@@ -14,7 +14,8 @@ export async function competitionRequest(token, type, p) {
     if (!actor) fail("登入已過期，請重新登入", 401);
     return {
       user: actor,
-      users: s.users.map(({ id, nickname, username, discordId }) => ({
+      users: s.users.map(({ id, nickname, username, discordId, active }) => ({
+        active,
         id,
         nickname,
         username,

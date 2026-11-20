@@ -120,7 +120,7 @@ function Ranking({ room, onChoose, motion, arrival }) {
   }, [room.version, motion]);
   return (
     <section>
-      <h3>參賽排名</h3>
+      <h3>{room.pool ? "獎池月亮幣排名" : "參賽排名"}</h3>
       <ol className="competition-ranks" ref={list}>
         {rows.map((e, i) => (
           <li key={e.id} data-id={e.id} data-coins={e.coins} style={{ "--team": e.color }}>
@@ -175,9 +175,10 @@ export default function Competitions({ me, request, onUnauthorized }) {
   useEffect(() => {
     if (!room) { seen.current = null; setArrival(null); return; }
     const prior = seen.current;
-    seen.current = { id: room.id, count: room.entries.length };
-    if (prior?.id === room.id && prior.count < room.entries.length)
-      setArrival(room.entries[room.entries.length - 1]);
+    const members = room.pool?.bets ?? room.entries;
+    seen.current = { id: room.id, count: members.length };
+    if (prior?.id === room.id && prior.count < members.length)
+      setArrival(members[members.length - 1]);
   }, [room]);
   useEffect(() => {
     if (!arrival) return;
@@ -276,7 +277,11 @@ export default function Competitions({ me, request, onUnauthorized }) {
       notify(
         {
           create: "比賽已建立",
-          join: "已加入比賽",
+          join: "選手報名成功",
+          openPool: "獎池已開放",
+          lockPool: "投注已截止",
+          bet: "已加入獎池",
+          enroll: "已納入獎池",
           score: "月亮幣已更新",
           settle: "比賽已結算，已移至歷史紀錄",
         }[type],
@@ -357,35 +362,44 @@ export default function Competitions({ me, request, onUnauthorized }) {
       {history && (nextPage ?? archivePages) > 0 && <Button disabled={paging} onClick={loadOlder}>{paging ? "讀取中…" : "載入更早紀錄"}</Button>}
       </>}
       {room && <article className="match-page">
-        <Button className="match-back" disabled={busy} onClick={close}><ArrowLeft size={16}/> 返回比賽清單</Button>
-        <header className="match-title"><h1>{room.title}</h1><Schedule key={room.id} room={room}/></header>
+        <div className="match-toolbar"><Button className="match-back" disabled={busy} onClick={close}><ArrowLeft size={16}/> 返回比賽清單</Button>
+            {open && !room.pool && !room.entries.some((e) => e.id === me.id) && (
+              <Button
+                className="match-register primary"
+                disabled={busy}
+                onClick={() => act("join", { id: room.id })}
+              >
+                參與比賽
+              </Button>
+            )}
+            {open && !room.pool && room.entries.some((e) => e.id === me.id) && (
+              <small>已報名為選手</small>
+            )}
+        </div>
+        <header className="match-title"><h1>{room.title}</h1><Schedule key={room.id} room={room}/><p className="muted">比賽由主持人在 Discord 頻道進行。</p></header>
         <div className="match-layout">
           <aside className="match-box match-rules"><h2>比賽規則</h2><p className="competition-body">{room.description}</p><small>房主 · {room.ownerName}</small></aside>
           <section className="match-feature">
-            <img className="match-poster" src="/guild-challenge.webp" alt="群山競技場中的挑戰賽獎盃"/>
-            <div className="match-pool"><span className="match-coin"><Coins size={32}/></span><div><h2>獎池總額</h2><strong>{room.total == null ? "待房主結算" : fmt(room.total)}</strong></div></div>
+            {/鐵匠|強化/.test(room.title) ? <img className="match-poster" src="/forge-challenge.webp" alt="鐵匠為戰士、弓箭手、魔法師、祭司與機甲蘿莉強化裝備"/> : <img className="match-poster" src="/guild-challenge.webp" alt="群山競技場中的挑戰賽獎盃"/>}
+            <div className="match-pool"><span className="match-coin"><Coins size={32}/></span><div><h2>獎池總額</h2><strong>{room.total != null ? fmt(room.total) : room.pool ? "由房主於結算時填寫" : "尚未開放投注"}</strong></div></div>
           </section>
-          <aside className="match-box match-log"><h2>比賽日誌</h2><p><Users size={16}/> {room.entries.length} 人參與</p>
+          <aside className="match-box match-log"><h2>比賽日誌</h2><p><Users size={16}/> {room.entries.length} 位選手報名</p>
             {room.events?.length ? <ol>{room.events.slice().reverse().map((event,i) => <li key={room.events.length-i}><time>{time(event.at)}</time>{event.message}</li>)}</ol> : <small>這場比賽尚無日誌紀錄。</small>}
           </aside>
         </div>
           <div className="competition-actions">
-            {open && !room.entries.some((e) => e.id === me.id) && (
-              <Button
-                primary
-                disabled={busy}
-                onClick={() => act("join", { id: room.id })}
-              >
-                加入比賽
-              </Button>
-            )}
-            {open && room.entries.some((e) => e.id === me.id) && (
-              <small>已加入比賽</small>
-            )}
-            {host && open && (
+            {open && (host || me.admin) && !room.pool && !room.entries.some(e=>e.coins > 0) &&
+              <Button disabled={busy || !room.entries.length} onClick={() => setForm({kind:"openPool"})}>開啟獎池投注</Button>}
+            {open && room.pool && !room.pool.locked && !room.pool.bets.some(b=>b.id === me.id) &&
+              <Button primary disabled={busy} onClick={() => act("bet",{id:room.id})}>加入獎池投注</Button>}
+            {open && room.pool && !room.pool.locked && host && <Button disabled={busy} onClick={()=>setForm({kind:"enroll",username:""})}>納入投注成員</Button>}
+            {open && room.pool && !room.pool.locked && (host || me.admin) &&
+              <Button disabled={busy} onClick={() => act("lockPool", {id:room.id})}>截止投注</Button>}
+            {open && room.pool?.bets.some(b=>b.id === me.id) && <small>你已加入獎池</small>}
+            {host && open && (room.pool?.bets ?? room.entries).some(e => e.coins > 0) && (
               <Button
                 className="competition-settle"
-                disabled={busy || !room.entries.some((e) => e.coins > 0)}
+                disabled={busy}
                 onClick={() =>
                   setForm({ kind: "settle", version: room.version, total: "" })
                 }
@@ -395,16 +409,19 @@ export default function Competitions({ me, request, onUnauthorized }) {
             )}
             {!open && <strong>已結算 · 總額 {fmt(room.total)}</strong>}
           </div>
+          <section className="match-roster"><h2>參賽選手</h2><p>{room.entries.map(e => e.name).join("、") || "等待第一位選手報名"}</p></section>
+          {room.pool && <section className="match-roster"><h2>獎池投注</h2><p>{room.pool.locked ? "已截止加入" : "接受加入"} · {room.pool.bets.length} 人投注。月亮幣由房主登記。</p></section>}
+          {(room.pool || room.total != null || room.entries.some(e => e.coins > 0)) && <>
           <label className="competition-motion"><input type="checkbox" checked={motion} onChange={e => {
             setMotion(e.target.checked);
             localStorage.setItem("competitionMotion", e.target.checked ? "on" : "off");
           }} />播放比賽動畫</label>
           <div className="competition-grid" data-motion={motion}>
-            <Chart entries={room.entries} motion={motion} />
+            <Chart entries={room.pool?.bets ?? room.entries} motion={motion} />
             <Ranking
               motion={motion}
               arrival={arrival}
-              room={room}
+              room={room.pool ? {...room,entries:room.pool.bets} : room}
               onChoose={
                 host && open
                   ? (e) =>
@@ -419,11 +436,12 @@ export default function Competitions({ me, request, onUnauthorized }) {
               }
             />
           </div>
+          </>}
         </article>}
       {form && (
         <Modal
           title={
-            { create: "建立比賽", score: "調整月亮幣", settle: "結算比賽" }[
+            { create: "建立比賽", enroll:"納入投注成員", openPool:"開啟獎池投注", score: "調整月亮幣", settle: "結算比賽" }[
               form.kind
             ]
           }
@@ -441,6 +459,8 @@ export default function Competitions({ me, request, onUnauthorized }) {
                   scheduledAt: form.scheduledAt,
                   submissionId: form.submissionId,
                 });
+              else if (form.kind === "enroll") act("enroll",{id:room.id,username:form.username});
+              else if (form.kind === "openPool") act("openPool",{id:room.id});
               else if (form.kind === "score")
                 act("score", {
                   id: room.id,
@@ -482,7 +502,9 @@ export default function Competitions({ me, request, onUnauthorized }) {
                   onChange={(e) => patch("scheduledAt", e.target.value)}
                 />
               </>
-            ) : form.kind === "score" ? (
+            ) : form.kind === "enroll" ? <Field label="成員帳號" required value={form.username} onChange={e=>patch("username",e.target.value)}/>
+            : form.kind === "openPool" ? <p>開放獎池後將截止選手報名。所有已登入的成員都可以加入獎池，由房主登記月亮幣。</p>
+            : form.kind === "score" ? (
               <Field
                 label={form.name + " 的月亮幣總數"}
                 type="number"
@@ -520,7 +542,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
               <Button primary disabled={busy}>
                 {busy
                   ? "儲存中…"
-                  : { create: "建立比賽", score: "儲存", settle: "確認結算" }[
+                  : { create: "建立比賽", enroll:"確認納入", openPool:"確認開放", score: "儲存", settle: "確認結算" }[
                       form.kind
                     ]}
               </Button>

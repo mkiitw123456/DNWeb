@@ -48,7 +48,8 @@ function settlementNotice(s, r) {
     lines = [heading];
     mentions = [];
   }
-  for (const e of [...r.entries].sort((a, b) => b.coins - a.coins)) {
+  const recipients = r.pool ? r.pool.bets : r.entries;
+  for (const e of [...recipients].sort((a, b) => b.coins - a.coins)) {
     const user = s.users.find((u) => u.id === e.id);
     const id = /^\d{17,20}$/.test(user?.discordId || "")
       ? user.discordId
@@ -113,11 +114,14 @@ export function competitionAction(s, user, type, p = {}) {
     }
   } else if (type !== "competition.state") {
     if (!room) fail("找不到比賽", 404);
-    if (type !== "competition.join" && user.id !== room.ownerId)
+    const poolManager = user.id === room.ownerId || user.admin;
+    const management = ["competition.openPool", "competition.lockPool"].includes(type);
+    if (!["competition.join", "competition.bet"].includes(type) && !(management ? poolManager : user.id === room.ownerId))
       fail("只有房主可以操作", 403);
     if (room.total != null) fail("比賽已結算", 409);
     if (type === "competition.join") {
       if (!room.entries.some((e) => e.id === user.id)) {
+        if (room.pool) fail("選手報名已截止", 409);
         if (room.entries.length >= 100) fail("本場參賽人數已滿");
         logEvent(room, (user.nickname || user.username) + " 加入比賽");
         room.entries.push({
@@ -127,8 +131,35 @@ export function competitionAction(s, user, type, p = {}) {
         });
         room.version++;
       }
+    } else if (type === "competition.openPool") {
+      if (!room.entries.length) fail("請先讓至少一位選手報名");
+      if (!room.pool) {
+        if (room.entries.some(e => e.coins > 0)) fail("本場已有月亮幣，請沿用原獎池結算");
+        room.pool = { bets: [], locked: false };
+        logEvent(room, "選手報名截止，獎池開放投注");
+        room.version++;
+      }
+    } else if (type === "competition.lockPool") {
+      if (!room.pool) fail("尚未開放獎池");
+      if (!room.pool.locked) {
+        room.pool.locked = true;
+        logEvent(room, "主持人已截止投注");
+        room.version++;
+      }
+    } else if (type === "competition.bet" || type === "competition.enroll") {
+      if (!room.pool || room.pool.locked) fail("目前未開放投注", 409);
+      const member = type === "competition.bet" ? user : s.users.find(u =>
+        u.active && u.username.toLowerCase() === String(p.username || "").trim().toLowerCase());
+      if (!member) fail("找不到此成員帳號");
+      if (!room.pool.bets.some(b => b.id === member.id)) {
+        if (room.pool.bets.length >= 100) fail("獎池名額已滿");
+        room.pool.bets.push({id:member.id, name:member.nickname || member.username, coins:0});
+        logEvent(room, (member.nickname || member.username) + " 加入獎池");
+        room.version++;
+      }
     } else if (type === "competition.score") {
-      const entry = room.entries.find((e) => e.id === p.memberId);
+      const members = room.pool ? room.pool.bets : room.entries;
+      const entry = members.find((e) => e.id === p.memberId);
       if (!entry) fail("請選擇參賽者");
       const coins = number(p.coins, "月亮幣", 1000000000);
       if (entry.coins !== coins) {
@@ -141,15 +172,17 @@ export function competitionAction(s, user, type, p = {}) {
     } else if (type === "competition.settle") {
       if (room.version !== p.version)
         fail("參賽者或月亮幣已變更，請重新確認分配", 409);
+      const members = room.pool ? room.pool.bets : room.entries;
       const total = number(p.total, "總額", 1000000000);
       if (!total) fail("總額必須大於零");
-      const payouts = distribute(room.entries, total);
-      room.entries.forEach((e, i) => {
+      const payouts = distribute(members, total);
+      members.forEach((e, i) => {
         e.name = display(s, e.id, e.name);
         e.payout = payouts[i];
       });
       logEvent(room, "比賽已結算，獎池總額 " + total);
       room.total = total;
+      if (room.pool) room.pool.locked = true;
       room.version++;
       s.deliveries ||= [];
       settlementNotice(s, room);

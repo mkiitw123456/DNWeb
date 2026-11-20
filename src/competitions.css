@@ -156,3 +156,9 @@ dialog.competition-modal {
 .match-page .competition-grid { padding:16px; background:var(--panel-background,var(--surface)); border:1px solid var(--border); border-radius:14px }
 @media(max-width:900px){.match-layout{grid-template-columns:1fr 1fr}.match-feature{grid-column:1/-1;grid-row:1}.match-log ol{max-height:160px}}
 @media(max-width:560px){.match-layout{grid-template-columns:minmax(0,1fr)}.match-title{text-align:start}.match-schedule{justify-content:start}.match-rules small{padding-top:0}}
+.match-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px }
+.match-toolbar .match-register { min-height:48px; padding:10px clamp(20px,4vw,48px); font-size:1.08rem; font-weight:700 }
+.match-title p { font-size:.9rem }
+.match-roster { margin:16px 0; padding:16px 20px; border:1px solid var(--border); border-radius:14px; background:var(--panel-background,var(--surface)) }
+.match-roster p { margin:.65em 0 0 }
+.match-roster ul { padding-inline-start:1.4rem; line-height:1.7 }

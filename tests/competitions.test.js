@@ -79,3 +79,27 @@ test("unlinked members can host and join; only the host scores and settles once 
     await rm(dir, { recursive: true, force: true });
   }
 });
+import { competitionAction } from "../server/competitions.js";
+
+test("admin opens the pool, spectators join independently and only the host assigns shares", () => {
+  const users = ["host", "rival", "fan", "other", "admin"].map(id => ({id, username:id, active:true, admin:id==="admin"}));
+  const state = {users, competitions:[], deliveries:[]};
+  const run = (i, type, payload={}) => competitionAction(state, users[i], "competition."+type, {id:state.competitions[0]?.id,...payload});
+  run(0,"create",{title:"鐵匠",description:"測試",scheduledAt:"2026-12-01T20:00",submissionId:randomUUID()});
+  run(0,"join"); run(1,"join");
+  assert.throws(()=>run(2,"openPool"),{status:403}); assert.throws(()=>run(2,"bet"));
+  run(4,"openPool"); assert.throws(()=>run(2,"join"));
+  run(2,"bet");run(2,"bet");
+  assert.throws(()=>run(2,"enroll",{username:"other"}),{status:403});
+  assert.throws(()=>run(0,"enroll",{username:"missing"}),/找不到/);
+  run(0,"enroll",{username:"OTHER"});
+  const room=state.competitions[0];
+  assert.equal(room.entries.length,2);assert.equal(room.pool.bets.length,2);
+  assert.throws(()=>run(2,"score",{memberId:"fan",coins:3,previous:0}),{status:403});
+  run(0,"score",{memberId:"fan",coins:3,previous:0});
+  run(0,"score",{memberId:"other",coins:2,previous:0});
+  assert.throws(()=>run(4,"settle",{version:room.version,total:101}),{status:403});
+  run(0,"settle",{version:room.version,total:101});
+  assert.deepEqual(room.pool.bets.map(b=>b.payout),[61,40]);
+  assert.equal(room.total,101);assert.match(state.deliveries[0].message.content,/fan/);
+});
