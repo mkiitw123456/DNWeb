@@ -16,7 +16,7 @@ const time = (n) =>
   }).format(n);
 const color = (i) => `hsl(${(206 + i * 137.508) % 360} 65% 60%)`;
 const fmt = (n) => n.toLocaleString("zh-TW");
-function Chart({ entries }) {
+function Chart({ entries, arrival }) {
   const canvas = useRef(null),
     previous = useRef([]);
   const amounts = entries.map((e) => e.coins).join(",");
@@ -32,7 +32,7 @@ function Chart({ entries }) {
       reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame;
     function paint(now) {
-      const t = reduced ? 1 : Math.min(1, (now - begin) / 550),
+      const t = reduced ? 1 : Math.min(1, (now - begin) / 1000),
         ease = 1 - (1 - t) ** 3;
       ctx.clearRect(0, 0, 480, 480);
       let angle = -Math.PI / 2;
@@ -48,6 +48,17 @@ function Chart({ entries }) {
           angle += Math.PI * 2 * part;
         }
         return part;
+      });
+      // The outer ring represents people, including entrants still on zero coins.
+      values.forEach((_, i) => {
+        const step = 2 * Math.PI / values.length;
+        const from = -Math.PI / 2 + i * step;
+        const extent = i < start.length ? 1 : ease;
+        ctx.beginPath();
+        ctx.arc(240, 240, 235, from, from + Math.max(0, step - .018) * extent);
+        ctx.strokeStyle = color(i);
+        ctx.lineWidth = 8;
+        ctx.stroke();
       });
       if (t < 1) frame = requestAnimationFrame(paint);
     }
@@ -66,10 +77,12 @@ function Chart({ entries }) {
           role="img"
         />
         {!total && <span>等待發放月亮幣</span>}
-        {entries.length > 0 && <i key={entries.length} aria-hidden="true" />}
+        {arrival && <div key={arrival.id} className="competition-arrival" role="status" style={{ "--team": color(entries.findIndex(e => e.id === arrival.id)) }}>
+          <i aria-hidden="true" /><b><Moon size={18} />{arrival.name} 加入比賽</b>
+        </div>}
       </div>
       <figcaption>
-        <Moon size={16} /> 月亮幣合計 <strong>{fmt(total)}</strong>
+        <Moon size={16} /> 月亮幣合計 <strong key={total} className="competition-count">{fmt(total)}</strong>
       </figcaption>
     </figure>
   );
@@ -88,19 +101,20 @@ function Ranking({ room, onChoose }) {
       const id = el.dataset.id,
         y = el.offsetTop,
         old = positions.current.get(id);
-      next.set(id, y);
-      if (!reduce && old !== y)
+      next.set(id, { y, coins: el.dataset.coins });
+      if (!reduce && old?.coins !== el.dataset.coins) el.querySelector("small").animate([{ color: "var(--team)", transform: "translateX(8px)" }, { transform: "translateX(0)" }], {duration: 900});
+      if (!reduce && old?.y !== y)
         el.animate(
           old === undefined
             ? [
-                { opacity: 0, transform: "translateX(18px)" },
+                { opacity: 0, transform: "translateX(54px) scale(.94)" },
                 { opacity: 1, transform: "none" },
               ]
             : [
-                { transform: `translateY(${old - y}px)` },
+                { transform: `translateY(${old.y - y}px)` },
                 { transform: "none" },
               ],
-          { duration: 340, easing: "ease-out" },
+          { duration: 780, easing: "ease-out" },
         );
     }
     positions.current = next;
@@ -110,7 +124,7 @@ function Ranking({ room, onChoose }) {
       <h3>參賽排名</h3>
       <ol className="competition-ranks" ref={list}>
         {rows.map((e, i) => (
-          <li key={e.id} data-id={e.id} style={{ "--team": e.color }}>
+          <li key={e.id} data-id={e.id} data-coins={e.coins} style={{ "--team": e.color }}>
             <span>{i + 1}</span>
             <div>
               <strong>{e.name}</strong>
@@ -138,6 +152,12 @@ function Ranking({ room, onChoose }) {
 
 export default function Competitions({ me, request, onUnauthorized }) {
   const [rooms, setRooms] = useState(null),
+    [history, setHistory] = useState(false),
+    [archivePages, setArchivePages] = useState(0),
+    [older, setOlder] = useState([]),
+    [nextPage, setNextPage] = useState(null),
+    [paging, setPaging] = useState(false),
+    [arrival, setArrival] = useState(null),
     [room, setRoom] = useState(null),
     [form, setForm] = useState(null),
     [busy, setBusy] = useState(false),
@@ -146,13 +166,41 @@ export default function Competitions({ me, request, onUnauthorized }) {
     seq = useRef(0),
     lock = useRef(false),
     polling = useRef(false);
+  const viewingHistory = useRef(false), seen = useRef(null);
+  useEffect(() => {
+    if (!room) { seen.current = null; setArrival(null); return; }
+    const prior = seen.current;
+    seen.current = { id: room.id, count: room.entries.length };
+    if (prior?.id === room.id && prior.count < room.entries.length)
+      setArrival(room.entries[room.entries.length - 1]);
+  }, [room]);
+  useEffect(() => {
+    if (!arrival) return;
+    const timer = setTimeout(() => setArrival(null), 2400);
+    return () => clearTimeout(timer);
+  }, [arrival]);
+  async function loadOlder() {
+    const page = nextPage ?? archivePages;
+    if (!page || paging) return;
+    setPaging(true);
+    try {
+      const result = await request("competition.history", {page});
+      setOlder(items => [...items, ...result.rooms]);
+      setNextPage(page - 1);
+    } catch (e) { notify(e.message, "error"); }
+    finally { setPaging(false); }
+  }
   async function load(id = selected.current) {
     const stamp = ++seq.current;
     try {
       const view = await request("competition.state", { id });
       if (seq.current !== stamp) return;
       setRooms(view.rooms);
-      setRoom(view.room);
+      setArchivePages(view.archivePages || 0);
+      if (view.room?.total != null && !viewingHistory.current) {
+        close();
+        notify("比賽已結算，可至歷史紀錄查看");
+      } else setRoom(view.room);
       setError("");
       if (id && !view.room) {
         selected.current = null;
@@ -211,8 +259,13 @@ export default function Competitions({ me, request, onUnauthorized }) {
       const view = await request("competition." + type, payload);
       if (seq.current !== stamp) return;
       setRooms(view.rooms);
-      setRoom(view.room);
-      selected.current = view.room.id;
+      setArchivePages(view.archivePages || 0);
+      if (type === "settle") close();
+      else {
+        if (type === "create") { setHistory(false); viewingHistory.current = false; }
+        setRoom(view.room);
+        selected.current = view.room.id;
+      }
       setForm(null);
       setError("");
       notify(
@@ -220,7 +273,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
           create: "比賽已建立",
           join: "已加入比賽",
           score: "月亮幣已更新",
-          settle: "比賽已結算",
+          settle: "比賽已結算，已移至歷史紀錄",
         }[type],
       );
     } catch (e) {
@@ -240,6 +293,11 @@ export default function Competitions({ me, request, onUnauthorized }) {
   const patch = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const host = room?.ownerId === me.id,
     open = room?.total == null;
+  const shown = rooms?.filter(r => history === (r.total != null)) || [];
+  if (history) {
+    const ids = new Set(shown.map(r => r.id));
+    shown.push(...older.filter(r => !ids.has(r.id)));
+  }
   return (
     <section>
       <Heading
@@ -260,12 +318,20 @@ export default function Competitions({ me, request, onUnauthorized }) {
           {error} <Button onClick={() => load()}>重試</Button>
         </p>
       )}
+      <nav className="competition-switch" aria-label="比賽清單">
+        {[[false, "進行中"], [true, "歷史紀錄"]].map(([value, label]) =>
+          <Button key={label} aria-pressed={history === value} onClick={() => {
+            viewingHistory.current = value; setHistory(value);
+            if (value) { setOlder([]); setNextPage(null); }
+          }}>{label}</Button>
+        )}
+      </nav>
       {!rooms && !error && <p>正在讀取比賽…</p>}
-      {rooms?.length === 0 && (
-        <p className="muted">還沒有比賽，來建立第一場吧。</p>
+      {rooms && shown.length === 0 && (
+        <p className="muted">{history ? "還沒有已結算的比賽。" : "目前沒有進行中的比賽。"}</p>
       )}
       <div className="competition-list">
-        {rooms?.map((r) => (
+        {shown.map((r) => (
           <article key={r.id}>
             <h3>{r.title}</h3>
             <div>
@@ -274,7 +340,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
                 {time(r.scheduledAt)}
               </span>
               <span>
-                <Users size={15} />
+                <Users size={15} key={r.count} className="competition-count" />
                 {r.count} 人參與
               </span>
             </div>
@@ -282,6 +348,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
           </article>
         ))}
       </div>
+      {history && (nextPage ?? archivePages) > 0 && <Button disabled={paging} onClick={loadOlder}>{paging ? "讀取中…" : "載入更早紀錄"}</Button>}
       {room && (
         <Modal
           title={room.title}
@@ -295,7 +362,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
           </p>
           <p className="competition-body">{room.description}</p>
           <div className="competition-grid">
-            <Chart entries={room.entries} />
+            <Chart entries={room.entries} arrival={arrival} />
             <Ranking
               room={room}
               onChoose={

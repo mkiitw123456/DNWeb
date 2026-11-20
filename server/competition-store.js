@@ -36,6 +36,11 @@ export async function competitionRequest(token, type, p) {
         id ? db.get("competition_" + id) : null,
       ]);
       let rooms = index?.rooms || [];
+      let archivePages = index?.archivePages || 0;
+      if (type === "competition.history") {
+        if (!Number.isSafeInteger(p.page) || p.page < 1 || p.page > archivePages) fail("歷史頁碼無效");
+        return await db.get("competitionHistory_" + p.page);
+      }
       const state = { users, competitions: room ? [room] : [], deliveries: [] };
       const oldVersion = room?.version;
       const result = competitionAction(state, user, type, { ...p, id });
@@ -51,14 +56,21 @@ export async function competitionRequest(token, type, p) {
           rooms = room
             ? rooms.map((r) => (r.id === id ? card : r))
             : [card, ...rooms];
-          // Keep active rooms listed; old settled detail documents remain intact.
-          let settledCount = 0;
-          rooms = rooms.filter((r) => r.total == null || ++settledCount <= 40);
-          db.set("competitionIndex", { rooms });
+          if (settle) {
+            rooms = [card, ...rooms.filter(r => r.id !== id)];
+            const settled = rooms.filter(r => r.total != null);
+            if (settled.length > 40) {
+              const archived = settled.slice(-20);
+              const ids = new Set(archived.map(r => r.id));
+              db.set("competitionHistory_" + (++archivePages), {rooms: archived});
+              rooms = rooms.filter(r => !ids.has(r.id));
+            }
+          }
+          db.set("competitionIndex", { rooms, archivePages });
         }
       }
       notices = state.deliveries;
-      return { rooms, room: result.room };
+      return { rooms, archivePages, room: result.room };
     },
     {
       authenticatedUser: user,
