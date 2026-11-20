@@ -16,6 +16,38 @@ const time = (n) =>
   }).format(n);
 const color = (i) => `hsl(${(206 + i * 137.508) % 360} 65% 60%)`;
 const fmt = (n) => n.toLocaleString("zh-TW");
+function MatchRules({ description, ownerName }) {
+  const preview = useRef(null);
+  const [truncated, setTruncated] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useLayoutEffect(() => {
+    const node = preview.current;
+    const measure = () => setTruncated(node.scrollHeight > node.clientHeight + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    observer.observe(node.firstElementChild);
+    measure();
+    return () => observer.disconnect();
+  }, [description]);
+
+  return (
+    <aside className="match-box match-rules">
+      <h2>比賽規則</h2>
+      <div className="match-rules-space">
+        <div className="match-rules-preview" ref={preview}>
+          <p className="competition-body">{description}</p>
+        </div>
+      </div>
+      {truncated && <Button className="match-read-more" aria-haspopup="dialog" onClick={() => setExpanded(true)}>閱讀全文</Button>}
+      <small>房主 · {ownerName}</small>
+      {expanded && <Modal title="完整比賽規則" className="match-rules-dialog" onClose={() => setExpanded(false)}>
+        <p className="competition-body" tabIndex={0}>{description}</p>
+      </Modal>}
+    </aside>
+  );
+}
+
 function Schedule({ room }) {
   const [now, setNow] = useState(Date.now);
   const running = room.total == null && room.scheduledAt > now;
@@ -378,7 +410,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
         </div>
         <header className="match-title"><h1>{room.title}</h1><Schedule key={room.id} room={room}/><p className="muted">比賽由主持人在 Discord 頻道進行。</p></header>
         <div className="match-layout">
-          <aside className="match-box match-rules"><h2>比賽規則</h2><p className="competition-body">{room.description}</p><small>房主 · {room.ownerName}</small></aside>
+          <MatchRules key={room.id} description={room.description} ownerName={room.ownerName} />
           <section className="match-feature">
             {/鐵匠|強化/.test(room.title) ? <img className="match-poster" src="/forge-challenge.webp" alt="鐵匠為戰士、弓箭手、魔法師、祭司與機甲蘿莉強化裝備"/> : <img className="match-poster" src="/guild-challenge.webp" alt="群山競技場中的挑戰賽獎盃"/>}
             <div className="match-pool"><span className="match-coin"><Coins size={32}/></span><div><h2>獎池總額</h2><strong>{room.total != null ? fmt(room.total) : room.pool ? "由房主於結算時填寫" : "尚未開放投注"}</strong></div></div>
