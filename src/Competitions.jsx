@@ -16,7 +16,7 @@ const time = (n) =>
   }).format(n);
 const color = (i) => `hsl(${(206 + i * 137.508) % 360} 65% 60%)`;
 const fmt = (n) => n.toLocaleString("zh-TW");
-function Chart({ entries, arrival }) {
+function Chart({ entries, motion }) {
   const canvas = useRef(null),
     previous = useRef([]);
   const amounts = entries.map((e) => e.coins).join(",");
@@ -28,12 +28,12 @@ function Chart({ entries, arrival }) {
     const total = values.reduce((a, b) => a + b, 0);
     const start = previous.current.slice(),
       end = values.map((n) => (total ? n / total : 0));
-    const begin = performance.now(),
-      reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let begin;
     let frame;
     function paint(now) {
-      const t = reduced ? 1 : Math.min(1, (now - begin) / 1000),
-        ease = 1 - (1 - t) ** 3;
+      begin ??= now;
+      const t = motion ? Math.min(1, (now - begin) / 1350) : 1,
+        ease = t * t * (3 - 2 * t);
       ctx.clearRect(0, 0, 480, 480);
       let angle = -Math.PI / 2;
       previous.current = end.map((v, i) => {
@@ -41,7 +41,7 @@ function Chart({ entries, arrival }) {
         if (part > 0) {
           ctx.beginPath();
           ctx.moveTo(240, 240);
-          ctx.arc(240, 240, 228, angle, angle + Math.PI * 2 * part);
+          ctx.arc(240, 240, 239, angle, angle + Math.PI * 2 * part);
           ctx.closePath();
           ctx.fillStyle = color(i);
           ctx.fill();
@@ -49,22 +49,11 @@ function Chart({ entries, arrival }) {
         }
         return part;
       });
-      // The outer ring represents people, including entrants still on zero coins.
-      values.forEach((_, i) => {
-        const step = 2 * Math.PI / values.length;
-        const from = -Math.PI / 2 + i * step;
-        const extent = i < start.length ? 1 : ease;
-        ctx.beginPath();
-        ctx.arc(240, 240, 235, from, from + Math.max(0, step - .018) * extent);
-        ctx.strokeStyle = color(i);
-        ctx.lineWidth = 8;
-        ctx.stroke();
-      });
       if (t < 1) frame = requestAnimationFrame(paint);
     }
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
-  }, [amounts]);
+  }, [amounts, motion]);
   const total = entries.reduce((n, e) => n + e.coins, 0);
   return (
     <figure className="competition-chart">
@@ -77,9 +66,6 @@ function Chart({ entries, arrival }) {
           role="img"
         />
         {!total && <span>等待發放月亮幣</span>}
-        {arrival && <div key={arrival.id} className="competition-arrival" role="status" style={{ "--team": color(entries.findIndex(e => e.id === arrival.id)) }}>
-          <i aria-hidden="true" /><b><Moon size={18} />{arrival.name} 加入比賽</b>
-        </div>}
       </div>
       <figcaption>
         <Moon size={16} /> 月亮幣合計 <strong key={total} className="competition-count">{fmt(total)}</strong>
@@ -87,7 +73,7 @@ function Chart({ entries, arrival }) {
     </figure>
   );
 }
-function Ranking({ room, onChoose }) {
+function Ranking({ room, onChoose, motion, arrival }) {
   const list = useRef(null),
     positions = useRef(new Map());
   const rows = room.entries
@@ -95,30 +81,29 @@ function Ranking({ room, onChoose }) {
     .sort((a, b) => b.coins - a.coins);
   const total = rows.reduce((s, e) => s + e.coins, 0);
   useLayoutEffect(() => {
-    const next = new Map(),
-      reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const next = new Map();
     for (const el of list.current.children) {
       const id = el.dataset.id,
         y = el.offsetTop,
         old = positions.current.get(id);
       next.set(id, { y, coins: el.dataset.coins });
-      if (!reduce && old?.coins !== el.dataset.coins) el.querySelector("small").animate([{ color: "var(--team)", transform: "translateX(8px)" }, { transform: "translateX(0)" }], {duration: 900});
-      if (!reduce && old?.y !== y)
+      if (motion && old?.coins !== el.dataset.coins) el.querySelector("small").animate([{ color: "var(--team)", transform: "translateX(8px)" }, { transform: "translateX(0)" }], {duration: 900});
+      if (motion && old?.y !== y)
         el.animate(
           old === undefined
             ? [
-                { opacity: 0, transform: "translateX(54px) scale(.94)" },
+                { opacity: 0, transform: "translateX(85%)" },
                 { opacity: 1, transform: "none" },
               ]
             : [
                 { transform: `translateY(${old.y - y}px)` },
                 { transform: "none" },
               ],
-          { duration: 780, easing: "ease-out" },
+          { duration: old ? 850 : 1100, delay: old ? 0 : 100, fill: "backwards", easing: "cubic-bezier(.35,0,.18,1)" },
         );
     }
     positions.current = next;
-  }, [room.version]);
+  }, [room.version, motion]);
   return (
     <section>
       <h3>參賽排名</h3>
@@ -128,12 +113,14 @@ function Ranking({ room, onChoose }) {
             <span>{i + 1}</span>
             <div>
               <strong>{e.name}</strong>
+              {arrival?.id === e.id && <em className="competition-new" role="status">剛加入</em>}
               <small>
                 {fmt(e.coins)} 月亮幣 ·{" "}
                 {total ? ((100 * e.coins) / total).toFixed(1) : 0}%
                 {room.total != null && ` · 分得 ${fmt(e.payout)}`}
               </small>
             </div>
+            <i className="competition-share" aria-hidden="true" style={{ transform: `scaleX(${total ? e.coins / total : 0})` }} />
             {onChoose && (
               <Button
                 onClick={() => onChoose(e)}
@@ -162,6 +149,10 @@ export default function Competitions({ me, request, onUnauthorized }) {
     [form, setForm] = useState(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [motion, setMotion] = useState(() => {
+    const preference = localStorage.getItem("competitionMotion");
+    return preference === null ? !matchMedia("(prefers-reduced-motion: reduce)").matches : preference === "on";
+  });
   const selected = useRef(null),
     seq = useRef(0),
     lock = useRef(false),
@@ -361,9 +352,15 @@ export default function Competitions({ me, request, onUnauthorized }) {
             {time(room.scheduledAt)}（台灣時間） · 房主 {room.ownerName}
           </p>
           <p className="competition-body">{room.description}</p>
-          <div className="competition-grid">
-            <Chart entries={room.entries} arrival={arrival} />
+          <label className="competition-motion"><input type="checkbox" checked={motion} onChange={e => {
+            setMotion(e.target.checked);
+            localStorage.setItem("competitionMotion", e.target.checked ? "on" : "off");
+          }} />播放比賽動畫</label>
+          <div className="competition-grid" data-motion={motion}>
+            <Chart entries={room.entries} motion={motion} />
             <Ranking
+              motion={motion}
+              arrival={arrival}
               room={room}
               onChoose={
                 host && open

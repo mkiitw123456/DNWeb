@@ -58,7 +58,6 @@ dialog.competition-modal {
   margin: auto;
   aspect-ratio: 1;
   background: var(--canvas);
-  border: 1px solid var(--border);
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -67,27 +66,7 @@ dialog.competition-modal {
   width: 100%;
   height: 100%;
 }
-.competition-disc span,
-.competition-disc i {
-  position: absolute;
-}
-.competition-disc i {
-  inset: 0;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  opacity: 0;
-  animation: competition-join 0.8s ease-out;
-}
-@keyframes competition-join {
-  from {
-    opacity: 0.8;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.05);
-  }
-}
+.competition-disc span { position:absolute }
 .competition-chart figcaption {
   justify-content: center;
   margin-top: 10px;
@@ -136,20 +115,17 @@ dialog.competition-modal {
     max-width: 190px;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .competition-disc i {
-    animation: none;
-  }
-}
 .competition-switch { display:flex; gap:8px; margin:8px 0 20px }
 .competition-switch [aria-pressed="true"] { border-color:var(--accent); box-shadow:inset 0 -2px var(--accent) }
-.competition-arrival { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none }
-.competition-arrival b { display:flex; align-items:center; gap:8px; max-width:90%; overflow-wrap:anywhere; padding:8px 14px; border:2px solid var(--team); border-radius:20px; color:var(--text); background:var(--canvas); box-shadow:0 4px 16px #0003 }
-.competition-arrival i { border:4px solid var(--team); animation:competition-join 1s ease-out 2 }
-@media(prefers-reduced-motion:no-preference) {
-  .competition-arrival b { animation:competition-banner 2.4s both }
-  .competition-count { animation:competition-count .75s ease-out }
-  @keyframes competition-banner { 0% {opacity:0;transform:translateY(18px) scale(.75)} 16% {opacity:1;transform:translateY(-3px) scale(1.05)} 25%,85% {opacity:1;transform:none} 100% {opacity:0;transform:translateY(-12px)} }
-  @keyframes competition-count { 35% {transform:scale(1.55); color:var(--accent)} }
+ .competition-motion { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin:0 0 10px; font-size:.8rem; color:var(--muted) }
+.competition-motion input { width:auto; accent-color:var(--accent) }
+.competition-ranks { overflow-x:hidden }
+.competition-ranks li { position:relative; overflow:hidden; padding-bottom:12px }
+.competition-share { position:absolute; inset:auto 0 0; height:3px; transform-origin:left; background:var(--team) }
+.competition-grid[data-motion="true"] .competition-share { transition:transform 1.35s cubic-bezier(.35,0,.2,1) }
+.competition-new { margin-inline-start:8px; color:var(--team); font-size:.75rem; font-style:normal }
+@media (prefers-reduced-motion: no-preference) {
+  .competition-count { animation: competition-count .75s ease-out }
+  @keyframes competition-count { 35% { transform:scale(1.35); color:var(--accent) } }
 }
-@media(prefers-reduced-motion:reduce) { .competition-arrival i { animation:none } }
+.competition-grid[data-motion="false"] .competition-count { animation:none }
