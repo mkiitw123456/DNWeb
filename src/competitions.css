@@ -1,0 +1,143 @@
+.competition-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 265px), 1fr));
+  gap: 16px;
+}
+.competition-list article {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-background, var(--surface));
+  color: var(--panel-text);
+  display: grid;
+  gap: 14px;
+}
+.competition-list h3,
+.competition-grid h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.competition-list article div,
+.competition-list article span,
+.competition-chart figcaption,
+.competition-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.competition-list article div {
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--panel-muted);
+}
+.competition-list button {
+  justify-self: end;
+}
+dialog.competition-modal {
+  width: min(840px, calc(100vw - 26px));
+  max-width: 840px;
+}
+.competition-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.competition-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.competition-chart {
+  margin: 0;
+  text-align: center;
+}
+.competition-disc {
+  position: relative;
+  width: min(100%, 320px);
+  margin: auto;
+  aspect-ratio: 1;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.competition-disc canvas {
+  width: 100%;
+  height: 100%;
+}
+.competition-disc span,
+.competition-disc i {
+  position: absolute;
+}
+.competition-disc i {
+  inset: 0;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: competition-join 0.8s ease-out;
+}
+@keyframes competition-join {
+  from {
+    opacity: 0.8;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+.competition-chart figcaption {
+  justify-content: center;
+  margin-top: 10px;
+}
+.competition-ranks {
+  list-style: none;
+  position: relative;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  max-height: 45vh;
+  overflow: auto;
+}
+.competition-ranks li {
+  border-inline-start: 4px solid var(--team);
+  background: var(--canvas);
+  color: var(--text);
+  padding: 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 6px;
+}
+.competition-ranks li div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.competition-ranks small {
+  display: block;
+  color: var(--muted);
+}
+.competition-actions {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 14px;
+}
+.competition-actions .competition-settle {
+  margin-inline-start: auto;
+}
+@media (max-width: 620px) {
+  .competition-grid {
+    grid-template-columns: 1fr;
+  }
+  .competition-disc {
+    max-width: 190px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .competition-disc i {
+    animation: none;
+  }
+}

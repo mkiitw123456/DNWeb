@@ -1,3 +1,4 @@
+import { competitionRequest } from "./competition-store.js";
 import { casinoAction, settleCasino } from "./casino.js";
 import { gameAction } from "./guild-games.js";
 import { duelAction, advanceDuels } from "./duels.js";
@@ -266,6 +267,11 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
+    if (type.startsWith("competition.")) {
+      const { view, jobs } = await competitionRequest(token, type, payload);
+      if (jobs.length) background(sendClaimedDeliveries(jobs));
+      return res.status(200).json(view);
+    }
     if (
       type.startsWith("casino.") ||
       type.startsWith("game.") ||

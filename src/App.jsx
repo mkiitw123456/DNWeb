@@ -21,6 +21,7 @@ import {
 import {
   CalendarDays,
   Compass,
+  Trophy,
   UsersRound,
   Settings,
   ShieldCheck,
@@ -28,6 +29,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button, Field, FormErrorContext, Modal } from "./ui.jsx";
+const Competitions = lazy(() => import("./Competitions.jsx"));
 const Casino = lazy(() => import("./Casino.jsx"));
 const Characters = lazy(() => import("./Characters.jsx"));
 const Admin = lazy(() => import("./Admin.jsx"));
@@ -399,6 +401,7 @@ export default function App() {
     ["lobby", "冒險大廳", Compass],
     ["characters", "角色資訊", UsersRound],
     ["casino", "賭場", Compass],
+    ["competitions", "比賽", Trophy],
     ...(SHOW_RAID_SCHEDULING ? [["raids", "出團排班", CalendarDays]] : []),
   ];
   return (
@@ -511,6 +514,8 @@ export default function App() {
                     onDiscord={() => setDiscordOpen(true)}
                     onTour={() => setTourOpen(true)}
                   />
+                ) : page === "competitions" ? (
+                  <Competitions me={data.me} request={request} onUnauthorized={onUnauthorized} />
                 ) : page === "casino" ? (
                   <Casino
                     me={data.me}
