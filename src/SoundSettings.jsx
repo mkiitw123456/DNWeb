@@ -60,7 +60,7 @@ export default function SoundSettings() {
       >
         試聽音效
       </button>
-      <small>操作音效設定只保存在這台瀏覽器。</small>
+      <small>只保存在這台瀏覽器，不播放背景音樂。</small>
     </fieldset>
   );
 }

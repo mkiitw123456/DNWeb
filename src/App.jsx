@@ -1,4 +1,3 @@
-import { ThemeMusic } from "./ThemeMusic.jsx";
 import { useStarRewards } from "./StarRewards.jsx";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import StarLoading from "./StarLoading.jsx";
@@ -407,7 +406,6 @@ export default function App() {
   ];
   return (
     <FormErrorContext.Provider value={error}>
-      <ThemeMusic theme={data.activity?.theme || (data.activity?.aquarium ? "aquarium" : null)}>
       <div className="app">
         <aside className="sidebar">
           <div className="brand">
@@ -576,7 +574,6 @@ export default function App() {
           </Modal>
         )}
       </div>
-      </ThemeMusic>
     </FormErrorContext.Provider>
   );
 }

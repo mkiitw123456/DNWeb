@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { Heading, Field, Button } from "./ui.jsx";
 import { useState } from "react";
-import { MusicSettings } from "./ThemeMusic.jsx";
 import SoundSettings from "./SoundSettings.jsx";
 export default function SettingsPanel({
   me,
@@ -44,7 +43,6 @@ export default function SettingsPanel({
         <p className="muted">登入帳號不變，公開顯示改用暱稱。</p>
       </form>
       <SoundSettings />
-      <MusicSettings />
       <div className="settings-options">
         <button className="settings-option" onClick={onTheme}>
           <Palette size={23} />
