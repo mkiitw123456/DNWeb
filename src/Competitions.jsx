@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Clock, Moon, Users } from "lucide-react";
+import { ArrowLeft, Clock, Coins, Moon, Users } from "lucide-react";
 import { Button, Heading, Field, Modal } from "./ui.jsx";
 import { notify } from "./FeedbackHost.jsx";
 import "./competitions.css";
@@ -16,6 +16,20 @@ const time = (n) =>
   }).format(n);
 const color = (i) => `hsl(${(206 + i * 137.508) % 360} 65% 60%)`;
 const fmt = (n) => n.toLocaleString("zh-TW");
+function Schedule({ room }) {
+  const [now, setNow] = useState(Date.now);
+  const running = room.total == null && room.scheduledAt > now;
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+  const seconds = Math.max(0, Math.ceil((room.scheduledAt - now) / 1000));
+  const digits = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+    .map(v => String(v).padStart(2, "0")).join(":");
+  return <div className="match-schedule"><span><Clock size={15}/> {time(room.scheduledAt)} 台灣時間</span>
+    <strong>{room.total != null ? "已結算" : running ? "距開賽 " + digits : "已到開賽時間"}</strong></div>;
+}
 function Chart({ entries, motion }) {
   const canvas = useRef(null),
     previous = useRef([]);
@@ -291,6 +305,12 @@ export default function Competitions({ me, request, onUnauthorized }) {
   }
   return (
     <section>
+      {error && (
+        <p role="alert">
+          {error} <Button onClick={() => load()}>重試</Button>
+        </p>
+      )}
+      {!room && <>
       <Heading
         title="比賽"
         onAdd={() =>
@@ -304,11 +324,6 @@ export default function Competitions({ me, request, onUnauthorized }) {
         }
         addLabel="建立比賽"
       />
-      {error && (
-        <p role="alert">
-          {error} <Button onClick={() => load()}>重試</Button>
-        </p>
-      )}
       <nav className="competition-switch" aria-label="比賽清單">
         {[[false, "進行中"], [true, "歷史紀錄"]].map(([value, label]) =>
           <Button key={label} aria-pressed={history === value} onClick={() => {
@@ -340,42 +355,20 @@ export default function Competitions({ me, request, onUnauthorized }) {
         ))}
       </div>
       {history && (nextPage ?? archivePages) > 0 && <Button disabled={paging} onClick={loadOlder}>{paging ? "讀取中…" : "載入更早紀錄"}</Button>}
-      {room && (
-        <Modal
-          title={room.title}
-          className="competition-modal"
-          onClose={() => {
-            if (!busy) close();
-          }}
-        >
-          <p className="muted">
-            {time(room.scheduledAt)}（台灣時間） · 房主 {room.ownerName}
-          </p>
-          <p className="competition-body">{room.description}</p>
-          <label className="competition-motion"><input type="checkbox" checked={motion} onChange={e => {
-            setMotion(e.target.checked);
-            localStorage.setItem("competitionMotion", e.target.checked ? "on" : "off");
-          }} />播放比賽動畫</label>
-          <div className="competition-grid" data-motion={motion}>
-            <Chart entries={room.entries} motion={motion} />
-            <Ranking
-              motion={motion}
-              arrival={arrival}
-              room={room}
-              onChoose={
-                host && open
-                  ? (e) =>
-                      setForm({
-                        kind: "score",
-                        memberId: e.id,
-                        name: e.name,
-                        previous: e.coins,
-                        coins: String(e.coins),
-                      })
-                  : null
-              }
-            />
-          </div>
+      </>}
+      {room && <article className="match-page">
+        <Button className="match-back" disabled={busy} onClick={close}><ArrowLeft size={16}/> 返回比賽清單</Button>
+        <header className="match-title"><h1>{room.title}</h1><Schedule key={room.id} room={room}/></header>
+        <div className="match-layout">
+          <aside className="match-box match-rules"><h2>比賽規則</h2><p className="competition-body">{room.description}</p><small>房主 · {room.ownerName}</small></aside>
+          <section className="match-feature">
+            <img className="match-poster" src="/guild-challenge.webp" alt="群山競技場中的挑戰賽獎盃"/>
+            <div className="match-pool"><span className="match-coin"><Coins size={32}/></span><div><h2>獎池總額</h2><strong>{room.total == null ? "待房主結算" : fmt(room.total)}</strong></div></div>
+          </section>
+          <aside className="match-box match-log"><h2>比賽日誌</h2><p><Users size={16}/> {room.entries.length} 人參與</p>
+            {room.events?.length ? <ol>{room.events.slice().reverse().map((event,i) => <li key={room.events.length-i}><time>{time(event.at)}</time>{event.message}</li>)}</ol> : <small>這場比賽尚無日誌紀錄。</small>}
+          </aside>
+        </div>
           <div className="competition-actions">
             {open && !room.entries.some((e) => e.id === me.id) && (
               <Button
@@ -402,8 +395,31 @@ export default function Competitions({ me, request, onUnauthorized }) {
             )}
             {!open && <strong>已結算 · 總額 {fmt(room.total)}</strong>}
           </div>
-        </Modal>
-      )}
+          <label className="competition-motion"><input type="checkbox" checked={motion} onChange={e => {
+            setMotion(e.target.checked);
+            localStorage.setItem("competitionMotion", e.target.checked ? "on" : "off");
+          }} />播放比賽動畫</label>
+          <div className="competition-grid" data-motion={motion}>
+            <Chart entries={room.entries} motion={motion} />
+            <Ranking
+              motion={motion}
+              arrival={arrival}
+              room={room}
+              onChoose={
+                host && open
+                  ? (e) =>
+                      setForm({
+                        kind: "score",
+                        memberId: e.id,
+                        name: e.name,
+                        previous: e.coins,
+                        coins: String(e.coins),
+                      })
+                  : null
+              }
+            />
+          </div>
+        </article>}
       {form && (
         <Modal
           title={

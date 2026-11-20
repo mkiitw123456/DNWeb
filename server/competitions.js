@@ -65,6 +65,10 @@ function settlementNotice(s, r) {
   enqueue();
 }
 
+function logEvent(room, message) {
+  room.events = [...(room.events || []), { at: Date.now(), message }].slice(-100);
+}
+
 export function competitionAction(s, user, type, p = {}) {
   const rooms = s.competitions || [];
   let room = rooms.find((r) => r.id === p.id);
@@ -104,6 +108,7 @@ export function competitionAction(s, user, type, p = {}) {
         version: 0,
         total: null,
       };
+      logEvent(room, room.ownerName + " 建立比賽");
       s.competitions = [room, ...rooms];
     }
   } else if (type !== "competition.state") {
@@ -114,6 +119,7 @@ export function competitionAction(s, user, type, p = {}) {
     if (type === "competition.join") {
       if (!room.entries.some((e) => e.id === user.id)) {
         if (room.entries.length >= 100) fail("本場參賽人數已滿");
+        logEvent(room, (user.nickname || user.username) + " 加入比賽");
         room.entries.push({
           id: user.id,
           name: user.nickname || user.username,
@@ -128,6 +134,7 @@ export function competitionAction(s, user, type, p = {}) {
       if (entry.coins !== coins) {
         if (entry.coins !== p.previous)
           fail("此成員的月亮幣已變更，請重新確認", 409);
+        logEvent(room, display(s, entry.id, entry.name) + " 的月亮幣由 " + entry.coins + " 調整為 " + coins);
         entry.coins = coins;
         room.version++;
       }
@@ -141,6 +148,7 @@ export function competitionAction(s, user, type, p = {}) {
         e.name = display(s, e.id, e.name);
         e.payout = payouts[i];
       });
+      logEvent(room, "比賽已結算，獎池總額 " + total);
       room.total = total;
       room.version++;
       s.deliveries ||= [];

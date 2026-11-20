@@ -129,3 +129,30 @@ dialog.competition-modal {
   @keyframes competition-count { 35% { transform:scale(1.35); color:var(--accent) } }
 }
 .competition-grid[data-motion="false"] .competition-count { animation:none }
+.match-page { max-width:1500px; margin-inline:auto; color:var(--text) }
+.match-back { display:inline-flex; align-items:center; gap:6px }
+.match-title { text-align:center; margin:14px auto 25px }
+.match-title h1 { font-size:clamp(1.7rem,3.6vw,3rem); line-height:1.15; margin:0 0 12px; overflow-wrap:anywhere }
+.match-schedule,.match-schedule span,.match-log>p { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:8px }
+.match-schedule { gap:8px 18px; font-size:.85rem; color:var(--muted) }
+.match-schedule strong { color:var(--accent); font-variant-numeric:tabular-nums }
+.match-layout { display:grid; grid-template-columns:minmax(155px,1fr) minmax(0,2.65fr) minmax(165px,1fr); gap:clamp(10px,1.5vw,24px); align-items:stretch }
+.match-box,.match-pool { border:1px solid var(--border); border-radius:14px; background:var(--panel-background,var(--surface)); padding:clamp(14px,1.45vw,24px); overflow-wrap:anywhere }
+.match-page h2 { font-size:1.05rem; margin:0 }
+.match-rules { display:flex; flex-direction:column }
+.match-rules small,.match-log small,.match-log time { color:var(--muted) }
+.match-rules small { margin-top:auto; padding-top:16px }
+.match-feature { display:grid; align-content:start; gap:10px }
+.match-poster { display:block; width:100%; aspect-ratio:2.2; object-fit:cover; border-radius:14px }
+.match-pool { display:flex; align-items:center; gap:16px }
+.match-coin { display:grid; place-items:center; width:52px; height:52px; flex-shrink:0; border-radius:50%; background:linear-gradient(135deg,#ffdf89,#d39232); color:#503010; box-shadow:inset 0 0 0 3px #efbf5c,inset 0 0 0 5px #a96927 }
+.match-pool h2 { color:var(--muted); font-size:.8rem }
+.match-pool strong { display:block; margin-top:4px; font-size:1.35rem }
+.match-log>p { justify-content:start; padding-bottom:10px; border-bottom:1px solid var(--border) }
+.match-log ol { padding:0; margin:0; list-style:none; max-height:280px; overflow:auto }
+.match-log li { padding:8px 0; font-size:.85rem }
+.match-log time { display:block; font-size:.72rem; font-variant-numeric:tabular-nums }
+.match-page .competition-actions { margin:14px 0; }
+.match-page .competition-grid { padding:16px; background:var(--panel-background,var(--surface)); border:1px solid var(--border); border-radius:14px }
+@media(max-width:900px){.match-layout{grid-template-columns:1fr 1fr}.match-feature{grid-column:1/-1;grid-row:1}.match-log ol{max-height:160px}}
+@media(max-width:560px){.match-layout{grid-template-columns:minmax(0,1fr)}.match-title{text-align:start}.match-schedule{justify-content:start}.match-rules small{padding-top:0}}
