@@ -8,6 +8,59 @@ function smooth(x) {
   const t = Math.max(0, Math.min(1, x));
   return t * t * (3 - 2 * t);
 }
+// Three spare rows below each sprite leave room for toes under the waterline.
+const frameHeight = tileSize + 3;
+const strideFrames = [0, 1, 2, 1, 0, -1, -2, -1];
+const kickReach = [2, 1, -1, -3, -4, -3, -1, 1];
+const kickDepth = [1, 2, 3, 3, 2, 1, 0, 0];
+
+function makeGaitAtlas(image, scene) {
+  const sheet = document.createElement("canvas");
+  sheet.width = image.width;
+  sheet.height = frameHeight * (1 + strideFrames.length);
+  const c = sheet.getContext("2d");
+  c.imageSmoothingEnabled = false;
+  c.drawImage(image, 0, 0); // The first row is the resting pose.
+  for (let frame = 0; frame < strideFrames.length; frame++) {
+    const top = (frame + 1) * frameHeight;
+    for (let tile = 0; tile < 4; tile++) {
+      const x = tile * tileSize;
+      if (scene === "pond") {
+        for (let leg = 0; leg < 2; leg++) {
+          const phase = (frame + leg * 4) % 8;
+          const hip = x + (leg ? 16 : 11);
+          const toe = hip + kickReach[phase];
+          const depth = kickDepth[phase];
+          c.fillStyle = leg ? "#af8050" : "#79735a";
+          c.fillRect(hip, top + 29, 2, 2);
+          c.fillRect(Math.min(hip, toe), top + 30, Math.abs(toe - hip) + 2, 1 + Math.min(depth, 1));
+          c.fillRect(toe, top + 30, 2, depth + 1);
+          c.fillRect(toe - 1, top + 30 + depth, 4, 1);
+        }
+        c.drawImage(image, x, 0, tileSize, tileSize, x, top, tileSize, tileSize);
+        continue;
+      }
+      const hipRow = scene === "ice" ? 28 : 26;
+      const split = scene === "ice" ? [16, 16, 18, 16][tile] : [12, 13, 13, 13][tile];
+      c.drawImage(image, x, 0, tileSize, hipRow, x, top, tileSize, hipRow);
+      for (let leg = 0; leg < 2; leg++) {
+        const phase = (frame + leg * 4) % 8;
+        const start = leg ? split : 0;
+        const width = leg ? tileSize - split : split;
+        const height = tileSize - hipRow;
+        const lift = phase >= 2 && phase <= 4 ? 1 : 0;
+        for (let row = 0; row < height - lift; row++) {
+          const bend = row / (height - lift - 1);
+          const dx = Math.round(strideFrames[phase] * bend);
+          const sy = hipRow + Math.round(bend * (height - 1));
+          c.drawImage(image, x + start, sy, width, 1, x + start + dx, top + hipRow + row, width, 1);
+        }
+      }
+    }
+  }
+  return sheet;
+}
+
 const art = new Map();
 function loadArt(scene) {
   if (!art.has(scene)) {
@@ -15,7 +68,7 @@ function loadArt(scene) {
       (suffix) =>
         new Promise((resolve, reject) => {
           const image = new Image();
-          image.onload = () => resolve(image);
+          image.onload = () => resolve(suffix ? makeGaitAtlas(image, scene) : image);
           image.onerror = () => reject(new Error("habitat art unavailable"));
           image.src = `/habitats/${scene}${suffix}.webp?v=pixel-meadow`;
         }),
@@ -51,6 +104,7 @@ function duck(id, time, count) {
     y: p.y + 4 * Math.cos(angle * 0.8 + phase),
     dir: Math.cos(angle) >= 0 ? 1 : -1,
     tile: id % 4,
+    stepping: true,
     size: p.size * (id % 4 === 2 ? 0.78 : 1),
   };
 }
@@ -67,6 +121,7 @@ function cat(id, time, count) {
     size: p.size * 1.08,
     dir: Math.cos(cycle) >= 0 ? 1 : -1,
     tile: id % 3,
+    stepping: walking,
   };
 }
 // Walk and glide along the same snow-covered lane; pause before turning back.
@@ -88,6 +143,7 @@ function penguin(id, time, count) {
     size: home.size,
     tile: id % 4,
     walking,
+    stepping: walking > 0.08,
   };
 }
 function ellipse(c, x, y, rx, ry, color, stroke = false) {
@@ -117,7 +173,7 @@ function basket(c, front) {
     c.fillRect(158 + i * 4, 103, 3, 1);
   }
 }
-function drawAnimal(c, img, a) {
+function drawAnimal(c, img, a, frame) {
   // Keep the sprite on the pixel grid while its path uses fractional coordinates.
   const size = Math.round(a.size);
   const left = Math.round(a.x - size / 2);
@@ -125,7 +181,10 @@ function drawAnimal(c, img, a) {
   c.save();
   c.translate(a.dir < 0 ? left + size : left, top);
   c.scale(a.dir, 1);
-  c.drawImage(img, a.tile * tileSize, 0, tileSize, tileSize, 0, 0, size, size);
+  const sourceY = frame * frameHeight;
+  c.drawImage(img, a.tile * tileSize, sourceY, tileSize, tileSize, 0, 0, size, size);
+  const extra = frameHeight - tileSize;
+  c.drawImage(img, a.tile * tileSize, sourceY + tileSize, tileSize, extra, 0, size, size, Math.round(size * extra / tileSize));
   c.restore();
 }
 function draw(c, [back, atlas], scene, total, cap, time, arrival) {
@@ -150,6 +209,7 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
         x: 85 + 18 * Math.sin((time - 0.6) * 0.57),
         y: 96 + Math.abs(Math.sin(time * 6)),
         tile: 0,
+        stepping: Math.abs(Math.cos((time - 0.6) * 0.57)) > 0.15,
         dir: Math.cos((time - 0.6) * 0.57) > 0 ? 1 : -1,
       });
     }
@@ -160,6 +220,7 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
         y: mix(105, 101, hop) - Math.sin(hop * Math.PI) * 10,
         dir: Math.sin(time * 0.28) > 0 ? -1 : 1,
         tile: 1,
+        stepping: false,
       });
     }
     if (actors[2])
@@ -167,6 +228,7 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
         x: 224,
         y: 113 + Math.sin(time * 1.5) * 0.4,
         tile: 3,
+        stepping: false,
       });
   }
   const age = arrival ? time - arrival.time : Infinity;
@@ -182,6 +244,7 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
     actor.y =
       mix(mix(start[1], land[1], jump), actor.y, join) -
       (scene === "pond" ? 11 * Math.sin(jump * Math.PI) : 0);
+    actor.stepping = age > 0.25 && (scene !== "pond" || age > 1.35);
     if (age < 1.4) {
       actor.dir = scene === "pond" ? 1 : -1;
     }
@@ -244,7 +307,9 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
       }
       ellipse(c, a.x, a.y - 1, a.size * 0.3, 2.3, "#36495447");
     }
-    drawAnimal(c, atlas, a);
+    const cadence = scene === "pond" ? 8 : scene === "cats" ? 10 : 12;
+    const frame = a.stepping ? 1 + (Math.floor(time * cadence + a.id * 3) % strideFrames.length) : 0;
+    drawAnimal(c, atlas, a, frame);
   }
   if (scene === "cats" && !front) basket(c, true);
 }
