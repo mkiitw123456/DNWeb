@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 const options = [
   ["aquarium", "潮汐水族箱"],
   ["sky", "山頂觀星台"],
+  ["inn", "冒險者旅店"],
   ["simple", "簡約簽到"],
 ];
 const fallback = new Map();

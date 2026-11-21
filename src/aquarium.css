@@ -95,3 +95,7 @@
 .scenery-sky .aquarium-stage canvas { width: 100%; max-width: none; height: 100%; object-fit: cover; }
 .scenery-sky .aquarium-population { background: #22253f; border-color: #73748f; color: #ffe3a7; }
 .scenery-sky .aquarium-population span { color: #d5d2df; }
+.scenery-inn .aquarium-stage { background: #49372f; }
+.scenery-inn .aquarium-stage canvas { display: block; width: 100%; max-width: none; height: auto; }
+.scenery-inn .aquarium-population { background: #49382e; border-color: #947653; color: #ffe0ac; }
+.scenery-inn .aquarium-population span { color: #e0c49f; }
