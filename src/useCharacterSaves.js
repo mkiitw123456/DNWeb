@@ -3,6 +3,18 @@ import { apiRequest } from "./api.js";
 import { notify } from "./FeedbackHost.jsx";
 
 
+// Store one submitted field per key so independent tabs cannot erase other fields.
+const namespace = (member) => "ddstar.character-draft.v1/" + encodeURIComponent(member) + "/";
+const fieldKey = (member, id, field, key) =>
+  namespace(member) + [id, field, key].map(encodeURIComponent).join("/");
+function localDrafts(action) {
+  try {
+    return action(localStorage);
+  } catch {
+    notify("瀏覽器無法存取本機草稿，請在關閉前完成同步", "error");
+  }
+}
+
 function mergeChanges(previous, patch) {
   const merged = { ...previous };
   for (const [field, edits] of Object.entries(patch)) {
@@ -29,6 +41,7 @@ export default function useCharacterSaves(
   const batchStarted = useRef(0);
   const outcome = useRef({});
   const [pending, setPending] = useState({});
+  const receipts = useRef(new WeakMap());
   const failures = useRef(new Map());
   const [failed, setFailed] = useState({});
   const saving = Object.keys(pending).length > 0 || Object.keys(failed).length > 0;
@@ -37,9 +50,14 @@ export default function useCharacterSaves(
     setFailed(Object.fromEntries([...failures.current].map(([id, item]) => [id, item.patch])));
   }
   function forget(id) {
+    if (session.memberId) localDrafts(store => {
+      const prefix = namespace(session.memberId) + encodeURIComponent(id) + "/";
+      for (const k of Object.keys(store)) if (k.startsWith(prefix)) store.removeItem(k);
+    });
     if (failures.current.delete(id)) publishFailures();
   }
-  function clearField(id, field, key) {
+  function clearField(id, field, key, clearLocal = true) {
+    if (clearLocal && session.memberId) localDrafts(store => store.removeItem(fieldKey(session.memberId, id, field, key)));
     const item = failures.current.get(id);
     if (!item || !Object.hasOwn(item.patch[field] || {}, key)) return;
     const edits = { ...item.patch[field] };
@@ -75,7 +93,7 @@ export default function useCharacterSaves(
   function discardExpired() {
     let changed = false;
     for (const [id, item] of failures.current) {
-      if (!item.owner.isCurrent()) forget(id);
+      if (!item.owner.isCurrent()) { failures.current.delete(id); publishFailures(); }
     }
     if (draftSession.current && !draftSession.current.isCurrent()) {
       drafts.current.clear();
@@ -97,6 +115,25 @@ export default function useCharacterSaves(
   }
   useEffect(discardExpired, [session.onUnauthorized]);
 
+  useEffect(() => {
+    if (!session.memberId) return;
+    const prefix = namespace(session.memberId);
+    localDrafts(store => {
+      for (const k of Object.keys(store)) {
+        if (!k.startsWith(prefix)) continue;
+        try {
+          const [id, field, key] = k.slice(prefix.length).split("/").map(decodeURIComponent);
+          if (!id || !key || !["details", "gear", "quantities", "runs"].includes(field)) continue;
+          const { value } = JSON.parse(store.getItem(k));
+          if (typeof value !== "number" && typeof value !== "string") continue;
+          const patch = mergeChanges(failures.current.get(id)?.patch, { [field]: { [key]: value } });
+          failures.current.set(id, { owner: session, patch });
+        } catch { /* Ignore damaged individual entries. */ }
+      }
+    });
+    publishFailures();
+  }, [session.memberId, session.onUnauthorized]);
+
   async function saveBatch(batch, owner) {
     if (!owner.isCurrent()) return discardExpired();
     if (!batch.size) return;
@@ -109,6 +146,10 @@ export default function useCharacterSaves(
           { id, ...patch },
         );
         if (!owner.isCurrent()) return discardExpired();
+        localDrafts(store => {
+          for (const [k, receipt] of receipts.current.get(patch) || [])
+            if (store.getItem(k) === receipt) store.removeItem(k);
+        });
         revision.current++;
         setData(
           (state) =>
@@ -181,13 +222,18 @@ export default function useCharacterSaves(
   function change(id, field, key, value) {
     if (!session.isCurrent()) return;
     discardExpired();
-    clearField(id, field, key);
+    clearField(id, field, key, false);
     draftSession.current = session;
     revision.current++;
-    drafts.current.set(
-      id,
-      mergeChanges(drafts.current.get(id), { [field]: { [key]: value } }),
-    );
+    const previous = drafts.current.get(id);
+    const patch = mergeChanges(previous, { [field]: { [key]: value } });
+    const k = fieldKey(session.memberId, id, field, key);
+    const receipt = JSON.stringify({ value, token: crypto.randomUUID() });
+    localDrafts(store => store.setItem(k, receipt));
+    const keys = new Map(receipts.current.get(previous));
+    keys.set(k, receipt);
+    receipts.current.set(patch, keys);
+    drafts.current.set(id, patch);
     publish();
     if (batches.current.size) return;
     // Save after a short pause, or within 900 ms if selections keep arriving.

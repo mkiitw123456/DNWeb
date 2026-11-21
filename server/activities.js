@@ -1,5 +1,5 @@
 import { randomInt, randomUUID, createHash } from "node:crypto";
-import { journeyEvents } from "./journey.js";
+import { journeyEvents, journeyStoryWithContext } from "./journey.js";
 import { currentCampaign, scriptCatalog, validateCampaigns } from "./campaigns.js";
 import { fail, text, number } from "./domain.js";
 import { activityTransaction, activityQuery } from "./activity-store.js";
@@ -193,6 +193,7 @@ export function normalizeActivityConfig(config) {
     events: (updated ? config.events : upgradedJourney(config)).map(
       (event) => ({
         ...event,
+        story: journeyStoryWithContext(event),
         options: event.options.map((option) =>
           option.outcomes
             ? option

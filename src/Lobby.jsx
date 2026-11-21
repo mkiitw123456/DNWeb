@@ -1,3 +1,4 @@
+import { encounterMotion } from "./encounterMotion.js";
 import { useStarRewards, STAR_ASSET } from "./StarRewards.jsx";
 import Aquarium from "./Aquarium.jsx";
 import useSubmitDialog from "./useSubmitDialog.js";
@@ -150,6 +151,7 @@ export default function Lobby({
     settledView.current = null;
     pending.current = null;
     setError("");
+    setMotion(encounterMotion() === "full" || !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "full" : "reduced");
     setEncounterPhase("waiting");
     setInEncounter(false);
     setSelected(a);
@@ -189,24 +191,20 @@ export default function Lobby({
       setBusy(false);
     }
   };
+  const [motion, setMotion] = useState("system");
   const hasEncounter = selected?.content?.extraIndex >= 0;
   const revealing = hasEncounter && encounterPhase !== "ready";
   useEffect(() => {
     if (result || !hasEncounter) return;
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
     const warning = setTimeout(() => {
       setEncounterPhase("warning");
       playSound("reveal");
     }, 500);
     const opening = setTimeout(
-      () => setEncounterPhase(reduced ? "ready" : "opening"),
-      1050,
+      () => setEncounterPhase("opening"),
+      1350,
     );
-    const ready = reduced
-      ? null
-      : setTimeout(() => setEncounterPhase("ready"), 1630);
+    const ready = setTimeout(() => setEncounterPhase("ready"), 2130);
     return () => {
       clearTimeout(warning);
       clearTimeout(opening);
@@ -501,7 +499,7 @@ export default function Lobby({
         <Modal
           className={
             selected.type === "event"
-              ? "activity-modal adventure-modal"
+              ? `activity-modal adventure-modal motion-${motion}`
               : "activity-modal"
           }
           title={inEncounter ? "機遇獎勵關卡" : selected.campaign?.title || selected.title}

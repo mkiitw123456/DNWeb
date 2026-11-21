@@ -9,6 +9,7 @@ import {
 import { Heading, Field, Button } from "./ui.jsx";
 import { useState } from "react";
 import SoundSettings from "./SoundSettings.jsx";
+import { encounterMotion, setEncounterMotion } from "./encounterMotion.js";
 export default function SettingsPanel({
   me,
   onTheme,
@@ -18,6 +19,7 @@ export default function SettingsPanel({
   isSaving,
 }) {
   const [nickname, setNickname] = useState(me.nickname || "");
+  const [motion, setMotion] = useState(encounterMotion);
   const discordSet = !!me.discordId;
   return (
     <section className="settings-panel">
@@ -43,6 +45,16 @@ export default function SettingsPanel({
         <p className="muted">登入帳號不變，公開顯示改用暱稱。</p>
       </form>
       <SoundSettings />
+      <label className="settings-option">
+        <span><strong>冒險機遇動畫</strong><small>控制第三個選項出現時的震動與展開效果</small></span>
+        <select value={motion} onChange={e => {
+          setEncounterMotion(e.target.value);
+          setMotion(e.target.value);
+        }}>
+          <option value="system">跟隨系統</option>
+          <option value="full">完整動畫</option>
+        </select>
+      </label>
       <div className="settings-options">
         <button className="settings-option" onClick={onTheme}>
           <Palette size={23} />

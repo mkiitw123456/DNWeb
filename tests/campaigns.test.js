@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activityAction, activityView } from "../server/activities.js";
+import { journeyEvents, journeyStoryWithContext } from "../server/journey.js";
 import { validateCampaigns } from "../server/campaigns.js";
 
 test("a campaign schedule rejects impossible dates, duplicate launches and unknown stories", () => {
@@ -105,4 +106,12 @@ test("scheduled campaign unlocks at 09:00 and advances three chapters per member
   assert.equal(next.campaign.title, alternateScript.title);
   assert.equal(next.campaign.progress, 0);
   assert.ok(next.content.options.length >= 2);
+});
+
+test("chapter clues extend shipped scenes once and preserve a guild-authored story", () => {
+  const chapter = journeyEvents()[4];
+  const story = journeyStoryWithContext(chapter);
+  assert.ok(story.includes("門檻") && story.includes("翻動紙頁"));
+  assert.equal(journeyStoryWithContext({ ...chapter, story }), story);
+  assert.equal(journeyStoryWithContext({ ...chapter, story: "公會自訂的委託" }), "公會自訂的委託");
 });

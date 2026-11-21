@@ -948,14 +948,28 @@ dialog.adventure-modal .activity-play > button.primary {
   .adventure-modal .star-reward-card {
     animation: adventure-page-enter 200ms ease-out both;
   }
-  dialog.adventure-modal:has([data-encounter="warning"]) {
-    animation: adventure-shake 420ms ease-out;
-  }
-  .event-rift-slot { transition: grid-template-rows 390ms ease-in-out; }
-  [data-encounter="opening"] .event-extra {
-    animation: adventure-appear 310ms 180ms ease-out both;
-  }
-  .event-extra::before { animation: adventure-embers 3.5s linear infinite; }
+}
+/* A member can opt into the full reveal even when the OS reduces motion. */
+dialog.motion-full .activity-options[data-encounter="warning"] {
+  animation: adventure-shake 540ms ease-out !important;
+}
+dialog.motion-full .event-rift-slot {
+  transition: grid-template-rows 620ms cubic-bezier(.25,.8,.3,1) !important;
+}
+dialog.motion-full [data-encounter="opening"] .event-extra {
+  animation: adventure-appear 540ms 90ms ease-out both !important;
+}
+dialog.motion-full [data-encounter="opening"] > button {
+  animation: adventure-make-room 620ms ease-out !important;
+  --nudge: -6px;
+}
+dialog.motion-full [data-encounter="opening"] > button:last-child { --nudge: 6px; }
+@keyframes adventure-make-room {
+  35% { transform: translateY(var(--nudge)); }
+}
+dialog.motion-full .event-extra::before {
+  animation: adventure-embers 3.5s linear infinite !important;
+}
   @keyframes adventure-embers {
     from { transform: translateY(20px); }
     to { transform: translateY(-28px); }
@@ -966,9 +980,9 @@ dialog.adventure-modal .activity-play > button.primary {
   }
   @keyframes adventure-shake {
     0%, 100% { transform: none; }
-    18% { transform: translateX(-4px); }
-    38% { transform: translateX(3px); }
-    60% { transform: translateX(-2px); }
+    18% { transform: translateX(-8px); }
+    38% { transform: translateX(7px); }
+    60% { transform: translateX(-4px); }
     82% { transform: translateX(1px); }
   }
   @keyframes adventure-appear {
@@ -983,7 +997,6 @@ dialog.adventure-modal .activity-play > button.primary {
       transform: none;
     }
   }
-}
 .encounter-challenge {
   padding: 18px 4px 0;
   color: var(--panel-text, var(--text));

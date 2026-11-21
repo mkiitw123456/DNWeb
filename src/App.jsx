@@ -99,6 +99,7 @@ export default function App() {
     refreshShell,
     enqueueWrite,
     {
+      memberId: data?.me.id,
       isCurrent: () => authVersion.current === generation,
       onUnauthorized,
     },
