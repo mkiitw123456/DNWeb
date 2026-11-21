@@ -8,7 +8,6 @@ export const animalHabitats = {
 const options = [
   ["aquarium", "潮汐水族箱"],
   ["sky", "山頂觀星台"],
-  ["inn", "冒險者旅店"],
   ...Object.entries(animalHabitats).map(([id, habitat]) => [id, habitat.name]),
   ["simple", "簡約簽到"],
 ];

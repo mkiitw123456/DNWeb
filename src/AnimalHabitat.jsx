@@ -1,421 +1,302 @@
 import { useEffect, useRef } from "react";
 
 const W = 320,
-  H = 132,
-  tau = 2 * Math.PI;
-const ease = (t) => {
-  t = Math.max(0, Math.min(1, t));
+  H = 133,
+  resolution = 2;
+const mix = (a, b, f) => a + (b - a) * f;
+function smooth(x) {
+  const t = Math.max(0, Math.min(1, x));
   return t * t * (3 - 2 * t);
-};
-const mix = (a, b, t) => a + (b - a) * t;
-const palettes = {
-  pond: ["#fff0ac", "#d9c2a0", "#efda7b", "#bb9072"],
-  cats: ["#d48b51", "#525264", "#d4bfaa", "#efd7a3"],
-  ice: ["#354d68", "#48576b", "#566780", "#364964"],
-};
-function rect(c, x, y, w, h, color) {
-  c.fillStyle = color;
-  c.fillRect(Math.round(x), Math.round(y), w, h);
 }
-function oval(c, x, y, rx, ry, color) {
-  for (let row = -ry; row <= ry; row++) {
-    const span = Math.round(
-      rx * Math.sqrt(Math.max(0, 1 - (row * row) / (ry * ry))),
+const art = new Map();
+function loadArt(scene) {
+  if (!art.has(scene)) {
+    const images = ["", "-animals"].map(
+      (suffix) =>
+        new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("habitat art unavailable"));
+          image.src = `/habitats/${scene}${suffix}.webp`;
+        }),
     );
-    rect(c, x - span, y + row, 2 * span + 1, 1, color);
+    art.set(
+      scene,
+      Promise.all(images).catch((error) => {
+        art.delete(scene);
+        throw error;
+      }),
+    );
   }
+  return art.get(scene);
 }
-function reeds(c, x, y, sway = 0) {
-  for (let j = 0; j < 7; j++) {
-    const h = 9 + ((j * 11) % 16),
-      tip = x + j * 2 + Math.round(Math.sin(j * 2 + sway) * 2);
-    rect(c, x + j * 2, y - h, 1, h, "#486c46");
-    rect(c, tip, y - h - 3, 2, 6, j % 2 ? "#996d43" : "#739456");
-  }
-}
-function box(c, x, y, front) {
-  rect(c, x - 10, y - 5, 21, 7, front ? "#be8b58" : "#6e5145");
-  if (front) {
-    rect(c, x - 10, y - 6, 21, 2, "#e3b377");
-    rect(c, x - 2, y - 4, 3, 5, "#d5a775");
-  }
-}
-function shelfWindow(c, x) {
-  rect(c, x, 9, 39, 31, "#936c61");
-  rect(c, x + 2, 11, 35, 25, "#779397");
-  rect(c, x + 4, 13, 9, 18, "#a9bab2");
-  rect(c, x + 19, 11, 2, 25, "#a5816e");
-  rect(c, x + 2, 22, 35, 2, "#a5816e");
-  rect(c, x - 3, 38, 45, 4, "#f1cfa2");
-}
-function floe(c, x, y, w) {
-  rect(c, x + 3, y + 1, w - 6, 6, "#67a5bf");
-  rect(c, x + 1, y - 2, w - 2, 4, "#b0dfe9");
-  rect(c, x + 5, y - 4, w - 10, 3, "#f5f6e8");
-}
-function background(scene) {
-  const layer = document.createElement("canvas");
-  layer.width = W;
-  layer.height = H;
-  const c = layer.getContext("2d");
-  const g = c.createLinearGradient(0, 0, 0, H);
-  const colors =
-    scene === "pond"
-      ? ["#a9c6a3", "#74ada1", "#4d8f91"]
-      : scene === "cats"
-        ? ["#e8bca0", "#e8c49c", "#b88870"]
-        : ["#91b3d2", "#548cac", "#21516f"];
-  colors.forEach((color, i) => g.addColorStop(i / 2, color));
-  c.fillStyle = g;
-  c.fillRect(0, 0, W, H);
-  if (scene === "pond") {
-    for (let x = 0; x < W; x += 2) {
-      const bank = Math.round(17 + 5 * Math.sin(x / 24) + 4 * Math.cos(x / 40));
-      rect(c, x, 0, 2, bank, "#719267");
-      rect(c, x, bank, 2, 3, "#b4be82");
-    }
-    for (let i = 0; i < 8; i++)
-      reeds(c, i * 44 - 5, 18 + Math.round(4 * Math.sin(i)));
-    for (let i = 0; i < 49; i++) {
-      const x = (i * 97) % W,
-        y = 34 + ((i * 31) % 92);
-      rect(c, x, y, 3 + (i % 8), 1, "#91b9a6");
-    }
-    for (const [x, y] of [
-      [46, 58],
-      [56, 65],
-      [241, 101],
-      [250, 95],
-      [271, 103],
-      [96, 34],
-      [185, 38],
-    ]) {
-      oval(c, x, y, 8, 3, "#538575");
-      oval(c, x, y - 1, 7, 2, "#91b77a");
-      rect(c, x, y, 4, 1, "#659a83");
-    }
-    for (const [x, y] of [
-      [54, 60],
-      [249, 91],
-    ]) {
-      rect(c, x - 4, y - 1, 8, 2, "#e2a7ad");
-      rect(c, x - 2, y - 4, 4, 4, "#f9cfbf");
-      rect(c, x, y - 1, 2, 1, "#f4dc87");
-    }
-  } else if (scene === "cats") {
-    rect(c, 0, 0, W, 44, "#c99780");
-    for (let y = 4; y < 42; y += 8)
-      for (let x = (y % 16) * 2; x < W; x += 27)
-        rect(c, x, y, 18, 1, "#d3a78c");
-    for (const x of [23, 109, 218]) shelfWindow(c, x);
-    rect(c, 0, 44, W, 3, "#a07868");
-    for (let y = 50; y < H; y += 10) {
-      rect(c, 0, y, W, 1, "#c99f84");
-      for (let x = y % 21; x < W; x += 32) rect(c, x, y, 1, 10, "#d0a58a");
-    }
-    for (let i = 0; i < 18; i++) rect(c, 34 + i * 2, 48 + i, 48, 1, "#ecd3a9");
-    for (const x of [7, 290, 304]) {
-      rect(c, x, 39, 9, 8, "#aa715a");
-      for (let j = 0; j < 4; j++)
-        oval(
-          c,
-          x + 4 + Math.round(Math.sin(j * 2) * 4),
-          37 - j * 2,
-          3,
-          3,
-          "#73876b",
-        );
-    }
-    box(c, 166, 79, false);
-  } else {
-    rect(c, 0, 0, W, 42, "#bad2df");
-    rect(c, 0, 39, W, 4, "#e2e7e6");
-    for (let x = 0; x < W; x += 2) {
-      const h = Math.round(
-        5 + 11 * Math.abs(Math.sin(x / 44)) + 6 * Math.cos(x / 17),
-      );
-      rect(c, x, 39 - h, 2, h, "#97b6ce");
-      rect(c, x, 39 - h, 2, 3, "#e1e8eb");
-    }
-    for (const [x, y, w] of [
-      [14, 54, 87],
-      [134, 47, 72],
-      [222, 59, 86],
-    ])
-      floe(c, x, y, w);
-    for (let i = 0; i < 43; i++) {
-      const x = (i * 79) % W,
-        y = 65 + ((i * 23) % 67);
-      rect(c, x, y, 2 + (i % 6), 1, "#75a4bc");
-    }
-    for (let x = 0; x < W; x += 2) {
-      const h = 4 + Math.round(3 * Math.sin(x / 19));
-      rect(c, x, H - h, 2, h, "#315d70");
-    }
-  }
-  return layer;
-}
-
-// Sprites face right. Transparent cells retain the painted habitat behind them.
-const sprites = {
-  duck: [
-    ".......ooo..",
-    "......occso.",
-    "......occobb",
-    "..o....cco..",
-    ".ocoooooco..",
-    "occcccccco..",
-    ".occaacco...",
-    "..oooooo....",
-  ],
-  dip: [
-    "...bb.......",
-    "...cc.......",
-    "..occco.....",
-    ".occcccco...",
-    "..ooooooo...",
-  ],
-  cat: [
-    "....o...o...",
-    "....co.oco..",
-    "....ccccco..",
-    "....occsco..",
-    "..ooccccob..",
-    "oocccccco...",
-    "occcaacco...",
-    "o.cc..cc....",
-  ],
-  nap: [
-    "............",
-    ".......o..o.",
-    ".....oocooc.",
-    "..ooccccccc.",
-    "occccaaccso.",
-    "..oooooooo..",
-  ],
-  bird: [
-    "....oooo....",
-    "...occcco...",
-    "...ocsawob..",
-    "...ocwwwo...",
-    "..occwwwo...",
-    "..ocawwwco..",
-    "...ocwwco...",
-    "...oboobo...",
-  ],
-  swim: [
-    ".........ooo",
-    "..oo...oocso",
-    "oocccccccwwb",
-    ".occcwwwwwo.",
-    "...oooooo...",
-  ],
-};
-const spriteCache = new Map();
-function sprite(c, name, id, scene, x, y, dir) {
-  const key = scene + ":" + name + ":" + (id % 4);
-  let image = spriteCache.get(key);
-  if (!image) {
-    const map = {
-      o: scene === "pond" ? "#625c49" : "#39404b",
-      c: palettes[scene][id % 4],
-      s: "#292d38",
-      w: "#e4edf0",
-      a: scene === "cats" ? "#896853" : "#bba87c",
-      b: "#e7a450",
-    };
-    const rows = sprites[name];
-    image = document.createElement("canvas");
-    image.width = 12;
-    image.height = rows.length;
-    const brush = image.getContext("2d");
-    rows.forEach((row, j) => {
-      for (let i = 0; i < row.length; i++)
-        if (row[i] !== ".") rect(brush, i, j, 1, 1, map[row[i]]);
-    });
-    spriteCache.set(key, image);
-  }
-  c.save();
-  c.translate(Math.round(x), Math.round(y));
-  c.scale(dir, 1);
-  c.drawImage(image, -6, -image.height);
-  c.restore();
-}
-function pose(scene, id, t) {
-  const phase = id * 2.39996;
-  if (scene === "pond") {
-    const swim = t * 0.19 + phase,
-      rest = ease((Math.sin(t * 0.09 + phase) - 0.79) / 0.13);
-    return {
-      x: 153 + 115 * Math.sin(swim),
-      y: mix(
-        71 + 35 * Math.sin(swim * 0.77 + phase),
-        17 + 2 * Math.sin(swim),
-        rest,
-      ),
-      dir: Math.cos(swim) >= 0 ? 1 : -1,
-      name: rest < 0.15 && Math.sin(t * 0.63 + phase) > 0.91 ? "dip" : "duck",
-      water: rest < 0.65,
-    };
-  }
-  if (scene === "cats") {
-    const cycle = (t * 0.36 + phase) % tau;
-    const home =
-      [43, 128, 236, 72, 266, 153][id % 6] + (Math.floor(id / 6) % 4) * 5;
-    const base = id % 3 === 0 ? 38 : 64 + ((id * 13) % 52);
-    const walk = ease(Math.sin(cycle) * 1.7);
-    return {
-      x: home + walk * (id % 3 === 0 ? 11 : 27),
-      y: base + (walk > 0 && walk < 1 ? Math.abs(Math.sin(t * 8)) : 0),
-      dir: Math.cos(cycle) >= 0 ? 1 : -1,
-      name: walk === 0 ? "nap" : "cat",
-    };
-  }
-  const route = [
-    [22, 92, 54, 140, 195, 47],
-    [141, 198, 47, 231, 299, 59],
-    [230, 297, 59, 22, 89, 54],
-  ][id % 3];
-  let f = (t * 0.066 + id * 0.137) % 1;
-  const reverse = f >= 0.5;
-  f = (f % 0.5) * 2;
-  const [left, end, level, next, far, nextLevel] = reverse
-    ? [route[3], route[4], route[5], route[0], route[1], route[2]]
-    : route;
-  const dir = Math.sign(end - left);
-  if (f < 0.4)
-    return {
-      x: mix(left, end, ease(f / 0.4)),
-      y: level + (f < 0.24 ? Math.sin(t * 9) * 1.3 : 0),
-      dir,
-      name: f < 0.24 ? "bird" : "swim",
-    };
-  const k = (f - 0.4) / 0.6;
+function space(id, count) {
+  // Fill the foreground first, then distribute later visitors into staggered rows.
+  const slot = ((id % 24) * 7) % 24;
+  const depth = slot % 4;
+  const col = Math.floor(slot / 4);
   return {
-    x: mix(end, next, ease(k)),
-    y: mix(level, nextLevel, k) + Math.sin(k * Math.PI) * (35 + (id % 5) * 4),
-    dir: next > end ? 1 : -1,
-    name: "swim",
+    x: count < 4 ? [108, 205, 155][id % 3] : 29 + col * 51 + (depth % 2) * 8,
+    y: count < 4 ? 94 + ((id % 3) - 1) * 13 : 65 + depth * 16,
+    size: count < 6 ? 42 : 25 + depth * 2,
   };
 }
-function ripple(c, x, y, r) {
-  c.strokeStyle = "#c8dfc0";
-  c.beginPath();
-  c.ellipse(Math.round(x), Math.round(y), r, Math.max(1, r * 0.23), 0, 0, tau);
-  c.stroke();
+function duck(id, time, count) {
+  const p = space(id, count),
+    phase = id * 2.4,
+    angle = time * 0.22 + phase;
+  return {
+    ...p,
+    x: p.x + Math.sin(angle) * (count < 6 ? 34 : 13),
+    y: p.y + 4 * Math.cos(angle * 0.8 + phase),
+    dir: Math.cos(angle) >= 0 ? 1 : -1,
+    tile: id % 4,
+    size: p.size * (id % 4 === 2 ? 0.78 : 1),
+    tilt:
+      0.035 * Math.sin(angle * 3) +
+      0.24 * Math.pow(Math.max(0, Math.sin(time * 0.63 + phase)), 14),
+  };
 }
-function paint(c, base, scene, total, cap, t, entry) {
-  c.drawImage(base, 0, 0);
-  const first = Math.max(0, total - cap),
-    animals = [];
-  for (let id = first; id < total; id++)
-    animals.push({ ...pose(scene, id, t), id });
-  const age = entry ? t - entry.time : Infinity;
-  if (scene === "pond" && age < 1.3) reeds(c, 16, 25, Math.sin(age * 13) * 2);
+function cat(id, time, count) {
+  const p = space(id, count),
+    cycle = time * 0.32 + id * 1.9;
+  const walking = Math.abs(Math.cos(cycle)) > 0.4;
+  return {
+    ...p,
+    x: p.x + (count < 6 ? 24 : 9) * Math.sin(cycle),
+    y:
+      Math.max(77, p.y) +
+      (walking ? 0.85 * Math.abs(Math.sin(time * 8 + id)) : 0),
+    size: p.size * 1.08,
+    dir: Math.cos(cycle) >= 0 ? 1 : -1,
+    tile: id % 3,
+    tilt: walking ? 0.022 * Math.sin(time * 8) : 0,
+  };
+}
+// Each trip starts on one floe and ends on the other. Walk, dive, and climb
+// all use the same sprite, pivot and scale. Only its position and angle change.
+const floes = [
+  [34, 91, 62],
+  [139, 195, 62],
+  [243, 286, 65],
+];
+function penguin(id, time, count) {
+  const trip = time / 10.5 + id * 0.347;
+  const reverse = Math.floor(trip) % 2 === 1;
+  const pair = id % 2;
+  const a = floes[pair + (reverse ? 1 : 0)],
+    b = floes[pair + (reverse ? 0 : 1)];
+  const dir = reverse ? -1 : 1,
+    f = trip % 1;
+  const start = (a[0] + a[1]) / 2,
+    edge = reverse ? a[0] : a[1],
+    land = reverse ? b[1] : b[0];
+  const lane = (id % 4) * 1.2;
+  const size = count < 5 ? 40 : 26 + (id % 3) * 2;
+  const stride = Math.sin(time * 8 + id);
+  let x, y, tilt;
+  if (f < 0.26) {
+    const k = smooth(f / 0.26);
+    x = mix(start, edge, k);
+    y = a[2] + lane - Math.abs(stride) * Math.sin(Math.PI * k) * 1.1;
+    tilt = stride * 0.085 * Math.sin(Math.PI * k);
+  } else if (f < 0.8) {
+    const k = (f - 0.26) / 0.54;
+    x = mix(edge, land, smooth(k));
+    const depth = 37 + (id % 4) * 4;
+    y =
+      mix(a[2], b[2], k) +
+      lane +
+      depth * Math.sin(Math.PI * k) ** 2 -
+      5 * Math.sin(2 * Math.PI * k);
+    tilt = 1.1 * smooth(k / 0.23) * (1 - smooth((k - 0.72) / 0.28));
+  } else {
+    const k = smooth((f - 0.8) / 0.2);
+    x = mix(land, (b[0] + b[1]) / 2, k);
+    y = b[2] + lane - Math.abs(stride) * Math.sin(Math.PI * k);
+    tilt = stride * 0.07 * Math.sin(Math.PI * k);
+  }
+  return { x, y, dir, size, tile: id % 4, tilt, underwater: y > 76 };
+}
+function ellipse(c, x, y, rx, ry, color, stroke = false) {
+  c.beginPath();
+  c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  if (stroke) {
+    c.strokeStyle = color;
+    c.lineWidth = 0.8;
+    c.stroke();
+  } else {
+    c.fillStyle = color;
+    c.fill();
+  }
+}
+function basket(c, front) {
+  if (!front) {
+    ellipse(c, 176, 100, 22, 6, "#917152");
+    ellipse(c, 176, 99, 20, 4, "#514637");
+    return;
+  }
+  c.fillStyle = "#9c6944";
+  c.fillRect(157, 101, 38, 5);
+  c.fillStyle = "#c59663";
+  c.fillRect(155, 100, 42, 2);
+  for (let i = 0; i < 9; i++) {
+    c.fillStyle = i % 2 ? "#795536" : "#ce9e67";
+    c.fillRect(158 + i * 4, 103, 3, 1);
+  }
+}
+function drawAnimal(c, img, a) {
+  c.save();
+  c.translate(a.x, a.y - a.size * 0.47);
+  c.scale(a.dir, 1);
+  c.rotate(a.tilt || 0);
+  c.drawImage(
+    img,
+    a.tile * 128,
+    0,
+    128,
+    128,
+    -a.size / 2,
+    -a.size * 0.53,
+    a.size,
+    a.size,
+  );
+  c.restore();
+}
+function draw(c, [back, atlas], scene, total, cap, time, arrival) {
+  c.setTransform(resolution, 0, 0, resolution, 0, 0);
+  c.imageSmoothingEnabled = true;
+  c.drawImage(back, 0, 0, W, H);
+  const count = Math.min(total, cap);
+  const actors = [];
+  const pose = scene === "ice" ? penguin : scene === "cats" ? cat : duck;
+  for (let id = total - count; id < total; id++)
+    actors.push({ ...pose(id, time, count), id });
+  // The courtyard has three readable destinations: open paving, a box, and a sunny mat.
   if (scene === "cats") {
-    // One cat follows a windblown leaf. Two more share the cardboard box.
-    const leaf = 74 + 23 * Math.sin(t * 0.7);
-    rect(c, leaf, 69 + Math.sin(t * 1.2) * 2, 4, 2, "#a8673c");
-    if (animals.length > 0)
-      Object.assign(animals[0], {
-        x: 74 + 22 * Math.sin((t - 0.55) * 0.7),
-        y: 77,
-        name: "cat",
-        dir: Math.cos((t - 0.55) * 0.7) > 0 ? 1 : -1,
-      });
-    if (animals.length > 1) {
-      const jump = ease((Math.cos(t * 0.28) + 0.4) * 1.5);
-      Object.assign(animals[1], {
-        x: mix(140, 166, jump),
-        y: mix(86, 77, jump) - Math.sin(jump * Math.PI) * 9,
-        name: "cat",
-        dir: Math.sin(t * 0.28) > 0 ? -1 : 1,
+    basket(c, false);
+    if (actors[0]) {
+      const leafX = 85 + 19 * Math.sin(time * 0.57);
+      c.save();
+      c.translate(leafX + 10, 91 + 2 * Math.sin(time));
+      c.rotate(-0.45);
+      ellipse(c, 0, 0, 3.5, 1.3, "#a25633");
+      c.restore();
+      Object.assign(actors[0], {
+        x: 85 + 18 * Math.sin((time - 0.6) * 0.57),
+        y: 96 + Math.abs(Math.sin(time * 6)),
+        tile: 0,
+        dir: Math.cos((time - 0.6) * 0.57) > 0 ? 1 : -1,
       });
     }
-    if (animals.length > 2) {
-      const perch = ease((Math.cos(t * 0.22) + 0.6) * 1.4);
-      Object.assign(animals[2], {
-        x: mix(194, 168, perch),
-        y: mix(84, 68, perch) - Math.sin(perch * Math.PI) * 10,
-        name: perch > 0.9 ? "nap" : "cat",
-        dir: -1,
+    if (actors[1]) {
+      const hop = smooth((Math.cos(time * 0.28) + 0.3) * 1.4);
+      Object.assign(actors[1], {
+        x: mix(142, 176, hop),
+        y: mix(105, 101, hop) - Math.sin(hop * Math.PI) * 10,
+        dir: Math.sin(time * 0.28) > 0 ? -1 : 1,
+        tile: 1,
       });
     }
+    if (actors[2])
+      Object.assign(actors[2], {
+        x: 224,
+        y: 113 + Math.sin(time * 1.5) * 0.4,
+        tile: 3,
+        tilt: 0,
+      });
   }
-  if (entry && age < 6 && animals.length) {
-    const a = animals.at(-1);
-    const spawn =
-      scene === "pond" ? [23, 22] : scene === "cats" ? [-6, 89] : [23, 54];
-    const landing =
-      scene === "pond" ? [45, 42] : scene === "cats" ? [47, 88] : [57, 54];
-    const u = ease((age - 0.35) / 1.15),
-      v = ease((age - 1.5) / 4.5);
-    a.x = mix(mix(spawn[0], landing[0], u), a.x, v);
-    a.y = mix(mix(spawn[1], landing[1], u), a.y, v);
+  const age = arrival ? time - arrival.time : Infinity;
+  if (age < 5.5 && actors.length) {
+    const actor = actors.at(-1);
+    const start =
+      scene === "pond" ? [26, 42] : scene === "cats" ? [252, 77] : [36, 62];
+    const land =
+      scene === "pond" ? [57, 68] : scene === "cats" ? [232, 89] : [65, 62];
+    const jump = smooth((age - 0.25) / 1.1),
+      join = smooth((age - 1.35) / 4.15);
+    actor.x = mix(mix(start[0], land[0], jump), actor.x, join);
+    actor.y =
+      mix(mix(start[1], land[1], jump), actor.y, join) -
+      (scene === "pond" ? 11 * Math.sin(jump * Math.PI) : 0);
+    if (age < 1.4) {
+      actor.dir = scene === "cats" ? -1 : 1;
+      actor.tilt = scene === "ice" ? 0.06 * Math.sin(age * 8) : 0;
+    }
     if (scene === "pond") {
-      a.y -= Math.sin(u * Math.PI) * 13;
-      a.name = "duck";
-      a.water = age > 1.45;
-      if (age > 1.45 && age < 2.45) {
-        ripple(c, ...landing, 2 + (age - 1.45) * 14);
-        ripple(c, ...landing, 1 + (age - 1.45) * 8);
+      if (age > 1.32 && age < 2.42) {
+        const f = (age - 1.32) / 1.1;
+        for (const r of [9, 17])
+          ellipse(
+            c,
+            57,
+            68,
+            2 + r * f,
+            1 + r * f * 0.3,
+            `rgba(232,248,208,${1 - f})`,
+            true,
+          );
       }
-      const buddy = animals.find((p) => p.id === entry.buddy);
+      const buddy = actors.find((a) => a.id === arrival.buddy);
       if (buddy) {
-        const greeting =
-          ease((age - 0.7) / 1.5) * (1 - ease((age - 3.6) / 2.4));
-        buddy.x = mix(buddy.x, a.x + 13, greeting);
-        buddy.y = mix(buddy.y, a.y + 4, greeting);
-        if (greeting > 0.35) {
-          buddy.dir = -1;
-          buddy.name = "duck";
-          buddy.water = true;
-        }
+        const f = smooth((age - 0.5) / 1.6) * (1 - smooth((age - 3.2) / 2.3));
+        buddy.x = mix(buddy.x, actor.x + 25, f);
+        buddy.y = mix(buddy.y, actor.y + 5, f);
       }
-    } else {
-      a.name = scene === "cats" ? "cat" : "bird";
-      a.y -= Math.abs(Math.sin(age * 8)) * (1 - v);
     }
-    if (age < 1.6) a.dir = 1;
   }
-  animals.sort((a, b) => a.y - b.y);
-  let boxFront = false;
-  for (const a of animals) {
-    if (scene === "cats" && !boxFront && a.y > 79) {
-      box(c, 166, 79, true);
-      boxFront = true;
+  actors.sort((a, b) => a.y - b.y);
+  let front = false;
+  for (const a of actors) {
+    if (scene === "cats" && !front && a.y > 102) {
+      basket(c, true);
+      front = true;
     }
-    if (scene === "pond" && a.water) {
-      rect(c, a.x - 8, a.y, 15, 1, "#b9d2b2");
-      rect(c, a.x - 4 - a.dir * 4, a.y + 2, 8, 1, "#8db8a9");
+    if (scene === "pond") {
+      ellipse(c, a.x, a.y - 2, a.size * 0.4, 2.7, "#263e4a52");
+      for (let i = 0; i < 2; i++) {
+        const f = (time * 0.52 + a.id * 0.35 + i * 0.5) % 1;
+        ellipse(
+          c,
+          a.x - a.dir * (4 + 8 * f),
+          a.y - 1,
+          6 + 13 * f,
+          1.4 + 2.4 * f,
+          `rgba(220,240,205,${0.52 * (1 - f)})`,
+          true,
+        );
+      }
+    } else if (scene === "cats" || !a.underwater) {
+      ellipse(c, a.x, a.y - 1, a.size * 0.3, 2.3, "#36495447");
     }
-    if (scene === "ice" && a.y > 65) {
-      rect(c, a.x - a.dir * 9, a.y - 4, 2, 1, "#a0c6d7");
-      rect(
-        c,
-        a.x - a.dir * 14,
-        a.y - 7 + Math.sin(t * 2 + a.id),
-        1,
-        1,
-        "#a0c6d7",
-      );
+    drawAnimal(c, atlas, a);
+    if (scene === "ice" && a.underwater) {
+      for (let i = 0; i < 3; i++) {
+        const k = (time * 0.9 + i * 0.33) % 1;
+        ellipse(
+          c,
+          a.x - a.dir * (5 + k * 15),
+          a.y - a.size * 0.29 - k * 8,
+          1 + k,
+          1 + k,
+          "#c3e7ed99",
+          true,
+        );
+      }
     }
-    sprite(c, a.name, a.id, scene, a.x, a.y, a.dir);
   }
-  if (scene === "cats" && !boxFront) box(c, 166, 79, true);
+  if (scene === "cats" && !front) basket(c, true);
 }
 
 export default function AnimalHabitat({ scene, total, capacity, playing }) {
   const node = useRef(null),
     elapsed = useRef(0),
     previous = useRef(total),
-    entry = useRef(null),
-    base = useRef(null);
+    arrival = useRef(null);
   useEffect(() => {
     const canvas = node.current,
       ctx = canvas.getContext("2d");
     if (!ctx) return;
-    base.current ??= background(scene);
     if (playing && total > previous.current) {
       let buddy = null,
         best = Infinity;
@@ -424,45 +305,46 @@ export default function AnimalHabitat({ scene, total, capacity, playing }) {
         scene === "pond" && id < total - 1;
         id++
       ) {
-        const p = pose(scene, id, elapsed.current),
-          dist = Math.hypot(p.x - 45, p.y - 42);
-        if (dist < best) {
-          best = dist;
+        const a = duck(id, elapsed.current, Math.min(total, capacity)),
+          d = Math.hypot(a.x - 57, a.y - 68);
+        if (d < best) {
           buddy = id;
+          best = d;
         }
       }
-      entry.current = { time: elapsed.current, buddy };
-    } else if (!playing || total < previous.current) entry.current = null;
+      arrival.current = { time: elapsed.current, buddy };
+    } else if (!playing || total < previous.current) arrival.current = null;
     previous.current = total;
-    function draw() {
-      paint(
+    let cancelled = false,
+      frame = 0,
+      visible = false,
+      last = null,
+      images = null;
+    function paint() {
+      draw(
         ctx,
-        base.current,
+        images,
         scene,
         total,
         capacity,
         elapsed.current,
-        entry.current,
+        arrival.current,
       );
     }
-    draw();
-    if (!playing) return;
-    let frame = 0,
-      last = null,
-      visible = false;
     function tick(now) {
       if (last === null || now - last >= 1000 / 30) {
         elapsed.current +=
           last === null ? 0 : Math.min((now - last) / 1000, 0.1);
         last = now;
-        draw();
+        paint();
       }
       frame = requestAnimationFrame(tick);
     }
     function resume() {
       cancelAnimationFrame(frame);
       last = null;
-      if (visible && !document.hidden) frame = requestAnimationFrame(tick);
+      if (images && playing && visible && !document.hidden)
+        frame = requestAnimationFrame(tick);
     }
     const observer = new IntersectionObserver(([e]) => {
       visible = e.isIntersecting;
@@ -470,11 +352,28 @@ export default function AnimalHabitat({ scene, total, capacity, playing }) {
     });
     observer.observe(canvas);
     document.addEventListener("visibilitychange", resume);
+    loadArt(scene)
+      .then((loaded) => {
+        if (!cancelled) {
+          images = loaded;
+          paint();
+          resume();
+        }
+      })
+      .catch(() => {});
     return () => {
+      cancelled = true;
       observer.disconnect();
       cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", resume);
     };
   }, [scene, total, capacity, playing]);
-  return <canvas ref={node} width={W} height={H} aria-hidden="true" />;
+  return (
+    <canvas
+      ref={node}
+      width={W * resolution}
+      height={H * resolution}
+      aria-hidden="true"
+    />
+  );
 }
