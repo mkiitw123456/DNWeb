@@ -88,3 +88,10 @@
   .aquarium-copy { padding: 12px 16px 14px; }
   .aquarium-actions { margin-top: 8px; }
 }
+.scenery-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.scenery-heading select { width: auto; max-width: 100%; font-size: 12px; }
+.scenery-simple { grid-template-columns: 1fr; }
+.scenery-sky .aquarium-stage { background: #191f3c; }
+.scenery-sky .aquarium-stage canvas { width: 100%; max-width: none; height: 100%; object-fit: cover; }
+.scenery-sky .aquarium-population { background: #22253f; border-color: #73748f; color: #ffe3a7; }
+.scenery-sky .aquarium-population span { color: #d5d2df; }

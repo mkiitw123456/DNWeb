@@ -1,5 +1,7 @@
+import { ScenerySelect, useLobbyScenery } from "./LobbyScenery.jsx";
+import NightSky from "./NightSky.jsx";
 import { useEffect, useRef, useState } from "react";
-import { Check, Fish, Pause, Play, Waves } from "lucide-react";
+import { Check, Fish, Stars, CalendarCheck, Pause, Play, Waves } from "lucide-react";
 import { Button } from "./ui.jsx";
 import { makeSchool, makeSeabed, paintTank, tankHeight, tankWidth } from "./aquariumScene.js";
 import "./aquarium.css";
@@ -93,35 +95,43 @@ function AquariumScene({ count, month, playing }) {
   return <canvas ref={canvas} width={tankWidth} height={tankHeight} aria-hidden="true" />;
 }
 
-export default function Aquarium({ aquarium, onCheckIn, busy }) {
+export default function Aquarium({ aquarium, onCheckIn, busy, memberId }) {
+  const [scene, chooseScene] = useLobbyScenery(memberId);
   const { playing, toggle } = useAquariumMotion();
   if (!aquarium) return null;
   const { month, fishCount, capacity, checkedInToday, totalCheckIns } = aquarium;
   const full = fishCount >= capacity;
+  const tank = scene === "aquarium";
+  const sky = scene === "sky";
+  const Icon = tank ? Fish : sky ? Stars : CalendarCheck;
   return (
-    <section className="guild-aquarium" aria-labelledby="aquarium-title">
+    <section className={`guild-aquarium scenery-${scene}`} aria-labelledby="aquarium-title">
       <div className="aquarium-copy">
-        <div className="aquarium-season"><Waves size={15} aria-hidden="true" />{Number(month.slice(-2))} 月公會共養</div>
-        <h2 id="aquarium-title">潮汐水族箱</h2>
-        <p>{full ? "魚缸住滿了！每次簽到仍會計入本月紀錄。" : "每人每天簽到一次，為魚缸添一尾魚。"}</p>
+        <div className="scenery-heading">
+          <div className="aquarium-season">{tank ? <Waves size={15} /> : <Icon size={15} />}{Number(month.slice(-2))} 月公會簽到</div>
+          <ScenerySelect value={scene} onChange={chooseScene} />
+        </div>
+        <h2 id="aquarium-title">{tank ? "潮汐水族箱" : sky ? "山頂觀星台" : "每日簽到"}</h2>
+        {tank && <p>{full ? "魚缸住滿了！每次簽到仍會計入本月紀錄。" : "每人每天簽到一次，為魚缸添一尾魚。"}</p>}
+        {sky && <p>{full ? "本月星圖已點亮，簽到仍會計入本月紀錄。" : "每次公會簽到，都會在山脊上方點亮一顆星。"}</p>}
         <div className="aquarium-actions">
           <Button primary={!checkedInToday} disabled={busy || checkedInToday} onClick={onCheckIn}>
-            {checkedInToday ? <Check size={15} /> : <Fish size={15} />}
+            {checkedInToday ? <Check size={15} /> : <Icon size={15} />}
             {checkedInToday ? "今日已簽到" : "今日簽到"}
           </Button>
-          <Button type="button" onClick={toggle}>
+          {tank && <Button type="button" onClick={toggle}>
             {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
             {playing ? "暫停魚群" : "播放魚群"}
-          </Button>
+          </Button>}
           <span aria-live="polite">本月 {totalCheckIns} 人次</span>
         </div>
       </div>
-      <div className="aquarium-stage">
-        <AquariumScene count={fishCount} month={month} playing={playing} />
-        <span className="aquarium-population" aria-label={`缸內 ${fishCount} 尾魚，上限 ${capacity} 尾`}>
-          <Fish size={13} aria-hidden="true" />{fishCount}<span>/ {capacity}</span>
+      {scene !== "simple" && <div className="aquarium-stage">
+        {tank ? <AquariumScene count={fishCount} month={month} playing={playing} /> : <NightSky count={fishCount} />}
+        <span className="aquarium-population" aria-label={tank ? `缸內 ${fishCount} 尾魚，上限 ${capacity} 尾` : `已點亮 ${fishCount} 顆星，上限 ${capacity} 顆`}>
+          <Icon size={13} aria-hidden="true" />{fishCount}<span>/ {capacity}</span>
         </span>
-      </div>
+      </div>}
     </section>
   );
 }

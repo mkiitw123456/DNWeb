@@ -1,3 +1,4 @@
+import { ScenerySelect, useLobbyScenery } from "./LobbyScenery.jsx";
 import {
   Palette,
   MessageSquare,
@@ -20,6 +21,7 @@ export default function SettingsPanel({
 }) {
   const [nickname, setNickname] = useState(me.nickname || "");
   const [motion, setMotion] = useState(encounterMotion);
+  const [scene, chooseScene] = useLobbyScenery(me.id);
   const discordSet = !!me.discordId;
   return (
     <section className="settings-panel">
@@ -45,6 +47,10 @@ export default function SettingsPanel({
         <p className="muted">登入帳號不變，公開顯示改用暱稱。</p>
       </form>
       <SoundSettings />
+      <label className="settings-option">
+        <span><strong>大廳佈景</strong><small>此帳號在這台瀏覽器使用的簽到佈景</small></span>
+        <ScenerySelect value={scene} onChange={chooseScene} />
+      </label>
       <label className="settings-option">
         <span><strong>冒險機遇動畫</strong><small>控制第三個選項出現時的震動與展開效果</small></span>
         <select value={motion} onChange={e => {

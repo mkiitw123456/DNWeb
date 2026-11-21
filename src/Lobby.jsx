@@ -307,7 +307,7 @@ export default function Lobby({
       )}
       <div className="view-transition" key={tab}>
         {tab === "lobby" && (
-          <Aquarium aquarium={view.aquarium} onCheckIn={checkIn} busy={busy} />
+          <Aquarium memberId={data.me.id} aquarium={view.aquarium} onCheckIn={checkIn} busy={busy} />
         )}
         <section
           className="adventure-stats"
