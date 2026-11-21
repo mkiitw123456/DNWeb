@@ -1,5 +1,6 @@
+import { makeCopyUpdater } from "./story-copy.js";
 import { randomInt, randomUUID, createHash } from "node:crypto";
-import { journeyEvents, journeyStoryWithContext, reviseHarborChapter } from "./journey.js";
+import { journeyEvents } from "./journey.js";
 import { currentCampaign, scriptCatalog, validateCampaigns } from "./campaigns.js";
 import { fail, text, number } from "./domain.js";
 import { activityTransaction, activityQuery } from "./activity-store.js";
@@ -117,7 +118,7 @@ export const defaultActivityConfig = () => ({
     {
       id: "e1",
       title: "森林裡的求救聲",
-      story: "回城途中，你遇見一位迷路的新手冒險家。你決定……",
+      story: "天快黑了，林道旁有個新手捧著空水壺，問你回城該走哪條岔路。你也要回城，背包裡還有一張備用地圖和一袋乾糧。",
       options: [
         {
           text: "陪他走回城鎮",
@@ -126,14 +127,14 @@ export const defaultActivityConfig = () => ({
         {
           text: "分享地圖與補給",
           result:
-            "你標記了安全的路線，並送出一些補給。小小的善意讓旅途更溫暖。",
+            "你在地圖上圈出石橋，把乾糧分給他。傍晚經過城門時，他正坐在橋旁的茶攤朝你招手。",
         },
       ],
     },
     {
       id: "e2",
       title: "營火旁的晚餐",
-      story: "公會營地飄出料理的香氣，大家正準備晚餐。你決定……",
+      story: "隊伍淋了一天雨，到了營地，廚師還有半籃根菜沒切。幾個新成員圍著火發呆，領隊想找人陪他們聊聊，讓這頓飯熱鬧一點。",
       options: [
         {
           text: "幫忙準備料理",
@@ -147,6 +148,8 @@ export const defaultActivityConfig = () => ({
     },
   ],
 });
+const refreshStoryCopy = makeCopyUpdater([...journeyEvents(), ...defaultActivityConfig().events]);
+
 function upgradedJourney(config) {
   const builtins = journeyEvents();
   const byId = new Map(builtins.map((e) => [e.id, e]));
@@ -180,20 +183,21 @@ function upgradedJourney(config) {
 }
 
 export function normalizeActivityConfig(config) {
-  const updated = config.journeyEdition === 2;
+  const updated = config.journeyEdition === 3;
+  const hasWeightedChoices = updated || config.journeyEdition === 2;
+  if (!updated) config = { ...config, events: config.events.map(refreshStoryCopy) };
   return {
     ...config,
-    // Old open rounds and unsaved admin drafts must refresh before using the new odds.
+    // Refresh old open rounds before resolving a choice with revised wording.
     version: updated ? config.version : config.version + 1,
-    journeyEdition: 2,
+    journeyEdition: 3,
     schedule: config.schedule || {},
     campaignSchedule: config.campaignSchedule || [],
     journeyInstalled: true,
     eventUnlimited: config.eventUnlimited ?? true,
-    events: (updated ? config.events : upgradedJourney(config)).map(reviseHarborChapter).map(
+    events: (hasWeightedChoices ? config.events : upgradedJourney(config)).map(
       (event) => ({
         ...event,
-        story: journeyStoryWithContext(event),
         options: event.options.map((option) =>
           option.outcomes
             ? option

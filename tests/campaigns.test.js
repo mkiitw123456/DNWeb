@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { activityAction, activityView } from "../server/activities.js";
-import { journeyEvents, journeyStoryWithContext } from "../server/journey.js";
+import { activityAction, activityView, defaultActivityConfig, normalizeActivityConfig } from "../server/activities.js";
+import { journeyEvents } from "../server/journey.js";
 import { validateCampaigns } from "../server/campaigns.js";
 
 test("a campaign schedule rejects impossible dates, duplicate launches and unknown stories", () => {
@@ -108,10 +108,21 @@ test("scheduled campaign unlocks at 09:00 and advances three chapters per member
   assert.ok(next.content.options.length >= 2);
 });
 
-test("chapter clues extend shipped scenes once and preserve a guild-authored story", () => {
+test("published copy updates in place without rewriting guild choices, outcomes, odds or chapter progress", () => {
   const chapter = journeyEvents()[4];
-  const story = journeyStoryWithContext(chapter);
-  assert.ok(story.includes("門檻") && story.includes("翻動紙頁"));
-  assert.equal(journeyStoryWithContext({ ...chapter, story }), story);
-  assert.equal(journeyStoryWithContext({ ...chapter, story: "公會自訂的委託" }), "公會自訂的委託");
+  const custom = { text: "公會自訂行動", outcomes: [{ chance: 100, stars: 2, result: "公會自訂結果" }] };
+  const saved = { ...chapter, options: [
+    { ...chapter.options[2], text: "跳進回音的空拍", revealChance: 40,
+      outcomes: [{ chance: 100, stars: 8, result: "你接住從暗層墜下的學徒筆記。" }] },
+    custom,
+  ] };
+  const config = { ...defaultActivityConfig(), journeyEdition: 2, events: [saved] };
+  const normalized = normalizeActivityConfig(config);
+  assert.deepEqual(normalized.events[0].options, [
+    { ...saved.options[0], text: chapter.options[2].text,
+      outcomes: [{ chance: 100, stars: 8, result: chapter.options[2].outcomes[0].result }] }, custom
+  ]);
+  assert.deepEqual(normalizeActivityConfig(normalized), normalized);
+  const guild = normalizeActivityConfig({ ...config, events: [{ ...saved, story: "公會自訂的委託" }] });
+  assert.equal(guild.events[0].story, "公會自訂的委託");
 });
