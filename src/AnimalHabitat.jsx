@@ -52,9 +52,6 @@ function duck(id, time, count) {
     dir: Math.cos(angle) >= 0 ? 1 : -1,
     tile: id % 4,
     size: p.size * (id % 4 === 2 ? 0.78 : 1),
-    tilt:
-      0.035 * Math.sin(angle * 3) +
-      0.24 * Math.pow(Math.max(0, Math.sin(time * 0.63 + phase)), 14),
   };
 }
 function cat(id, time, count) {
@@ -70,7 +67,6 @@ function cat(id, time, count) {
     size: p.size * 1.08,
     dir: Math.cos(cycle) >= 0 ? 1 : -1,
     tile: id % 3,
-    tilt: walking ? 0.022 * Math.sin(time * 8) : 0,
   };
 }
 // Walk and glide along the same snow-covered lane; pause before turning back.
@@ -84,7 +80,6 @@ function penguin(id, time, count) {
   const progress = 0.74 * walk + 0.26 * glide;
   const radius = count < 5 ? 25 : 10;
   const walking = Math.sin(Math.PI * walk);
-  const sliding = Math.sin(Math.PI * glide);
   const stride = Math.sin(13 * time + id);
   return {
     x: home.x + dir * radius * (2 * progress - 1),
@@ -92,7 +87,6 @@ function penguin(id, time, count) {
     dir,
     size: home.size,
     tile: id % 4,
-    tilt: walking * stride * 0.095 + sliding * 0.2,
     walking,
   };
 }
@@ -124,21 +118,14 @@ function basket(c, front) {
   }
 }
 function drawAnimal(c, img, a) {
+  // Keep the sprite on the pixel grid while its path uses fractional coordinates.
+  const size = Math.round(a.size);
+  const left = Math.round(a.x - size / 2);
+  const top = Math.round(a.y - size);
   c.save();
-  c.translate(a.x, a.y - a.size * 0.47);
+  c.translate(a.dir < 0 ? left + size : left, top);
   c.scale(a.dir, 1);
-  c.rotate(a.tilt || 0);
-  c.drawImage(
-    img,
-    a.tile * tileSize,
-    0,
-    tileSize,
-    tileSize,
-    -a.size / 2,
-    -a.size * 0.53,
-    a.size,
-    a.size,
-  );
+  c.drawImage(img, a.tile * tileSize, 0, tileSize, tileSize, 0, 0, size, size);
   c.restore();
 }
 function draw(c, [back, atlas], scene, total, cap, time, arrival) {
@@ -180,7 +167,6 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
         x: 224,
         y: 113 + Math.sin(time * 1.5) * 0.4,
         tile: 3,
-        tilt: 0,
       });
   }
   const age = arrival ? time - arrival.time : Infinity;
@@ -198,7 +184,6 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
       (scene === "pond" ? 11 * Math.sin(jump * Math.PI) : 0);
     if (age < 1.4) {
       actor.dir = scene === "pond" ? 1 : -1;
-      actor.tilt = scene === "ice" ? 0.06 * Math.sin(age * 8) : 0;
     }
     if (scene === "pond") {
       if (age > 1.32 && age < 2.42) {
