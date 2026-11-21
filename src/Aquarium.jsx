@@ -6,32 +6,31 @@ import { Button } from "./ui.jsx";
 import { makeSchool, makeSeabed, paintTank, tankHeight, tankWidth } from "./aquariumScene.js";
 import "./aquarium.css";
 
-const motionKey = "ddstar-aquarium-motion";
-
-function shouldPlayAquarium() {
-  try {
-    return localStorage.getItem(motionKey) !== "pause";
-  } catch {
-    return true;
+function useSceneMotion(key, respectReducedMotion = false) {
+  const media = "(prefers-reduced-motion: reduce)";
+  function read() {
+    try {
+      const choice = localStorage.getItem(key);
+      if (choice === "play" || choice === "pause") return choice === "play";
+    } catch { /* Use the default for this visit. */ }
+    return !respectReducedMotion || !window.matchMedia(media).matches;
   }
-}
-
-function useAquariumMotion() {
-  const [playing, setPlaying] = useState(shouldPlayAquarium);
+  const [playing, setPlaying] = useState(read);
   useEffect(() => {
-    const syncChoice = (event) => {
-      if (event.key === motionKey || event.key === null) setPlaying(shouldPlayAquarium());
+    const preference = window.matchMedia(media);
+    const sync = () => setPlaying(read());
+    const storage = event => { if (event.key === key || event.key === null) sync(); };
+    window.addEventListener("storage", storage);
+    if (respectReducedMotion) preference.addEventListener("change", sync);
+    return () => {
+      window.removeEventListener("storage", storage);
+      preference.removeEventListener("change", sync);
     };
-    window.addEventListener("storage", syncChoice);
-    return () => window.removeEventListener("storage", syncChoice);
-  }, []);
+  }, [key, respectReducedMotion]);
   function toggle() {
     setPlaying(!playing);
-    try {
-      localStorage.setItem(motionKey, playing ? "pause" : "play");
-    } catch {
-      // Keep the choice for this visit when storage is unavailable.
-    }
+    try { localStorage.setItem(key, playing ? "pause" : "play"); }
+    catch { /* Keep the choice for this visit. */ }
   }
   return { playing, toggle };
 }
@@ -97,12 +96,14 @@ function AquariumScene({ count, month, playing }) {
 
 export default function Aquarium({ aquarium, onCheckIn, busy, memberId }) {
   const [scene, chooseScene] = useLobbyScenery(memberId);
-  const { playing, toggle } = useAquariumMotion();
+  const fishMotion = useSceneMotion("ddstar-aquarium-motion");
+  const skyMotion = useSceneMotion("ddstar-sky-motion", true);
   if (!aquarium) return null;
   const { month, fishCount, capacity, checkedInToday, totalCheckIns } = aquarium;
   const full = fishCount >= capacity;
   const tank = scene === "aquarium";
   const sky = scene === "sky";
+  const { playing, toggle } = sky ? skyMotion : fishMotion;
   const Icon = tank ? Fish : sky ? Stars : CalendarCheck;
   return (
     <section className={`guild-aquarium scenery-${scene}`} aria-labelledby="aquarium-title">
@@ -119,15 +120,15 @@ export default function Aquarium({ aquarium, onCheckIn, busy, memberId }) {
             {checkedInToday ? <Check size={15} /> : <Icon size={15} />}
             {checkedInToday ? "今日已簽到" : "今日簽到"}
           </Button>
-          {tank && <Button type="button" onClick={toggle}>
+          {(tank || sky) && <Button type="button" onClick={toggle}>
             {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
-            {playing ? "暫停魚群" : "播放魚群"}
+            {playing ? "暫停" : "播放"}{tank ? "魚群" : "星空"}
           </Button>}
           <span aria-live="polite">本月 {totalCheckIns} 人次</span>
         </div>
       </div>
       {scene !== "simple" && <div className="aquarium-stage">
-        {tank ? <AquariumScene count={fishCount} month={month} playing={playing} /> : <NightSky count={fishCount} />}
+        {tank ? <AquariumScene count={fishCount} month={month} playing={playing} /> : <NightSky count={fishCount} playing={playing} />}
         <span className="aquarium-population" aria-label={tank ? `缸內 ${fishCount} 尾魚，上限 ${capacity} 尾` : `已點亮 ${fishCount} 顆星，上限 ${capacity} 顆`}>
           <Icon size={13} aria-hidden="true" />{fishCount}<span>/ {capacity}</span>
         </span>
