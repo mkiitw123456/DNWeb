@@ -23,6 +23,7 @@ function CountInput({ label, value, max, readOnly, disabled, onCommit }) {
         const field = e.currentTarget;
         if (field.validity.badInput || !field.validity.valid) {
           notify(`${label}須為 0 至 ${max} 的整數`, "error");
+          return;
         } else if (field.value !== "" && field.valueAsNumber !== value) {
           onCommit(field.valueAsNumber);
         }
@@ -43,19 +44,23 @@ export default function CharacterCard({
   canEdit,
   busy,
   pending,
+  failed,
+  retry,
   change,
   onEdit,
 }) {
+  const [noteDraft, setNoteDraft] = useState(null);
+  const note = pending?.details?.note ?? failed?.details?.note ?? c.note ?? "";
+  function status(field, key) {
+    if (Object.hasOwn(pending?.[field] || {}, key)) return <small role="status">同步中…</small>;
+    if (Object.hasOwn(failed?.[field] || {}, key)) return <span className="character-sync-error" role="status">同步失敗 <Button type="button" onClick={() => retry(c.id, field, key)}>重試</Button></span>;
+    return null;
+  }
   const profession = professions.find((p) => p.id === c.professionId);
   return (
     <article className="compact-character" aria-label={`角色 ${c.name}`}>
       <header className="compact-character-header">
         <h3 title={c.name}>{c.name}</h3>
-        {pending && (
-          <small role="status" className="gear-saving">
-            儲存中…
-          </small>
-        )}
         <ProfessionIcon profession={profession} />
         {canEdit && (
           <Button aria-label={`編輯角色 ${c.name}`} onClick={onEdit}>
@@ -65,7 +70,8 @@ export default function CharacterCard({
       </header>
       <GearPicker
         characterName={c.name}
-        gear={{ ...c.gear, ...pending?.gear }}
+        gear={{ ...c.gear, ...failed?.gear, ...pending?.gear }}
+        renderStatus={slot => status("gear",slot)}
         disabled={busy}
         onChange={
           canEdit
@@ -73,6 +79,19 @@ export default function CharacterCard({
             : undefined
         }
       />
+      {canEdit && <div className="character-note"><label>角色備註
+        <textarea aria-label={c.name + " 角色備註"} rows={2} maxLength={500} value={noteDraft ?? note}
+          onChange={e => setNoteDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }} onBlur={() => {
+            if (noteDraft !== null && noteDraft !== note) change(c.id, "details", "note", noteDraft);
+            setNoteDraft(null);
+          }}/>
+      </label>{status("details","note")}</div>}
       <div
         className={
           dungeons.length > 3
@@ -81,7 +100,7 @@ export default function CharacterCard({
         }
       >
         {dungeons.map((d) => {
-          const run = pending?.runs?.[d.id] ?? c.runs[d.id] ?? 0;
+          const run = pending?.runs?.[d.id] ?? failed?.runs?.[d.id] ?? c.runs[d.id] ?? 0;
           const count = run === "complete" ? d.max : run;
           const done = count >= d.max;
           return (
@@ -99,7 +118,7 @@ export default function CharacterCard({
                   disabled={busy}
                   onCommit={(n) => change(c.id, "runs", d.id, n)}
                 />
-                <small>/ {d.max}</small>
+                <small>/ {d.max}</small>{status("runs",d.id)}
                 {canEdit && (
                   <Button
                     aria-label={`${c.name} ${d.name} 全部完成`}
@@ -122,14 +141,14 @@ export default function CharacterCard({
               <span title={t.name}>{t.name}</span>
               <CountInput
                 label={`${c.name} ${t.name} 數量`}
-                value={pending?.quantities?.[t.id] ?? c.quantities?.[t.id] ?? 0}
+                value={pending?.quantities?.[t.id] ?? failed?.quantities?.[t.id] ?? c.quantities?.[t.id] ?? 0}
                 max={1e12}
                 readOnly={!canEdit}
                 disabled={busy}
                 onCommit={(quantity) =>
                   change(c.id, "quantities", t.id, quantity)
                 }
-              />
+              />{status("quantities",t.id)}
             </div>
           ))}
         </div>

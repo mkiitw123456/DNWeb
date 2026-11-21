@@ -12,6 +12,8 @@ export default function Characters({
   ask,
   isSaving,
   pendingChanges,
+  failedChanges,
+  retry,
   change,
 }) {
   const { editing, setEditing, openEditor, saveEditor } = useRecordEditor("character.save");
@@ -113,6 +115,8 @@ export default function Characters({
               canEdit={true}
               busy={busy}
               pending={pendingChanges[c.id]}
+              failed={failedChanges[c.id]}
+              retry={retry}
               change={change}
               onEdit={() =>
                 openEditor({
@@ -192,6 +196,7 @@ export default function Characters({
               <GearPicker
                 gear={{
                   ...characters.find((c) => c.id === editing.id)?.gear,
+                  ...failedChanges[editing.id]?.gear,
                   ...pendingChanges[editing.id]?.gear,
                   ...editing.gear,
                 }}

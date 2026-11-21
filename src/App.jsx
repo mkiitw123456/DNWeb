@@ -205,6 +205,10 @@ export default function App() {
           authVersion.current++;
           sessionMember.current = next.me.id;
         }
+        if (type === "character.delete") characterSaves.forget(payload.id);
+        if (type === "character.save" && payload.id) {
+          for (const slot of Object.keys(payload.gear || {})) characterSaves.clearField(payload.id, "gear", slot);
+        }
         setData((current) => {
           if (
             !next ||
@@ -526,6 +530,8 @@ export default function App() {
                   <Characters
                     {...shared}
                     pendingChanges={characterSaves.pending}
+                    failedChanges={characterSaves.failed}
+                    retry={characterSaves.retry}
                     change={characterSaves.change}
                   />
                 ) : SHOW_RAID_SCHEDULING && page === "raids" ? (

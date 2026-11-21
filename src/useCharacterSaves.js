@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 import { notify } from "./FeedbackHost.jsx";
-import { gearSlots } from "../shared/gear.js";
+
 
 function mergeChanges(previous, patch) {
   const merged = { ...previous };
@@ -29,7 +29,27 @@ export default function useCharacterSaves(
   const batchStarted = useRef(0);
   const outcome = useRef({});
   const [pending, setPending] = useState({});
-  const saving = Object.keys(pending).length > 0;
+  const failures = useRef(new Map());
+  const [failed, setFailed] = useState({});
+  const saving = Object.keys(pending).length > 0 || Object.keys(failed).length > 0;
+
+  function publishFailures() {
+    setFailed(Object.fromEntries([...failures.current].map(([id, item]) => [id, item.patch])));
+  }
+  function forget(id) {
+    if (failures.current.delete(id)) publishFailures();
+  }
+  function clearField(id, field, key) {
+    const item = failures.current.get(id);
+    if (!item || !Object.hasOwn(item.patch[field] || {}, key)) return;
+    const edits = { ...item.patch[field] };
+    delete edits[key];
+    const patch = { ...item.patch, [field]: edits };
+    if (!Object.keys(edits).length) delete patch[field];
+    if (Object.keys(patch).length) failures.current.set(id, { ...item, patch });
+    else failures.current.delete(id);
+    publishFailures();
+  }
 
   useEffect(() => {
     if (!saving) return;
@@ -54,6 +74,9 @@ export default function useCharacterSaves(
 
   function discardExpired() {
     let changed = false;
+    for (const [id, item] of failures.current) {
+      if (!item.owner.isCurrent()) forget(id);
+    }
     if (draftSession.current && !draftSession.current.isCurrent()) {
       drafts.current.clear();
       draftSession.current = null;
@@ -113,21 +136,18 @@ export default function useCharacterSaves(
           outcome.current.reconcile = true;
         batch.delete(id);
         const latest = publish()[id] || {};
-        const failedFields = new Set();
+        let retained = {};
         for (const [field, edits] of Object.entries(patch)) {
-          for (const key of Object.keys(edits)) {
-            if (Object.hasOwn(latest[field] || {}, key)) continue;
-            if (field === "gear")
-              failedFields.add(gearSlots.find((s) => s.id === key).label);
-            else failedFields.add(field === "runs" ? "副本場次" : "自訂數量");
+          for (const [key, value] of Object.entries(edits)) {
+            if (!Object.hasOwn(latest[field] || {}, key))
+              retained = mergeChanges(retained, { [field]: { [key]: value } });
           }
         }
-        if (failedFields.size) {
+        if (Object.keys(retained).length) {
+          failures.current.set(id, { owner, patch: mergeChanges(failures.current.get(id)?.patch, retained) });
+          publishFailures();
           outcome.current.failed = true;
-          notify(
-            `${gearOnly ? "裝備" : "角色資料"}儲存失敗（${[...failedFields].join("、")}） · ${error.message || "連線失敗"}`,
-            "error",
-          );
+          notify("角色資料同步失敗，已保留輸入。" + (error.message || ""), "error");
         }
       }
     }
@@ -161,6 +181,7 @@ export default function useCharacterSaves(
   function change(id, field, key, value) {
     if (!session.isCurrent()) return;
     discardExpired();
+    clearField(id, field, key);
     draftSession.current = session;
     revision.current++;
     drafts.current.set(
@@ -179,5 +200,12 @@ export default function useCharacterSaves(
     );
   }
 
-  return { pending, change, flush, hasPending };
+  function retry(id, field, key) {
+    const item = failures.current.get(id);
+    if (!item?.owner.isCurrent() || !Object.hasOwn(item.patch[field] || {}, key)) return;
+    change(id, field, key, item.patch[field][key]);
+    flush();
+  }
+
+  return { pending, failed, change, retry, forget, clearField, flush, hasPending };
 }

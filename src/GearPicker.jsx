@@ -9,6 +9,7 @@ export default function GearPicker({
   characterName,
   onChange,
   disabled,
+  renderStatus,
 }) {
   return (
     <div className="gear-picker" role="group" aria-label="裝備階級">
@@ -16,7 +17,7 @@ export default function GearPicker({
         const grade = gear?.[id];
         const Icon = icons[id];
         return (
-          <div className="gear-slot" data-grade={grade || "none"} key={id}>
+          <div key={id} className="gear-slot-group"><div className="gear-slot" data-grade={grade || "none"}>
             <span className="gear-emblem" aria-hidden="true">
               <Icon size={25} strokeWidth={1.55} />
               {grade && <strong>{grade}</strong>}
@@ -44,7 +45,7 @@ export default function GearPicker({
             ) : (
               grade && <span className="gear-readonly-grade">{grade} 級</span>
             )}
-          </div>
+          </div>{renderStatus?.(id)}</div>
         );
       })}
     </div>

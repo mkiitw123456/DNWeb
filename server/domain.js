@@ -600,6 +600,12 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
     const changes = {};
     for (const [field, edits] of Object.entries(p)) {
       if (field === "id") continue;
+      if (field === "details") {
+        if (!edits || Object.keys(edits).length !== 1 || typeof edits.note !== "string" || edits.note.length > 500)
+          fail("角色備註最多 500 字");
+        changes.note = edits.note;
+        continue;
+      }
       if (!["gear", "runs", "quantities"].includes(field))
         fail("角色更新欄位不正確");
       if (
@@ -628,6 +634,7 @@ export function action(s, u, type, p, now = Date.now(), verified = {}) {
       id: c.id,
       gear: applyGear(c.gear),
       quantities: c.quantities,
+      ...(Object.hasOwn(changes, "note") ? {note:c.note} : {}),
       runs: c.runs,
       week: c.week,
     };

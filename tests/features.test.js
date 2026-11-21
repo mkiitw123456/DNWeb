@@ -175,9 +175,13 @@ test("quick character patches enforce ownership, validate all fields before comm
   assert.throws(() => save({ runs: { d: 1 } }, { id: "stranger" }), {
     status: 403,
   });
+  assert.equal(save({details:{note:"先打海龍"}}).note, "先打海龍");
+  assert.equal(save({details:{note:""}}).note, "");
   save({ runs: { d2: "complete" }, quantities: { q: 3 } });
   for (const patch of [
     {},
+    { details: { note: "字".repeat(501) } },
+    { details: { note: 0 } },
     { runs: [] },
     { gear: {} },
     { quantities: null },
