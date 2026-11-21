@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 const W = 320,
   H = 133,
-  resolution = 2;
+  tileSize = 32;
 const mix = (a, b, f) => a + (b - a) * f;
 function smooth(x) {
   const t = Math.max(0, Math.min(1, x));
@@ -17,7 +17,7 @@ function loadArt(scene) {
           const image = new Image();
           image.onload = () => resolve(image);
           image.onerror = () => reject(new Error("habitat art unavailable"));
-          image.src = `/habitats/${scene}${suffix}.webp`;
+          image.src = `/habitats/${scene}${suffix}.webp?v=pixel-meadow`;
         }),
     );
     art.set(
@@ -73,50 +73,28 @@ function cat(id, time, count) {
     tilt: walking ? 0.022 * Math.sin(time * 8) : 0,
   };
 }
-// Each trip starts on one floe and ends on the other. Walk, dive, and climb
-// all use the same sprite, pivot and scale. Only its position and angle change.
-const floes = [
-  [34, 91, 62],
-  [139, 195, 62],
-  [243, 286, 65],
-];
+// Walk and glide along the same snow-covered lane; pause before turning back.
 function penguin(id, time, count) {
-  const trip = time / 10.5 + id * 0.347;
-  const reverse = Math.floor(trip) % 2 === 1;
-  const pair = id % 2;
-  const a = floes[pair + (reverse ? 1 : 0)],
-    b = floes[pair + (reverse ? 0 : 1)];
-  const dir = reverse ? -1 : 1,
-    f = trip % 1;
-  const start = (a[0] + a[1]) / 2,
-    edge = reverse ? a[0] : a[1],
-    land = reverse ? b[1] : b[0];
-  const lane = (id % 4) * 1.2;
-  const size = count < 5 ? 40 : 26 + (id % 3) * 2;
-  const stride = Math.sin(time * 8 + id);
-  let x, y, tilt;
-  if (f < 0.26) {
-    const k = smooth(f / 0.26);
-    x = mix(start, edge, k);
-    y = a[2] + lane - Math.abs(stride) * Math.sin(Math.PI * k) * 1.1;
-    tilt = stride * 0.085 * Math.sin(Math.PI * k);
-  } else if (f < 0.8) {
-    const k = (f - 0.26) / 0.54;
-    x = mix(edge, land, smooth(k));
-    const depth = 37 + (id % 4) * 4;
-    y =
-      mix(a[2], b[2], k) +
-      lane +
-      depth * Math.sin(Math.PI * k) ** 2 -
-      5 * Math.sin(2 * Math.PI * k);
-    tilt = 1.1 * smooth(k / 0.23) * (1 - smooth((k - 0.72) / 0.28));
-  } else {
-    const k = smooth((f - 0.8) / 0.2);
-    x = mix(land, (b[0] + b[1]) / 2, k);
-    y = b[2] + lane - Math.abs(stride) * Math.sin(Math.PI * k);
-    tilt = stride * 0.07 * Math.sin(Math.PI * k);
-  }
-  return { x, y, dir, size, tile: id % 4, tilt, underwater: y > 76 };
+  const home = space(id, count);
+  const lap = time / 7 + id * 0.39;
+  const dir = Math.floor(lap) % 2 === 0 ? 1 : -1;
+  const f = lap % 1;
+  const walk = smooth(f / 0.52);
+  const glide = smooth((f - 0.55) / 0.2);
+  const progress = 0.74 * walk + 0.26 * glide;
+  const radius = count < 5 ? 25 : 10;
+  const walking = Math.sin(Math.PI * walk);
+  const sliding = Math.sin(Math.PI * glide);
+  const stride = Math.sin(13 * time + id);
+  return {
+    x: home.x + dir * radius * (2 * progress - 1),
+    y: home.y + 2 * Math.sin(Math.PI * progress) - Math.abs(stride) * walking,
+    dir,
+    size: home.size,
+    tile: id % 4,
+    tilt: walking * stride * 0.095 + sliding * 0.2,
+    walking,
+  };
 }
 function ellipse(c, x, y, rx, ry, color, stroke = false) {
   c.beginPath();
@@ -152,10 +130,10 @@ function drawAnimal(c, img, a) {
   c.rotate(a.tilt || 0);
   c.drawImage(
     img,
-    a.tile * 128,
+    a.tile * tileSize,
     0,
-    128,
-    128,
+    tileSize,
+    tileSize,
     -a.size / 2,
     -a.size * 0.53,
     a.size,
@@ -164,8 +142,7 @@ function drawAnimal(c, img, a) {
   c.restore();
 }
 function draw(c, [back, atlas], scene, total, cap, time, arrival) {
-  c.setTransform(resolution, 0, 0, resolution, 0, 0);
-  c.imageSmoothingEnabled = true;
+  c.imageSmoothingEnabled = false;
   c.drawImage(back, 0, 0, W, H);
   const count = Math.min(total, cap);
   const actors = [];
@@ -210,9 +187,9 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
   if (age < 5.5 && actors.length) {
     const actor = actors.at(-1);
     const start =
-      scene === "pond" ? [26, 42] : scene === "cats" ? [252, 77] : [36, 62];
+      scene === "pond" ? [26, 42] : scene === "cats" ? [252, 77] : [287, 61];
     const land =
-      scene === "pond" ? [57, 68] : scene === "cats" ? [232, 89] : [65, 62];
+      scene === "pond" ? [57, 68] : scene === "cats" ? [232, 89] : [254, 70];
     const jump = smooth((age - 0.25) / 1.1),
       join = smooth((age - 1.35) / 4.15);
     actor.x = mix(mix(start[0], land[0], jump), actor.x, join);
@@ -220,7 +197,7 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
       mix(mix(start[1], land[1], jump), actor.y, join) -
       (scene === "pond" ? 11 * Math.sin(jump * Math.PI) : 0);
     if (age < 1.4) {
-      actor.dir = scene === "cats" ? -1 : 1;
+      actor.dir = scene === "pond" ? 1 : -1;
       actor.tilt = scene === "ice" ? 0.06 * Math.sin(age * 8) : 0;
     }
     if (scene === "pond") {
@@ -266,24 +243,23 @@ function draw(c, [back, atlas], scene, total, cap, time, arrival) {
           true,
         );
       }
-    } else if (scene === "cats" || !a.underwater) {
+    } else {
+      if (scene === "ice" && !(age < 5.5 && a.id === total - 1)) {
+        for (let step = 4; step >= 1; step--) {
+          const past = penguin(a.id, Math.max(0, time - step * 0.34), count);
+          if (past.walking < 0.18) continue;
+          c.fillStyle = "#b9afc1";
+          c.fillRect(
+            Math.round(past.x + (step % 2 ? 2 : -2)),
+            Math.round(past.y),
+            2,
+            1,
+          );
+        }
+      }
       ellipse(c, a.x, a.y - 1, a.size * 0.3, 2.3, "#36495447");
     }
     drawAnimal(c, atlas, a);
-    if (scene === "ice" && a.underwater) {
-      for (let i = 0; i < 3; i++) {
-        const k = (time * 0.9 + i * 0.33) % 1;
-        ellipse(
-          c,
-          a.x - a.dir * (5 + k * 15),
-          a.y - a.size * 0.29 - k * 8,
-          1 + k,
-          1 + k,
-          "#c3e7ed99",
-          true,
-        );
-      }
-    }
   }
   if (scene === "cats" && !front) basket(c, true);
 }
@@ -368,12 +344,5 @@ export default function AnimalHabitat({ scene, total, capacity, playing }) {
       document.removeEventListener("visibilitychange", resume);
     };
   }, [scene, total, capacity, playing]);
-  return (
-    <canvas
-      ref={node}
-      width={W * resolution}
-      height={H * resolution}
-      aria-hidden="true"
-    />
-  );
+  return <canvas ref={node} width={W} height={H} aria-hidden="true" />;
 }
