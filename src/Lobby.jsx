@@ -79,7 +79,8 @@ export default function Lobby({
   const lock = useRef(false),
     pending = useRef(null),
     settledView = useRef(null),
-    viewRequest = useRef(0);
+    viewRequest = useRef(0),
+    lastPrivateRefresh = useRef(Date.now());
   const handleError = useCallback(
     (e) => {
       setError(e.message);
@@ -91,6 +92,7 @@ export default function Lobby({
     const sequence = ++viewRequest.current;
     const v = await request("activity.state");
     if (sequence === viewRequest.current) {
+      lastPrivateRefresh.current = Date.now();
       setView(v);
       onActivityChange(v);
     }
@@ -112,16 +114,42 @@ export default function Lobby({
     };
   }, [data.activity, refresh, handleError]);
   useEffect(() => {
-    const focus = () => {
-      if (!lock.current && !document.hidden) refresh().catch(handleError);
+    let live = true, pending = false;
+    let last = Date.now();
+    const focus = async () => {
+      if (pending || lock.current || document.hidden || !data.activity || Date.now() - last < 60000) return;
+      pending = true;
+      last = Date.now();
+      const version = viewRequest.current;
+      try {
+        if (Date.now() - lastPrivateRefresh.current >= 15 * 60000) {
+          await refresh();
+          return;
+        }
+        const summary = await request("activity.summary");
+        if (!live || version !== viewRequest.current || lock.current) return;
+        const previous = data.activity;
+        if (summary.day !== previous.aquarium.day || summary.period.day !== previous.period.day) {
+          await refresh();
+          return;
+        }
+        const total = Math.max(previous.aquarium.totalCheckIns, summary.totalCheckIns);
+        onActivityChange({ ...previous, leaderboard: summary.leaderboard,
+          aquarium: { ...previous.aquarium, totalCheckIns: total, fishCount: Math.min(previous.aquarium.capacity, total) } });
+      } catch (e) {
+        if (live) handleError(e);
+      } finally { pending = false; }
     };
     window.addEventListener("focus", focus);
-    const timer = setInterval(focus, 60000);
+    document.addEventListener("visibilitychange", focus);
+    const timer = setInterval(focus, 120000);
     return () => {
+      live = false;
       clearInterval(timer);
       window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", focus);
     };
-  }, [refresh, handleError]);
+  }, [data.activity, refresh, request, onActivityChange, handleError]);
   const perform = async (type, payload) => {
     if (lock.current) return null;
     lock.current = true;

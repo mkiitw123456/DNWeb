@@ -11,7 +11,7 @@ export default function VoiceStats({ request, onUnauthorized }) {
     let live = true,
       pending = false;
     async function refresh() {
-      if (pending) return;
+      if (pending || document.hidden) return;
       pending = true;
       try {
         const r = await request("voice.state");

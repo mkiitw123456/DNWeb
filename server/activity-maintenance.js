@@ -10,6 +10,7 @@ const dayKey = (id, day) =>
 async function deleteQuery(query) {
   for (;;) {
     const snap = await query.limit(250).get();
+    console.info("db_usage cleanup_query", snap.size);
     if (snap.empty) return;
     const batch = snap.docs[0].ref.firestore.batch();
     for (const d of snap.docs) batch.delete(d.ref);
@@ -145,6 +146,37 @@ async function runDeploymentCleanup() {
   });
   if (needed) await drainUserDeletions();
 }
+// Advance one bounded page per maintenance run. New receipts already carry expiry.
+async function migrateLegacyHistory(db) {
+  const marker = db.doc("dnweb_maintenance/activity_history_v1");
+  const state = (await marker.get()).data() || { phase: "member_" };
+  if (state.phase === "done") return;
+  const { FieldPath } = await import("firebase-admin/firestore");
+  let query = db.collection("guild_activity").orderBy(FieldPath.documentId());
+  query = state.cursor ? query.startAfter(state.cursor) : query.startAt(state.phase);
+  const page = await query.endAt(state.phase + "\uf8ff").limit(50).get();
+  console.info("db_usage legacy_cleanup", state.phase, page.size);
+  for (const doc of page.docs) {
+    if (state.phase === "member_") {
+      await deleteQuery(doc.ref.collection("history"));
+      continue;
+    }
+    const { result, expiresAt } = doc.data();
+    if (expiresAt || !["participation", "bonus"].includes(result?.kind) || !Number.isFinite(result.createdAt)) continue;
+    const expiry = result.createdAt + 35 * 86400000;
+    await db.runTransaction(async tx => {
+      const daily = result.memberId && result.day
+        ? await tx.get(db.doc("guild_activity/" + dayKey(result.memberId, result.day))) : null;
+      const receipt = await tx.get(doc.ref);
+      if (receipt.exists && !receipt.get("expiresAt")) tx.update(doc.ref, { expiresAt: expiry });
+      if (daily?.exists && !daily.get("expiresAt")) tx.update(daily.ref, { expiresAt: expiry });
+    });
+  }
+  await marker.set(page.size === 50
+    ? { phase: state.phase, cursor: page.docs.at(-1).id }
+    : { phase: state.phase === "member_" ? "receipt_" : "done" });
+}
+
 let maintenanceAt = 0;
 export async function compactActivityHistory(now = Date.now()) {
   if (now - maintenanceAt < 3600000) return;
@@ -166,24 +198,7 @@ export async function compactActivityHistory(now = Date.now()) {
     await deleteQuery(
       db.collection("guild_activity").where("expiresAt", "<", now),
     );
-    // The former personal-history copies are redundant; reports use the ledger.
-    const members = await db.collection("guild_activity").get();
-    for (const d of members.docs) {
-      const x = d.data();
-      if (
-        d.id.startsWith("receipt_") &&
-        ["participation", "bonus"].includes(x.result?.kind) &&
-        x.result.createdAt < cutoff
-      ) {
-        if (x.result.memberId && x.result.day)
-          await db
-            .doc(`guild_activity/${dayKey(x.result.memberId, x.result.day)}`)
-            .delete();
-        await d.ref.delete();
-      }
-    }
-    for (const d of members.docs.filter((d) => d.id.startsWith("member_")))
-      await deleteQuery(d.ref.collection("history"));
+    await migrateLegacyHistory(db);
   } else
     await activityTransaction(async (db) => {
       for (const [key, x] of db.entries())

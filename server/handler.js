@@ -187,6 +187,8 @@ export default async function handler(req, res) {
       typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const type = req.method === "GET" ? "state" : body.type;
     const payload = body.payload || {};
+    if (process.env.VERCEL && ["state", "activity.state", "activity.summary", "competition.room", "competition.state"].includes(type))
+      console.info("db_usage request", type, req.url?.includes("bootstrap=1") ? "bootstrap" : "");
     await cleanupDeploymentTest();
     if (type === "logout") {
       const token = session(req);

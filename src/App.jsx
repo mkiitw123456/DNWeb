@@ -135,7 +135,7 @@ export default function App() {
         return;
       const current = ++revision.current;
       const expected = authVersion.current;
-      (initial === true ? initialSession : request())
+      (initial === true ? initialSession : request("state"))
         .then((d) => {
           if (live && current === revision.current) {
             const memberId = d?.me?.id ?? null;
@@ -143,7 +143,8 @@ export default function App() {
               authVersion.current++;
               sessionMember.current = memberId;
             }
-            setData(d);
+            setData(previous => previous && d && previous.me.id === d.me.id && previous.me.admin === d.me.admin
+              ? { ...d, activity: d.activity ?? previous.activity } : d);
             setSessionChecked(true);
           }
         })
@@ -162,13 +163,19 @@ export default function App() {
     };
     refreshShell.current = refresh;
     refresh(true);
-    const timer = setInterval(refresh, 120000);
-    window.addEventListener("focus", refresh);
+    let lastPoll = Date.now();
+    const poll = () => {
+      if (document.hidden || Date.now() - lastPoll < 60000) return;
+      lastPoll = Date.now();
+      refresh();
+    };
+    const timer = setInterval(poll, 300000);
+    window.addEventListener("focus", poll);
     return () => {
       live = false;
       refreshShell.current = null;
       clearInterval(timer);
-      window.removeEventListener("focus", refresh);
+      window.removeEventListener("focus", poll);
     };
   }, [request, hasPending, invalidate]);
   useFeedback(error);

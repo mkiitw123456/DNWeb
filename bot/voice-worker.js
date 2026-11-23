@@ -5,6 +5,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { writeFileSync, renameSync, unlinkSync, existsSync } from "node:fs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 dotenv.config({ path: path.join(root, ".env"), quiet: true });
 const token = process.env.DISCORD_BOT_TOKEN,
@@ -54,13 +55,21 @@ let sessionId = randomUUID(),
   ready = false,
   stopping = false;
 // Session totals survive failed uploads. The server applies only the increase.
-const textCounts = new Map();
-const textSession = randomUUID();
+const pendingPath = path.join(root, ".local", "voice-text-pending.json");
+const saved = existsSync(pendingPath) ? JSON.parse(await readFile(pendingPath, "utf8")) : null;
+const textCounts = new Map(Object.entries(saved?.counts || {}));
+const textSession = saved?.session || randomUUID();
+let textRevision = saved ? 1 : 0, acknowledged = 0, lastSuccess = 0;
+
 setupReactionRole(client, guildId);
 client.on(Events.MessageCreate, message => {
   if (message.guildId !== guildId || message.author.bot || message.webhookId || message.system) return;
   const id = message.author.id;
-  if (textCounts.has(id) || textCounts.size < 500) textCounts.set(id, (textCounts.get(id) || 0) + 1);
+  if (!textCounts.has(id) && textCounts.size >= 500) return;
+  textCounts.set(id, (textCounts.get(id) || 0) + 1);
+  textRevision++;
+  writeFileSync(pendingPath + ".tmp", JSON.stringify({ session: textSession, counts: Object.fromEntries(textCounts) }));
+  renameSync(pendingPath + ".tmp", pendingPath);
 });
 function snapshot() {
   const guild = client.guilds.cache.get(guildId);
@@ -85,6 +94,7 @@ function snapshot() {
 }
 function send() {
   const data = snapshot();
+  const revision = textRevision;
   chain = chain
     .then(async () => {
       if (Date.now() - data.observedAt > 15000) return;
@@ -109,12 +119,16 @@ function send() {
       if (Number.isFinite(receipt.totalMessages)) console.log(`已寫入網站：累積文字發言 ${receipt.totalMessages} 則`);
       if (!receipt.ok || !Number.isFinite(receipt.totalRecordedMs))
         throw new Error("網站未回傳有效的統計收據");
+      lastSuccess = Date.now();
+      acknowledged = revision;
+      if (revision === textRevision && existsSync(pendingPath)) unlinkSync(pendingPath);
       console.log(
         new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }),
         `已同步 ${data.members.filter((m) => !m.bot).length} 位語音成員（只記時間）；伺服器累積 ${receipt.trackedMembers} 人／${Math.floor(receipt.totalRecordedMs / 1000)} 秒`,
       );
     })
     .catch((e) => {
+      lastSuccess = 0;
       console.error(
         e.name === "TimeoutError" ? "網站回報逾時，下次重新同步" : e.message,
       );
@@ -133,7 +147,7 @@ client.on(Events.ClientReady, () => {
   void send();
 });
 client.on(Events.VoiceStateUpdate, (before, after) => {
-  if (after.guild.id === guildId && ready) void send();
+  if (after.guild.id === guildId && ready && before.channelId !== after.channelId) void send();
 });
 client.on(Events.ShardDisconnect, () => {
   ready = false;
@@ -150,7 +164,16 @@ client.on(Events.ShardResume, () => {
 });
 client.on(Events.Error, (e) => console.error("Discord 連線錯誤：", e.name));
 const timer = setInterval(() => {
-  if (ready) void send();
+  if (!ready) return;
+  const guild = client.guilds.cache.get(guildId);
+  const occupied = new Set();
+  const counting = guild?.voiceStates.cache.some(v => {
+    if (!v.channelId || v.channelId === guild.afkChannelId || !v.member || v.member.user.bot) return false;
+    if (occupied.has(v.channelId)) return true;
+    occupied.add(v.channelId);
+    return false;
+  });
+  if (counting || acknowledged !== textRevision || Date.now() - lastSuccess >= 300000) void send();
 }, 30000);
 async function stop(code = 0) {
   if (stopping) return;

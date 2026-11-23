@@ -268,9 +268,10 @@ export default function Competitions({ me, request, onUnauthorized }) {
     const timer = setInterval(async () => {
       if (
         document.hidden ||
+        (selected.current && viewingHistory.current) ||
         lock.current ||
         polling.current ||
-        Date.now() - last < (selected.current ? 4500 : 20000)
+        Date.now() - last < (selected.current ? 8000 : 60000)
       )
         return;
       polling.current = true;

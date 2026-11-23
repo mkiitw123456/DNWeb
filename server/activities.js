@@ -409,6 +409,38 @@ function visibleActivity(config, a, memberId, period, today, member) {
   }
   return result;
 }
+function rankedRows(board, users) {
+  const active = new Set(users.filter(user => user.active).map(user => user.id));
+  return Object.values(board?.members || {})
+    .filter(row => active.has(row.memberId))
+    .sort((a, b) => b.points - a.points || b.count - a.count || a.memberId.localeCompare(b.memberId));
+}
+function rankedLeaderboard(rows, users) {
+  const names = new Map(users.map(user => [user.id, user]));
+  return rows.slice(0, 50).map((row, i) => {
+    const user = names.get(row.memberId);
+    return { ...row, rank: i + 1, name: user?.nickname || row.nickname || user?.username || "冒險者" };
+  });
+}
+
+let cachedSummary;
+async function lobbySummary(users, now) {
+  const period = activityPeriods(now);
+  const { day } = dailyActivityPeriods(now);
+  const key = period.week + "/" + day;
+  if (!cachedSummary || cachedSummary.key !== key || now >= cachedSummary.until) {
+    const pending = activityTransaction(async db => Promise.all([
+      db.get(`week_${period.week}`), db.get(aquariumKey(day)),
+    ]));
+    const entry = { key, until: now + 60000, pending };
+    cachedSummary = entry;
+    console.info("db_usage lobby_summary cache_fill docs=2");
+    pending.catch(() => { if (cachedSummary === entry) cachedSummary = null; });
+  }
+  const [board, aquarium] = await cachedSummary.pending;
+  return { period, day, totalCheckIns: aquarium?.totalCheckIns || 0,
+    leaderboard: rankedLeaderboard(rankedRows(board, users), users) };
+}
 export async function activityView(user, users, now = Date.now()) {
   const period = activityPeriods(now);
   const daily = dailyActivityPeriods(now);
@@ -429,14 +461,7 @@ export async function activityView(user, users, now = Date.now()) {
         storedMember || defaultMember(user.id),
         now,
       );
-      const rows = Object.values(board?.members || {})
-        .filter((x) => users.some((u) => u.id === x.memberId && u.active))
-        .sort(
-          (a, b) =>
-            b.points - a.points ||
-            b.count - a.count ||
-            a.memberId.localeCompare(b.memberId),
-        );
+      const rows = rankedRows(board, users);
       const own = rows.find((x) => x.memberId === user.id);
       return {
         period,
@@ -458,15 +483,7 @@ export async function activityView(user, users, now = Date.now()) {
             ),
           ),
         discordUrl: config.discordUrl,
-        leaderboard: rows.slice(0, 50).map((x, i) => ({
-          ...x,
-          rank: i + 1,
-          name:
-            users.find((u) => u.id === x.memberId)?.nickname ||
-            x.nickname ||
-            users.find((u) => u.id === x.memberId)?.username ||
-            "冒險者",
-        })),
+        leaderboard: rankedLeaderboard(rows, users),
         adminConfig: user.admin ? { ...config, scripts: scriptCatalog(config.events) } : null,
       };
     },
@@ -675,6 +692,7 @@ export async function activityAction(
       { authenticatedUser: user },
     );
   }
+  if (type === "activity.summary") return lobbySummary(users, now);
   if (type === "activity.state") return activityView(user, users, now);
   if (type === "aquarium.checkIn") {
     const { day } = dailyActivityPeriods(now);

@@ -95,3 +95,16 @@ test("a full aquarium continues recording participation, including simultaneous 
   assert.equal(full.totalCheckIns, users.length);
   assert.deepEqual(await checkIn(users[0], day, now), full);
 });
+
+test("cached lobby summaries exclude private fields and roll over at Taipei 09:00", async () => {
+  const before = Date.parse("2027-04-01T08:59:59+08:00");
+  const [member] = users;
+  const summary = now => activityAction(member, users, "activity.summary", {}, now);
+  await checkIn(member, "2027-03-31", before);
+  const previous = await summary(before);
+  assert.deepEqual(Object.keys(previous).sort(), ["day", "leaderboard", "period", "totalCheckIns"]);
+  assert.equal(previous.totalCheckIns, 1);
+  const next = await summary(before + 1000);
+  assert.equal(next.day, "2027-04-01");
+  assert.equal(next.totalCheckIns, 0);
+});

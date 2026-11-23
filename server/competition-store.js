@@ -17,14 +17,31 @@ function validateRoomId(id) {
   if (typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)) fail("比賽編號無效");
 }
 
+const recentRooms = new Map();
+function readRoom(db, id) {
+  const now = Date.now();
+  const cached = recentRooms.get(id);
+  if (cached && now < cached.until) return cached.pending;
+  for (const [key, entry] of recentRooms) {
+    if (entry.until <= now) recentRooms.delete(key);
+  }
+  if (recentRooms.size >= 128) recentRooms.delete(recentRooms.keys().next().value);
+  const pending = db.doc("guild_activity/competition_" + id).get().then(snap => snap.data());
+  const entry = { pending, until: now + 4000 };
+  recentRooms.set(id, entry);
+  console.info("db_usage competition_room cache_fill docs=1");
+  pending.catch(() => { if (recentRooms.get(id) === entry) recentRooms.delete(id); });
+  return pending;
+}
+
 async function roomUpdate(token, { id, revision }) {
   validateRoomId(id);
   let users, room;
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
-    const [guild, match] = await db.getAll(db.doc("dnweb/state"), db.doc("guild_activity/competition_" + id));
+    const [guild, match] = await Promise.all([db.doc("dnweb/state").get(), readRoom(db, id)]);
     users = guild.get("users") ?? [];
-    room = match.data();
+    room = match;
   } else {
     users = await readState(s => s.users);
     room = await activityTransaction(db => db.get("competition_" + id));
@@ -122,6 +139,7 @@ export async function competitionRequest(token, type, p) {
         : {}),
     },
   );
+  if (id && type !== "competition.state") recentRooms.delete(id);
   return settle
     ? { view: response.result, jobs: response.jobs }
     : { view: response, jobs: [] };

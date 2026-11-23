@@ -98,6 +98,7 @@ export function applyVoiceSnapshot(previous, input, now = Date.now()) {
 }
 export async function recordVoiceSnapshot(p, now = Date.now()) {
   return activityTransaction(async (db) => {
+    if (process.env.VERCEL) console.info("db_usage voice_ingest docs_read=1 docs_written=1");
     const previous = await db.get("voice_tracking");
     const next = applyVoiceSnapshot(previous, p, now);
     db.set("voice_tracking", next);
@@ -118,9 +119,10 @@ export async function voiceView(user, users, now = Date.now()) {
   return activityTransaction(
     async (db) => {
       const s = await db.get("voice_tracking");
-      const online = !!s && now - s.lastSeen <= MAX_GAP;
+      const eligible = s ? eligibleVoiceMembers(s.members || [], s.afkChannelId) : [];
+      const online = !!s && now - s.lastSeen <= (eligible.length ? MAX_GAP : 360000);
       const active = new Set(
-        online ? eligibleVoiceMembers(s.members || [], s.afkChannelId) : [],
+        online ? eligible : [],
       );
       const day = casinoDay(now);
       return {
