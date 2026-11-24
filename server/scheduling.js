@@ -1,5 +1,5 @@
 import { fail, id, text } from "./domain.js";
-import { remainingRaidRuns } from "../shared/scheduling.js";
+import { periods, remainingRaidRuns } from "../shared/scheduling.js";
 export function isOwner(s, u) {
   return !!u.admin && s.adminOwnerId === u.id;
 }
@@ -19,6 +19,7 @@ export function raidView(s, r) {
       const owner = s.users.find((u) => u.id === slot.ownerId);
       return {
         ...slot,
+        gear: c?.gear || slot.gear || {},
         name: c?.name || slot.name,
         professionId: c?.professionId ?? slot.professionId,
         username: owner?.username || slot.username,
@@ -105,6 +106,44 @@ export function schedulingAction(s, u, type, p, now) {
     )
   )
     fail("通知傳送中，請稍後再修改", 409);
+  if (old?.settledAt) fail("此團已結算", 409);
+  if (type === "raid.settle") {
+    if (!old) fail("找不到出團排班", 404);
+    if (now < old.startsAt) fail("尚未到出團時間");
+    if (periods(now).week !== periods(old.startsAt).week) fail("此團屬於已重置的週次，無法扣除本週場次");
+    const dungeon = s.dungeons.find(d => d.id === old.dungeonId);
+    if (!dungeon) fail("副本已移除");
+    const members = raidView(s, old).slots.filter(Boolean);
+    if (!members.length) fail("請先加入出團成員");
+    const charged = members.map(slot => {
+      const c = s.characters.find(c => c.id === slot.characterId);
+      if (slot.unavailable || !remainingRaidRuns(c, dungeon, old.startsAt))
+        fail(slot.name + " 無法扣場，請先調整名單", 409);
+      return c;
+    });
+    for (const c of charged) c.runs[dungeon.id] = (c.runs[dungeon.id] || 0) + 1;
+    old.settledAt = now;
+    old.settledBy = u.id;
+    old.revision++;
+    return true;
+  }
+  if (type === "raid.seat") {
+    if (!old || !Number.isInteger(p.index) || p.index < 0 || p.index >= 8) fail("位置無效");
+    let slot = null;
+    if (p.characterId !== null) {
+      const c = s.characters.find(c => c.id === p.characterId);
+      const owner = c && s.users.find(u => u.id === c.ownerId && u.active);
+      const dungeon = s.dungeons.find(d => d.id === old.dungeonId);
+      if (!owner || !remainingRaidRuns(c, dungeon, old.startsAt)) fail("角色無法出團", 409);
+      if (old.slots.some((s,i) => i !== p.index && s?.ownerId === owner.id)) fail("同一帳號每團限一位角色");
+      slot = {characterId:c.id, ownerId:owner.id, username:owner.username, name:c.name, professionId:c.professionId};
+    }
+    old.slots[p.index] = slot;
+    old.revision++;
+    old.updatedAt = now;
+    old.notification = "unsent";
+    return true;
+  }
   if (type === "raid.save") {
     const startsAt = Date.parse(p.startsAt);
     if (
@@ -265,6 +304,8 @@ export function audit(s, u, type, p, now = Date.now()) {
     "raidTemplate.save": "儲存常用出團名單",
     "raidTemplate.delete": "刪除常用出團名單",
     "raid.save": p.id ? "修改出團排班" : "建立出團排班",
+    "raid.settle": "結算出團場次",
+    "raid.seat": "調整出團成員",
     "raid.delete": "刪除出團排班",
     "raid.notify": "發送出團通知",
     "user.role": "調整管理員權限",

@@ -221,8 +221,8 @@ export function publicState(s, u) {
     roster: u.admin
       ? s.characters
           .filter((c) => s.users.some((x) => x.id === c.ownerId && x.active))
-          .map(({ id, name, ownerId, professionId, week, runs }) => ({
-            week, runs,
+          .map(({ id, name, ownerId, professionId, week, runs, gear }) => ({
+            week, runs, gear,
             id,
             name,
             ownerId,

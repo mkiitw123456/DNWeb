@@ -337,3 +337,24 @@ test("raid save and Discord notify recheck the selected dungeon in the scheduled
   assert.equal(s.raids.length, 2);
   assert.equal(c.runs[dungeon.id], dungeon.max);
 });
+
+test("raid settlement debits only final seats, validates the whole roster and rejects repeats", () => {
+  const { s, owner, a, draft } = fixture();
+  const now = Date.now();
+  draft.startsAt = new Date(now).toISOString();
+  action(s, owner, "raid.save", draft, now);
+  const raid = s.raids[0], dungeon = s.dungeons[0];
+  const payload = () => ({id:raid.id,revision:raid.revision});
+  assert.throws(() => action(s,a,"raid.settle",payload(),now),{status:403});
+  s.characters[2].runs[dungeon.id] = dungeon.max;
+  assert.throws(() => action(s,owner,"raid.settle",payload(),now),{status:409});
+  assert.equal(s.characters[0].runs[dungeon.id] || 0,0);
+  action(s,owner,"raid.seat",{...payload(),index:1,characterId:null},now);
+  action(s,owner,"raid.seat",{...payload(),index:0,characterId:s.characters[1].id},now);
+  action(s,owner,"raid.settle",payload(),now);
+  assert.throws(() => action(s,owner,"raid.settle",payload(),now),{status:409});
+  assert.throws(() => action(s,owner,"raid.seat",{...payload(),index:0,characterId:null},now),{status:409});
+  assert.equal(s.characters[1].runs[dungeon.id],1);
+  assert.equal(s.characters[0].runs[dungeon.id] || 0,0);
+  assert.equal(s.characters[2].runs[dungeon.id],dungeon.max);
+});

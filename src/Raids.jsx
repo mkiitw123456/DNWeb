@@ -19,10 +19,52 @@ const statusLabel = {
   failed: "通知失敗，可重試",
   unconfigured: "尚未設定出團 Webhook",
 };
-function CharacterPicker({ data, available, remaining, slots, index, onPick, onClose }) {
+const gradeColors = { A: "#d8751f", S: "#9353d6", L: "#a82348" };
+function MemberCard({ member, professions, subtitle }) {
+  const profession = professions.find((p) => p.id === member.professionId);
+  const gear = member.gear || {};
+  const parts = [
+    ["equipment", "裝備"],
+    ["weapon", "武器"],
+    ["accessory", "飾品"],
+  ];
+  return (
+    <span
+      className="raid-member"
+      style={Object.fromEntries(
+        parts.map(([key]) => [
+          "--" + key,
+          gradeColors[gear[key]] || "var(--border)",
+        ]),
+      )}
+    >
+      <span className="member-prof">
+        <ProfessionIcon profession={profession} />
+        {profession?.name}
+      </span>
+      <strong>{member.name}</strong>
+      <small>{subtitle}</small>
+      <span className="member-grades">
+        {parts.map(([key, label]) => (
+          <span key={key}>
+            {label} {gear[key] || "—"}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+function CharacterPicker({
+  data,
+  available,
+  remaining,
+  slots,
+  index,
+  onPick,
+  onClose,
+}) {
   const [query, setQuery] = useState(""),
-    [professionId, setProfessionId] = useState(""),
-    [expanded, setExpanded] = useState(null);
+    [professionId, setProfessionId] = useState("");
   const groups = searchRoster(available, data.users, query, professionId);
   const chosenOwners = new Set(
     slots
@@ -40,7 +82,6 @@ function CharacterPicker({ data, available, remaining, slots, index, onPick, onC
           value={professionId}
           onChange={(e) => {
             setProfessionId(e.target.value);
-            setExpanded(null);
           }}
         >
           <option value="">所有職業</option>
@@ -52,60 +93,39 @@ function CharacterPicker({ data, available, remaining, slots, index, onPick, onC
         </select>
       </Field>
       <Field
-        label="搜尋帳號或角色名稱"
+        label="搜尋 ID、帳號或角色名稱"
         placeholder="輸入任意片段，不分大小寫"
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
-          setExpanded(null);
         }}
       />
       <p className="hint">
         只列出在出團當週還有此副本場次的角色。同一帳號每團限選一個角色。
       </p>
       <div className="roster-search-results">
-        {groups.map((u) => (
-          <section key={u.id} className="roster-search-group">
+        {groups.flatMap((u) =>
+          u.characters.map((c) => (
             <button
-              className="roster-account"
-              onClick={() => setExpanded(expanded === u.id ? null : u.id)}
-              aria-expanded={expanded === u.id}
+              className="member-choice"
+              key={c.id}
+              disabled={chosenOwners.has(u.id)}
+              onClick={() => onPick(c.id)}
             >
-              <span>
-                <strong>{u.username}</strong>
-                <small>
-                  {u.characters.length} 個符合角色
-                  {chosenOwners.has(u.id) ? " · 已在團內" : ""}
-                </small>
-              </span>
-              {professionId ? (
-                <ProfessionIcon
-                  profession={data.professions.find(
-                    (p) => p.id === professionId,
-                  )}
-                />
-              ) : (
-                <span>選擇角色</span>
-              )}
+              <MemberCard
+                member={c}
+                professions={data.professions}
+                subtitle={
+                  u.username +
+                  " · 剩 " +
+                  remaining(c) +
+                  " 場" +
+                  (chosenOwners.has(u.id) ? " · 已在團內" : "")
+                }
+              />
             </button>
-            {expanded === u.id &&
-              u.characters.map((c) => (
-                <button
-                  key={c.id}
-                  className="roster-character"
-                  disabled={chosenOwners.has(u.id)}
-                  onClick={() => onPick(c.id)}
-                >
-                  <span>{c.name} · 剩 {remaining(c)} 場</span>
-                  <ProfessionIcon
-                    profession={data.professions.find(
-                      (p) => p.id === c.professionId,
-                    )}
-                  />
-                </button>
-              ))}
-          </section>
-        ))}
+          )),
+        )}
         {!groups.length && (
           <p className="hint">沒有符合條件且仍有此副本場次的角色。</p>
         )}
@@ -121,6 +141,11 @@ export default function Raids({ data, mutate, busy, ask }) {
     [picker, setPicker] = useState(null);
   const [templateSource, setTemplateSource] = useState(null),
     [templateName, setTemplateName] = useState("");
+  const [quick, setQuick] = useState(null);
+  const quickDungeon =
+    quick && data.dungeons.find((d) => d.id === quick.raid.dungeonId);
+  const quickRemaining = (c) =>
+    remainingRaidRuns(c, quickDungeon, quick.raid.startsAt);
   const days = nextSevenDays();
   const raids = [...(data.raids || [])].sort((a, b) => a.startsAt - b.startsAt);
   const shown = raids.filter(
@@ -136,12 +161,13 @@ export default function Raids({ data, mutate, busy, ask }) {
     });
     setStep(1);
   };
-  const dungeon = data.dungeons.find(d => d.id === draft?.dungeonId);
+  const dungeon = data.dungeons.find((d) => d.id === draft?.dungeonId);
   const startsAt = Date.parse((draft?.startsAt || "") + ":00+08:00");
-  const remaining = c => remainingRaidRuns(c, dungeon, startsAt);
-  const available = draft ? data.roster.filter(c => remaining(c) > 0) : [];
-  const eligibleIds = new Set(available.map(c => c.id));
-  const invalidSlots = draft?.slots.filter(id => id && !eligibleIds.has(id)).length || 0;
+  const remaining = (c) => remainingRaidRuns(c, dungeon, startsAt);
+  const available = draft ? data.roster.filter((c) => remaining(c) > 0) : [];
+  const eligibleIds = new Set(available.map((c) => c.id));
+  const invalidSlots =
+    draft?.slots.filter((id) => id && !eligibleIds.has(id)).length || 0;
   const close = () => {
     setDraft(null);
     setPicker(null);
@@ -269,7 +295,7 @@ export default function Raids({ data, mutate, busy, ask }) {
               <header>
                 <span className="raid-date">
                   {taipeiDay(r.startsAt)} · {taipeiTime(r.startsAt)}
-                  {r.startsAt < Date.now() ? " · 已結束" : ""}
+                  {r.startsAt < Date.now() ? " · 已開團" : ""}
                 </span>
                 <h2>{r.dungeonName}</h2>
                 <small>
@@ -283,24 +309,55 @@ export default function Raids({ data, mutate, busy, ask }) {
                     key={i}
                     className={slot?.ownerId === data.me.id ? "is-me" : ""}
                   >
-                    <span className="slot-number">{i + 1}</span>
+                    <span className="slot-number">席次 {i + 1}</span>
                     {slot ? (
-                      <>
-                        <div>
-                          <strong>{slot.name}</strong>
-                          <small>
-                            {slot.username}
-                            {slot.unavailable ? " · 角色已刪除或停用" : ""}
-                          </small>
-                        </div>
-                        <ProfessionIcon
-                          profession={data.professions.find(
-                            (p) => p.id === slot.professionId,
-                          )}
-                        />
-                      </>
+                      <MemberCard
+                        member={slot}
+                        professions={data.professions}
+                        subtitle={
+                          slot.username + (slot.unavailable ? " · 已停用" : "")
+                        }
+                      />
                     ) : (
                       <span className="muted">待補</span>
+                    )}
+                    {data.me.admin && !r.settledAt && (
+                      <div className="seat-tools">
+                        <Button
+                          disabled={busy}
+                          onClick={() => setQuick({ raid: r, index: i })}
+                        >
+                          {slot ? "換人" : "新增"}
+                        </Button>
+                        {slot && (
+                          <Button
+                            disabled={busy}
+                            onClick={async () => {
+                              if (
+                                await ask(
+                                  "移除第 " +
+                                    (i + 1) +
+                                    " 席的 " +
+                                    slot.name +
+                                    "？",
+                                )
+                              )
+                                await mutate(
+                                  "raid.seat",
+                                  {
+                                    id: r.id,
+                                    revision: r.revision,
+                                    index: i,
+                                    characterId: null,
+                                  },
+                                  "已移除成員",
+                                );
+                            }}
+                          >
+                            移除
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </li>
                 ))}
@@ -315,8 +372,38 @@ export default function Raids({ data, mutate, busy, ask }) {
                 >
                   {statusLabel[r.notification] || "尚未通知"}
                 </span>
-                {data.me.admin && (
+                {r.settledAt && <strong> · 已結算</strong>}
+                {data.me.admin && !r.settledAt && (
                   <div className="raid-actions">
+                    <Button
+                      primary
+                      disabled={
+                        busy ||
+                        r.startsAt > Date.now() ||
+                        !r.slots.some(Boolean)
+                      }
+                      onClick={async () => {
+                        const names = r.slots
+                          .filter(Boolean)
+                          .map((s) => s.name);
+                        if (
+                          await ask(
+                            "結算「" +
+                              r.dungeonName +
+                              "」？" +
+                              names.join("、") +
+                              " 各扣 1 場，結算後將鎖定名單。",
+                          )
+                        )
+                          await mutate(
+                            "raid.settle",
+                            { id: r.id, revision: r.revision },
+                            "已結算並扣除入場次數",
+                          );
+                      }}
+                    >
+                      結算
+                    </Button>
                     <Button
                       onClick={() => {
                         setTemplateSource(r);
@@ -393,6 +480,31 @@ export default function Raids({ data, mutate, busy, ask }) {
           }
         />
       )}
+      {quick && (
+        <CharacterPicker
+          data={data}
+          available={data.roster.filter((c) => quickRemaining(c) > 0)}
+          remaining={quickRemaining}
+          slots={quick.raid.slots.map((s) => s?.characterId)}
+          index={quick.index}
+          onClose={() => setQuick(null)}
+          onPick={async (id) => {
+            if (
+              await mutate(
+                "raid.seat",
+                {
+                  id: quick.raid.id,
+                  revision: quick.raid.revision,
+                  index: quick.index,
+                  characterId: id,
+                },
+                "已更新席次",
+              )
+            )
+              setQuick(null);
+          }}
+        />
+      )}
       {templateSource && (
         <Modal
           title="儲存常用出團名單"
@@ -451,10 +563,15 @@ export default function Raids({ data, mutate, busy, ask }) {
                 "startsAt",
               );
               if (step === 1) {
-                setDraft(current => ({
-                  ...current, startsAt: selectedTime,
+                setDraft((current) => ({
+                  ...current,
+                  startsAt: selectedTime,
                   skipped: current.fromTemplate ? invalidSlots : 0,
-                  slots: current.fromTemplate ? current.slots.map(id => eligibleIds.has(id) ? id : null) : current.slots,
+                  slots: current.fromTemplate
+                    ? current.slots.map((id) =>
+                        eligibleIds.has(id) ? id : null,
+                      )
+                    : current.slots,
                 }));
                 setStep(2);
                 return;
@@ -522,8 +639,15 @@ export default function Raids({ data, mutate, busy, ask }) {
                   可先保留空位；儲存後可隨時編輯。修改已通知的名單後，請重新按「於
                   DC 通知」。
                 </p>
-                {draft.skipped > 0 && <p role="status">常用名單有 {draft.skipped} 個位置的角色已失效或場次用完，已留空待補。</p>}
-                {invalidSlots > 0 && <p role="alert">部分位置已無法出團，請清除或更換角色。</p>}
+                {draft.skipped > 0 && (
+                  <p role="status">
+                    常用名單有 {draft.skipped}{" "}
+                    個位置的角色已失效或場次用完，已留空待補。
+                  </p>
+                )}
+                {invalidSlots > 0 && (
+                  <p role="alert">部分位置已無法出團，請清除或更換角色。</p>
+                )}
                 <div className="raid-editor-slots">
                   {draft.slots.map((id, i) => {
                     const c = data.roster.find((c) => c.id === id);
@@ -587,7 +711,10 @@ export default function Raids({ data, mutate, busy, ask }) {
               <Button type="button" onClick={close}>
                 取消
               </Button>
-              <Button primary disabled={busy || !dungeon || (step === 2 && invalidSlots > 0)}>
+              <Button
+                primary
+                disabled={busy || !dungeon || (step === 2 && invalidSlots > 0)}
+              >
                 {step === 1 ? "建立並安排成員" : "儲存出團"}
               </Button>
             </div>

@@ -30,8 +30,7 @@ export function searchRoster(roster, users, query, professionId) {
           c.ownerId === u.id &&
           (!professionId || c.professionId === professionId) &&
           (!q ||
-            u.username.toLocaleLowerCase().includes(q) ||
-            c.name.toLocaleLowerCase().includes(q)),
+            [u.username, u.nickname, u.id, u.discordId, c.name, c.id].some(value => String(value ?? "").toLocaleLowerCase().includes(q))),
       ),
     }))
     .filter((u) => u.characters.length);
