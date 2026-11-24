@@ -2195,8 +2195,17 @@ button.primary:disabled {
 .raid-slots li>.seat-tools { display:flex; flex:0 0 auto; gap:5px; margin-top:auto; }
 .seat-tools button { padding:4px 8px; }
 .member-choice { background:none; text-align:left; padding:0; border:0; color:inherit; }
-.raid-professions { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; padding:0; border:0; }
-.raid-professions legend { margin-bottom:6px; }
-.raid-professions label { display:inline-flex; align-items:center; gap:4px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; cursor:pointer; }
-.raid-professions label:has(:checked) { background:var(--accent-soft); }
-.raid-professions input { width:auto; margin:0; accent-color:var(--accent); }
+.raid-professions { min-width:0; margin:0 0 12px; padding:0; border:0; }
+.raid-professions legend { margin-bottom:8px; }
+.raid-profession-options {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,104px),1fr)); gap:6px;
+}
+.raid-profession-options button {
+  display:flex; align-items:center; justify-content:flex-start; gap:5px;
+  min-width:0; min-height:40px; padding:5px 7px;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+}
+.raid-profession-options img { flex:none; object-fit:contain; }
+.raid-profession-options span { min-width:0; overflow-wrap:anywhere; }
+.raid-profession-options svg { flex:none; margin-left:auto; }
+.raid-profession-options button[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }

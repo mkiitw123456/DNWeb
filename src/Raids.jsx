@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Plus, X } from "lucide-react";
+import { CalendarDays, Check, Plus, X } from "lucide-react";
 import { Heading, Button, Field, Modal, Empty } from "./ui.jsx";
 import {
   taipeiDay,
@@ -80,22 +80,28 @@ function CharacterPicker({
     <Modal title="選擇成員" onClose={onClose} explicitCloseOnly>
       <fieldset className="raid-professions">
         <legend>職業篩選</legend>
-        {professions.map((p) => (
-          <label key={p.id}>
-            <input
-              type="checkbox"
-              checked={selectedProfessions.includes(p.id)}
-              onChange={() =>
+        <div className="raid-profession-options">
+          {professions.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={selectedProfessions.includes(p.id)}
+              onClick={() =>
                 setSelectedProfessions((prev) =>
                   prev.includes(p.id)
                     ? prev.filter((id) => id !== p.id)
                     : [...prev, p.id],
                 )
               }
-            />
-            {p.name}
-          </label>
-        ))}
+            >
+              {p.icon && <img src={p.icon} width="24" height="24" alt="" />}
+              <span>{p.name}</span>
+              {selectedProfessions.includes(p.id) && (
+                <Check size={13} aria-hidden="true" />
+              )}
+            </button>
+          ))}
+        </div>
       </fieldset>
       <Field
         label="搜尋 ID、帳號或角色名稱"
@@ -131,7 +137,11 @@ function CharacterPicker({
           )),
         )}
         {!groups.length && (
-          <p className="hint">{selectedProfessions.length ? "沒有符合條件且仍有此副本場次的角色。" : "請先勾選職業以顯示角色。"}</p>
+          <p className="hint">
+            {selectedProfessions.length
+              ? "沒有符合條件且仍有此副本場次的角色。"
+              : "請先勾選職業以顯示角色。"}
+          </p>
         )}
       </div>
     </Modal>
