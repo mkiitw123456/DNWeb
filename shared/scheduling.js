@@ -45,3 +45,19 @@ export function remainingRaidRuns(character, dungeon, startsAt) {
   const used = character.week === periods(startsAt).week ? character.runs?.[dungeon.id] || 0 : 0;
   return Math.max(0, dungeon.max - used);
 }
+
+export function raidAvailability(character, dungeon, startsAt, raids, editingId) {
+  const remaining = remainingRaidRuns(character, dungeon, startsAt);
+  if (!remaining) return { remaining: 0, reservedBy: "" };
+  const week = periods(startsAt).week;
+  const reservations = raids.filter(r =>
+    r.id !== editingId && !r.settledAt && r.dungeonId === dungeon.id &&
+    periods(r.startsAt).week === week && r.slots.some(slot => slot?.characterId === character.id)
+  );
+  return {
+    remaining: Math.max(0, remaining - reservations.length),
+    reservedBy: reservations.length >= remaining
+      ? "已排 " + reservations.map(r => taipeiDay(r.startsAt) + " " + taipeiTime(r.startsAt) + " " + r.dungeonName).join("、")
+      : "",
+  };
+}

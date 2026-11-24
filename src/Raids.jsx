@@ -8,7 +8,7 @@ import {
   nextSevenDays,
   mine,
   searchRoster,
-  remainingRaidRuns,
+  raidAvailability,
 } from "../shared/scheduling.js";
 const statusLabel = {
   unsent: "尚未通知",
@@ -47,7 +47,7 @@ function MemberCard({ member, professions, subtitle }) {
 function CharacterPicker({
   data,
   available,
-  remaining,
+  availability,
   slots,
   index,
   onPick,
@@ -120,17 +120,18 @@ function CharacterPicker({
             <button
               className="member-choice"
               key={c.id}
-              disabled={chosenOwners.has(u.id)}
+              disabled={chosenOwners.has(u.id) || !availability(c).remaining}
               onClick={() => onPick(c.id)}
             >
               <MemberCard
                 member={c}
                 professions={data.professions}
                 subtitle={
+                  availability(c).reservedBy ||
                   "剩 " +
-                  remaining(c) +
-                  " 場" +
-                  (chosenOwners.has(u.id) ? " · 已在團內" : "")
+                    availability(c).remaining +
+                    " 場" +
+                    (chosenOwners.has(u.id) ? " · 已在團內" : "")
                 }
               />
             </button>
@@ -158,8 +159,14 @@ export default function Raids({ data, mutate, busy, ask }) {
   const [quick, setQuick] = useState(null);
   const quickDungeon =
     quick && data.dungeons.find((d) => d.id === quick.raid.dungeonId);
-  const quickRemaining = (c) =>
-    remainingRaidRuns(c, quickDungeon, quick.raid.startsAt);
+  const quickAvailability = (c) =>
+    raidAvailability(
+      c,
+      quickDungeon,
+      quick.raid.startsAt,
+      raids,
+      quick.raid.id,
+    );
   const days = nextSevenDays();
   const raids = [...(data.raids || [])].sort((a, b) => a.startsAt - b.startsAt);
   const shown = raids.filter(
@@ -177,9 +184,15 @@ export default function Raids({ data, mutate, busy, ask }) {
   };
   const dungeon = data.dungeons.find((d) => d.id === draft?.dungeonId);
   const startsAt = Date.parse((draft?.startsAt || "") + ":00+08:00");
-  const remaining = (c) => remainingRaidRuns(c, dungeon, startsAt);
-  const available = draft ? data.roster.filter((c) => remaining(c) > 0) : [];
-  const eligibleIds = new Set(available.map((c) => c.id));
+  const availability = (c) =>
+    raidAvailability(c, dungeon, startsAt, raids, draft?.id);
+  const remaining = (c) => availability(c).remaining;
+  const available = draft
+    ? data.roster.filter((c) => remaining(c) > 0 || availability(c).reservedBy)
+    : [];
+  const eligibleIds = new Set(
+    available.filter((c) => remaining(c) > 0).map((c) => c.id),
+  );
   const invalidSlots =
     draft?.slots.filter((id) => id && !eligibleIds.has(id)).length || 0;
   const close = () => {
@@ -494,8 +507,12 @@ export default function Raids({ data, mutate, busy, ask }) {
       {quick && (
         <CharacterPicker
           data={data}
-          available={data.roster.filter((c) => quickRemaining(c) > 0)}
-          remaining={quickRemaining}
+          available={data.roster.filter(
+            (c) =>
+              quickAvailability(c).remaining > 0 ||
+              quickAvailability(c).reservedBy,
+          )}
+          availability={quickAvailability}
           slots={quick.raid.slots.map((s) => s?.characterId)}
           index={quick.index}
           onClose={() => setQuick(null)}
@@ -724,7 +741,7 @@ export default function Raids({ data, mutate, busy, ask }) {
         <CharacterPicker
           data={data}
           available={available}
-          remaining={remaining}
+          availability={availability}
           slots={draft.slots}
           index={picker}
           onClose={() => setPicker(null)}

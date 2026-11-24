@@ -358,3 +358,27 @@ test("raid settlement debits only final seats, validates the whole roster and re
   assert.equal(s.characters[0].runs[dungeon.id] || 0,0);
   assert.equal(s.characters[2].runs[dungeon.id],dungeon.max);
 });
+
+test("a single run is reserved across raids, released on cancellation, then completed on settlement", () => {
+  const { s, owner, draft } = fixture();
+  const at = Date.parse("2026-11-24T20:00:00+08:00");
+  reset(s, at);
+  const c = s.characters[0], dungeon = s.dungeons[0];
+  dungeon.max = 1;
+  draft.slots = [c.id, ...Array(7).fill(null)];
+  draft.startsAt = new Date(at).toISOString();
+  action(s, owner, "raid.save", draft, at);
+  const first = s.raids[0];
+  action(s, owner, "raid.save", {...draft, id:first.id, revision:first.revision}, at);
+  const later = {...draft, startsAt:new Date(at+3600000).toISOString()};
+  assert.throws(() => action(s, owner, "raid.save", later, at), /已排 .*20:00/);
+  action(s, owner, "raid.save", {...later, slots:Array(8).fill(null)}, at);
+  const second = s.raids[1];
+  const pick = () => action(s, owner, "raid.seat", {id:second.id,revision:second.revision,index:0,characterId:c.id}, at);
+  assert.throws(pick, /已排 .*20:00/);
+  action(s, owner, "raid.delete", {id:first.id,revision:first.revision}, at);
+  assert.equal(c.runs[dungeon.id] || 0, 0);
+  pick();
+  action(s, owner, "raid.settle", {id:second.id,revision:second.revision}, at+3600000);
+  assert.equal(c.runs[dungeon.id], 1);
+});

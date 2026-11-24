@@ -1,5 +1,5 @@
 import { fail, id, text } from "./domain.js";
-import { periods, remainingRaidRuns } from "../shared/scheduling.js";
+import { periods, raidAvailability, remainingRaidRuns } from "../shared/scheduling.js";
 export function isOwner(s, u) {
   return !!u.admin && s.adminOwnerId === u.id;
 }
@@ -135,6 +135,8 @@ export function schedulingAction(s, u, type, p, now) {
       const owner = c && s.users.find(u => u.id === c.ownerId && u.active);
       const dungeon = s.dungeons.find(d => d.id === old.dungeonId);
       if (!owner || !remainingRaidRuns(c, dungeon, old.startsAt)) fail("角色無法出團", 409);
+      const availability = raidAvailability(c, dungeon, old.startsAt, s.raids, old.id);
+      if (!availability.remaining) fail(c.name + " " + availability.reservedBy, 409);
       if (old.slots.some((s,i) => i !== p.index && s?.ownerId === owner.id)) fail("同一帳號每團限一位角色");
       slot = {characterId:c.id, ownerId:owner.id, username:owner.username, name:c.name, professionId:c.professionId};
     }
@@ -163,6 +165,8 @@ export function schedulingAction(s, u, type, p, now) {
       const owner = c && s.users.find((x) => x.id === c.ownerId && x.active);
       if (!c || !owner) fail("角色已刪除或帳號已停用，請重新選擇");
       if (!remainingRaidRuns(c, dungeon, startsAt)) fail(`${c.name} 的「${dungeon.name}」場次已用完，請更換角色`, 409);
+      const availability = raidAvailability(c, dungeon, startsAt, s.raids, old?.id);
+      if (!availability.remaining) fail(c.name + " " + availability.reservedBy, 409);
       if (owners.has(owner.id)) fail("同一帳號每團只能安排一個角色");
       owners.add(owner.id);
       return {
