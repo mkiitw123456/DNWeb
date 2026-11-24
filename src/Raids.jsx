@@ -337,8 +337,13 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
             <article className="raid-card" key={r.id}>
               <header>
                 <span className="raid-date">
-                  {taipeiDay(r.startsAt)} · {taipeiTime(r.startsAt)}
-                  {r.startsAt < Date.now() ? " · 已開團" : ""}
+                  {r.joinNow &&
+                  ["sent", "pending", "sending"].includes(r.notification)
+                    ? "直接進隊"
+                    : taipeiDay(r.startsAt) +
+                      " · " +
+                      taipeiTime(r.startsAt) +
+                      (r.startsAt < Date.now() ? " · 已開團" : "")}
                 </span>
                 <h2>{r.dungeonName}</h2>
                 <small>
@@ -468,29 +473,35 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                     >
                       編輯
                     </Button>
-                    <Button
-                      disabled={
-                        busy ||
-                        r.savingSeat != null ||
-                        r.startsAt < Date.now() ||
-                        (["pending", "sending"].includes(r.notification) &&
-                          Date.now() - (r.notificationAt || 0) < 60000)
-                      }
-                      onClick={async () => {
-                        if (
-                          await ask(
-                            `將「${r.dungeonName}」出團名單發送至 Discord，並標記已綁定 ID 的參與者？`,
-                          )
-                        )
-                          await mutate(
-                            "raid.notify",
-                            { id: r.id, revision: r.revision },
-                            "已處理通知，請查看卡片傳送狀態",
-                          );
-                      }}
-                    >
-                      {r.notification === "sent" ? "重新通知" : "於 DC 通知"}
-                    </Button>
+                    {[false, true].map((joinNow) => (
+                      <Button
+                        key={String(joinNow)}
+                        disabled={
+                          busy ||
+                          r.savingSeat != null ||
+                          (!joinNow && r.startsAt < Date.now()) ||
+                          (["pending", "sending"].includes(r.notification) &&
+                            Date.now() - (r.notificationAt || 0) < 60000)
+                        }
+                        onClick={async () => {
+                          const prompt = joinNow
+                            ? `通知「${r.dungeonName}」的團員直接進隊？Discord 將顯示「直接進隊」及名單。`
+                            : `將「${r.dungeonName}」出團時間與名單發送至 Discord？`;
+                          if (await ask(prompt))
+                            await mutate(
+                              "raid.notify",
+                              { id: r.id, revision: r.revision, joinNow },
+                              "已處理通知，請查看卡片傳送狀態",
+                            );
+                        }}
+                      >
+                        {joinNow
+                          ? "通知直接進隊"
+                          : r.notification === "sent"
+                            ? "重新通知時間"
+                            : "於 DC 通知"}
+                      </Button>
+                    ))}
                     <Button
                       disabled={busy || r.savingSeat != null}
                       onClick={async () => {

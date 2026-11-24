@@ -382,3 +382,20 @@ test("a single run is reserved across raids, released on cancellation, then comp
   action(s, owner, "raid.settle", {id:second.id,revision:second.revision}, at+3600000);
   assert.equal(c.runs[dungeon.id], 1);
 });
+
+test("delayed raid can announce immediate entry without changing its scheduled time or counters", () => {
+  const { s, owner, a, draft } = fixture();
+  a.discordId = "123456789012345678";
+  const start = Date.parse("2026-11-24T20:30:00+08:00"), delayed = start + 1800000;
+  reset(s,start);
+  action(s,owner,"raid.save",{...draft,startsAt:new Date(start).toISOString()},start);
+  const r=s.raids[0], payload={id:r.id,revision:r.revision};
+  assert.throws(()=>action(s,owner,"raid.notify",payload,delayed),/出團時間已過/);
+  action(s,owner,"raid.notify",{...payload,joinNow:true},delayed);
+  const event=s.deliveries.find(e=>e.id===r.notificationEventId);
+  assert.match(event.message.content,/^直接進隊\n/);
+  assert.doesNotMatch(event.message.content,/20:30|台灣時間|<t:/);
+  assert.deepEqual(event.message.allowed_mentions.users,[a.discordId]);
+  assert.equal(r.startsAt,start);
+  assert.equal(s.characters[0].runs[draft.dungeonId] || 0,0);
+});

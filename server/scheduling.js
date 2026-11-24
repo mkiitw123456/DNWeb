@@ -199,7 +199,8 @@ export function schedulingAction(s, u, type, p, now) {
     return true;
   }
   if (type === "raid.notify") {
-    if (old.startsAt < now) fail("出團時間已過，請先調整時間");
+    const joinNow = p.joinNow === true;
+    if (!joinNow && old.startsAt < now) fail("出團時間已過，可改用「通知直接進隊」");
     const view = raidView(s, old);
     if (!view.slots.some(Boolean)) fail("請先安排至少一位成員");
     if (view.slots.some((x) => x?.unavailable))
@@ -212,10 +213,11 @@ export function schedulingAction(s, u, type, p, now) {
     old.notificationEventId = queueDelivery(
       s,
       "raid",
-      raidMessage(s, view),
+      raidMessage(s, view, joinNow),
       { raidId: old.id, revision: old.revision },
       now,
     );
+    old.joinNow = joinNow;
     old.notification = "pending";
     old.notificationAt = now;
     return true;
@@ -226,7 +228,7 @@ const escape = (value) =>
   String(value)
     .replace(/[\\*_~`>|@<#\[\]]/g, "\\$&")
     .replace(/[\r\n]/g, " ");
-export function raidMessage(s, r) {
+export function raidMessage(s, r, joinNow = false) {
   const timestamp = Math.floor(r.startsAt / 1000);
   const local = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Taipei",
@@ -252,8 +254,9 @@ export function raidMessage(s, r) {
     const member = mentions.includes(owner?.discordId) ? `<@${owner.discordId}>` : escape(owner?.nickname || owner?.username || slot.username);
     return `${i + 1}. ${member} · ${escape(slot.name)} · ${profession?.discordEmoji || ""}${escape(profession?.name || "未設定職業")}`;
   });
+  const heading = joinNow ? "直接進隊" : `${local}（台灣時間 · <t:${timestamp}:R>）`;
   return {
-    content: `${local}（台灣時間 · <t:${timestamp}:R>）\n**${escape(r.dungeonName)}**\n${rows.join("\n")}`,
+    content: `${heading}\n**${escape(r.dungeonName)}**\n${rows.join("\n")}`,
     allowed_mentions: { parse: [], users: mentions },
   };
 }
