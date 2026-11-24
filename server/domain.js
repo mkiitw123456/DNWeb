@@ -278,7 +278,7 @@ export function publicState(s, u) {
       (({ password, version, ...rest }) => rest)(u),
     webhookConfigured: !!(s.webhook || process.env.DISCORD_WEBHOOK_URL),
     discordClaimsEnabled: discordEnabled(),
-    storage: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ? "Firebase" : "本機",
+    storage: process.env.DDSTAR_DATABASE_URL ? "Supabase" : process.env.FIREBASE_SERVICE_ACCOUNT_JSON ? "Firebase" : "本機",
     accountCleanupCompleted: !!s.accountCleanupCompleted,
   };
 }

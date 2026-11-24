@@ -1,9 +1,13 @@
+import { usePostgres, pgTransaction, guildDoc, putDoc } from "./postgres.js";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { initialState } from "./domain.js";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 let queue = Promise.resolve(),
   db;
+export function assertSourceWritable(state) {
+  if (state?.ddstarStorageFrozen) throw Object.assign(new Error("資料庫切換中，請稍後重試"),{status:503});
+}
 export async function firestore() {
   if (!db) {
     const { initializeApp, cert, getApps } = await import("firebase-admin/app");
@@ -27,6 +31,7 @@ async function localState(folder) {
 // An authorization lookup only needs a fresh snapshot. Using a transaction
 // here would contend with writes to the shared guild document.
 export async function readState(select) {
+  if (usePostgres()) return pgTransaction(async c => select(await guildDoc(c)));
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const snap = await (await firestore()).doc("dnweb/state").get();
     return select(snap.exists ? snap.data() : initialState());
@@ -61,6 +66,13 @@ export async function transact(fn, { backup = false } = {}) {
   const backupId = backup
     ? `before-account-cleanup-${Date.now()}-${randomUUID()}`
     : null;
+  if (usePostgres()) return pgTransaction(async c => {
+    const state = await guildDoc(c), original = structuredClone(state);
+    const result = await fn(state);
+    if (backup) await putDoc(c, "dnweb_backups/" + backupId, original);
+    if (!isDeepStrictEqual(state, original)) await putDoc(c, "dnweb/state", state);
+    return result;
+  });
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const fieldTypes = await import("firebase-admin/firestore");
     const ref = (await firestore()).doc("dnweb/state");
@@ -73,6 +85,7 @@ export async function transact(fn, { backup = false } = {}) {
         : backup
           ? structuredClone(state)
           : null;
+      assertSourceWritable(state);
       const result = await fn(state);
       if (backup)
         tx.create(ref.firestore.doc(`dnweb_backups/${backupId}`), original);

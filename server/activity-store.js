@@ -1,5 +1,6 @@
+import { usePostgres, pgTransaction, guildDoc, getDoc, putDoc } from "./postgres.js";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import { firestore, transact } from "./store.js";
+import { assertSourceWritable, firestore, transact } from "./store.js";
 let queue = Promise.resolve();
 function documentPath(key) {
   // Mirror Firestore path validation in the local adapter too.
@@ -25,6 +26,26 @@ export async function activityTransaction(
   fn,
   { authenticatedUser, queueAudit } = {},
 ) {
+  if (usePostgres()) return pgTransaction(async c => {
+    const guild = authenticatedUser ? await guildDoc(c) : null;
+    if (authenticatedUser) checkActivitySession(guild, authenticatedUser);
+    const writes = new Map();
+    const result = await fn({
+      get: key => getDoc(c, documentPath(key)),
+      set: (key,value) => writes.set(documentPath(key), value),
+      delete: key => writes.set(documentPath(key), null),
+      entries: async () => (await c.query("select substring(path from 16) as key,body from documents where starts_with(path,'guild_activity/')")).rows.map(r=>[r.key,r.body]),
+      quizRecords: async memberId => (await c.query("select body from documents where parent='guild_activity/records/ledger' and body->>'memberId'=$1 and body->>'activityId'='quiz' and body->>'kind'='participation'",[memberId])).rows.map(r=>r.body)
+    });
+    for (const [path,value] of writes) {
+      if (value === null) await c.query("delete from documents where path=$1",[path]);
+      else await putDoc(c,path,value);
+    }
+    if (!queueAudit) return result;
+    const jobs = writes.size ? queueAudit(guild) : [];
+    if (writes.size) await putDoc(c,"dnweb/state",guild);
+    return {result,jobs};
+  });
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     return db.runTransaction(async (tx) => {
@@ -33,6 +54,7 @@ export async function activityTransaction(
       if (authenticatedUser) {
         const main = await tx.get(db.doc("dnweb/state"));
         guild = main.data();
+        assertSourceWritable(guild);
         checkActivitySession(guild, authenticatedUser);
       }
       const result = await fn({
@@ -52,6 +74,7 @@ export async function activityTransaction(
           (await tx.get(db.doc(documentPath(key)))).data() ?? null,
         set: (key, value) => writes.push([key, value]),
       });
+      if (writes.length && !authenticatedUser) assertSourceWritable((await tx.get(db.doc("dnweb/state"))).data());
       for (const [key, value] of writes)
         tx.set(db.doc(documentPath(key)), value);
       if (queueAudit) {
@@ -129,6 +152,10 @@ export async function activityQuery(
   kind,
   { memberId, before = Number.MAX_SAFE_INTEGER, from = 0, limit = 51 } = {},
 ) {
+  if (usePostgres()) return pgTransaction(async c => {
+    const parent = memberId ? "guild_activity/member_" + memberId + "/history" : "guild_activity/records/" + kind;
+    return (await c.query("select body from documents where parent=$1 and (body->>'createdAt')::numeric >= $2 and (body->>'createdAt')::numeric < $3 order by (body->>'createdAt')::numeric desc limit $4",[parent,from,before,limit])).rows.map(r=>r.body);
+  });
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     // Per-member history and period reports use a single indexed timestamp field.

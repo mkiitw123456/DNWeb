@@ -1,3 +1,4 @@
+import { usePostgres } from "./postgres.js";
 import { createHash } from "node:crypto";
 import { firestore, readState } from "./store.js";
 import { activityTransaction } from "./activity-store.js";
@@ -37,7 +38,7 @@ function readRoom(db, id) {
 async function roomUpdate(token, { id, revision }) {
   validateRoomId(id);
   let users, room;
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  if (!usePostgres() && process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     const [guild, match] = await Promise.all([db.doc("dnweb/state").get(), readRoom(db, id)]);
     users = guild.get("users") ?? [];

@@ -1,3 +1,4 @@
+import { usePostgres, pgTransaction } from "./postgres.js";
 import { createHash } from "node:crypto";
 import { firestore, readState, transact } from "./store.js";
 import { activityTransaction } from "./activity-store.js";
@@ -18,7 +19,7 @@ async function deleteQuery(query) {
   }
 }
 export async function purgeActivityMember(uid) {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  if (!usePostgres() && process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     const root = await db.collection("guild_activity").get();
     const days = new Set();
@@ -61,7 +62,7 @@ export async function purgeActivityMember(uid) {
       await d.ref.update({ operatorId: "deleted-account" });
   } else
     await activityTransaction(async (db) => {
-      const entries = db.entries(),
+      const entries = await db.entries(),
         days = new Set(
           entries
             .filter(
@@ -188,7 +189,18 @@ export async function compactActivityHistory(now = Date.now()) {
   });
   if (!shouldRun) return;
   const cutoff = now - 35 * 86400000;
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  if (usePostgres()) {
+    await pgTransaction(c => c.query(`
+      delete from documents where starts_with(path,'guild_activity/') and (
+        (body->>'expiresAt')::numeric < $1 or
+        (parent='guild_activity/records/ledger' and (body->>'createdAt')::numeric < $2) or
+        parent like 'guild_activity/member%/history' or
+        (starts_with(path,'guild_activity/receipt_') and body#>>'{result,kind}' in ('participation','bonus')
+          and (body#>>'{result,createdAt}')::numeric < $2)
+      )`, [now,cutoff]));
+    return;
+  }
+  if (!usePostgres() && process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     const db = await firestore();
     await deleteQuery(
       db
@@ -201,7 +213,7 @@ export async function compactActivityHistory(now = Date.now()) {
     await migrateLegacyHistory(db);
   } else
     await activityTransaction(async (db) => {
-      for (const [key, x] of db.entries())
+      for (const [key, x] of await db.entries())
         if (
           key.includes("/history/") ||
           (key.startsWith("records/ledger/") && x.createdAt < cutoff) ||
