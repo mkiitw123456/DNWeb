@@ -9,7 +9,7 @@ const target = "vnqbitelgrkojmiqdpak";
 const root = `projects/${source}/databases/(default)/documents`;
 const rest = "https://firestore.googleapis.com/v1/";
 const snapshot = randomUUID();
-const readTime = new Date(Math.floor(Date.now() / 1000) * 1000 - 2000).toISOString();
+const readTime = process.env.DDSTAR_SNAPSHOT_TIME || new Date(Math.floor(Date.now() / 1000) * 1000 - 2000).toISOString();
 const hashes = new Map();
 
 function canonical(value) {
