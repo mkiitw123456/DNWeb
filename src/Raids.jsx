@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { CalendarDays, Plus, X } from "lucide-react";
 import { Heading, Button, Field, Modal, Empty } from "./ui.jsx";
-import ProfessionIcon from "./ProfessionIcon.jsx";
 import {
   taipeiDay,
   taipeiTime,
@@ -23,34 +22,25 @@ const gradeColors = { A: "#d8751f", S: "#9353d6", L: "#a82348" };
 function MemberCard({ member, professions, subtitle }) {
   const profession = professions.find((p) => p.id === member.professionId);
   const gear = member.gear || {};
-  const parts = [
-    ["equipment", "裝備"],
-    ["weapon", "武器"],
-    ["accessory", "飾品"],
-  ];
   return (
     <span
       className="raid-member"
       style={Object.fromEntries(
-        parts.map(([key]) => [
+        ["equipment", "weapon", "accessory"].map((key) => [
           "--" + key,
           gradeColors[gear[key]] || "var(--border)",
         ]),
       )}
     >
-      <span className="member-prof">
-        <ProfessionIcon profession={profession} />
-        {profession?.name}
-      </span>
+      {profession?.icon && (
+        <img
+          className="raid-job-icon"
+          src={profession.icon}
+          alt={profession.name}
+        />
+      )}
       <strong>{member.name}</strong>
-      <small>{subtitle}</small>
-      <span className="member-grades">
-        {parts.map(([key, label]) => (
-          <span key={key}>
-            {label} {gear[key] || "—"}
-          </span>
-        ))}
-      </span>
+      {subtitle && <small>{subtitle}</small>}
     </span>
   );
 }
@@ -63,35 +53,50 @@ function CharacterPicker({
   onPick,
   onClose,
 }) {
-  const [query, setQuery] = useState(""),
-    [professionId, setProfessionId] = useState("");
-  const groups = searchRoster(available, data.users, query, professionId);
+  const professions = [...data.professions];
+  if (
+    available.some((c) => !professions.some((p) => p.id === c.professionId))
+  ) {
+    professions.push({ id: "", name: "未設定職業" });
+  }
+  const [query, setQuery] = useState("");
+  const [selectedProfessions, setSelectedProfessions] = useState([]);
+  const groups = searchRoster(
+    available.filter((c) => {
+      const id = data.professions.some((p) => p.id === c.professionId)
+        ? c.professionId
+        : "";
+      return selectedProfessions.includes(id);
+    }),
+    data.users,
+    query,
+  );
   const chosenOwners = new Set(
     slots
       .filter((_, i) => i !== index)
       .map((id) => data.roster.find((c) => c.id === id)?.ownerId),
   );
   return (
-    <Modal
-      title={`選擇第 ${index + 1} 位成員`}
-      onClose={onClose}
-      explicitCloseOnly
-    >
-      <Field label="職業篩選">
-        <select
-          value={professionId}
-          onChange={(e) => {
-            setProfessionId(e.target.value);
-          }}
-        >
-          <option value="">所有職業</option>
-          {data.professions.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+    <Modal title="選擇成員" onClose={onClose} explicitCloseOnly>
+      <fieldset className="raid-professions">
+        <legend>職業篩選</legend>
+        {professions.map((p) => (
+          <label key={p.id}>
+            <input
+              type="checkbox"
+              checked={selectedProfessions.includes(p.id)}
+              onChange={() =>
+                setSelectedProfessions((prev) =>
+                  prev.includes(p.id)
+                    ? prev.filter((id) => id !== p.id)
+                    : [...prev, p.id],
+                )
+              }
+            />
+            {p.name}
+          </label>
+        ))}
+      </fieldset>
       <Field
         label="搜尋 ID、帳號或角色名稱"
         placeholder="輸入任意片段，不分大小寫"
@@ -116,8 +121,7 @@ function CharacterPicker({
                 member={c}
                 professions={data.professions}
                 subtitle={
-                  u.username +
-                  " · 剩 " +
+                  "剩 " +
                   remaining(c) +
                   " 場" +
                   (chosenOwners.has(u.id) ? " · 已在團內" : "")
@@ -127,7 +131,7 @@ function CharacterPicker({
           )),
         )}
         {!groups.length && (
-          <p className="hint">沒有符合條件且仍有此副本場次的角色。</p>
+          <p className="hint">{selectedProfessions.length ? "沒有符合條件且仍有此副本場次的角色。" : "請先勾選職業以顯示角色。"}</p>
         )}
       </div>
     </Modal>
@@ -309,14 +313,11 @@ export default function Raids({ data, mutate, busy, ask }) {
                     key={i}
                     className={slot?.ownerId === data.me.id ? "is-me" : ""}
                   >
-                    <span className="slot-number">席次 {i + 1}</span>
                     {slot ? (
                       <MemberCard
                         member={slot}
                         professions={data.professions}
-                        subtitle={
-                          slot.username + (slot.unavailable ? " · 已停用" : "")
-                        }
+                        subtitle={slot.unavailable ? "已停用" : ""}
                       />
                     ) : (
                       <span className="muted">待補</span>
@@ -658,24 +659,12 @@ export default function Raids({ data, mutate, busy, ask }) {
                           aria-label={`選擇位置 ${i + 1}`}
                           onClick={() => setPicker(i)}
                         >
-                          <span className="slot-number">{i + 1}</span>
                           {c ? (
-                            <>
-                              <span>
-                                {c.name} · 剩 {remaining(c)} 場
-                                <small>
-                                  {
-                                    data.users.find((u) => u.id === c.ownerId)
-                                      ?.username
-                                  }
-                                </small>
-                              </span>
-                              <ProfessionIcon
-                                profession={data.professions.find(
-                                  (p) => p.id === c.professionId,
-                                )}
-                              />
-                            </>
+                            <MemberCard
+                              member={c}
+                              professions={data.professions}
+                              subtitle={`剩 ${remaining(c)} 場`}
+                            />
                           ) : (
                             <>
                               <Plus size={18} />
