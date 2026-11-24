@@ -150,6 +150,13 @@ export default function Lobby({
       document.removeEventListener("visibilitychange", focus);
     };
   }, [data.activity, refresh, request, onActivityChange, handleError]);
+  useEffect(() => {
+    const day = view?.aquarium?.day;
+    if (!day) return;
+    const nextReset = Date.parse(day + "T09:00:00+08:00") + 86400000;
+    const timer = setTimeout(() => refresh().catch(handleError), Math.max(0, nextReset - Date.now()) + 150);
+    return () => clearTimeout(timer);
+  }, [view?.aquarium?.day, refresh, handleError]);
   const perform = async (type, payload) => {
     if (lock.current) return null;
     lock.current = true;
@@ -668,7 +675,7 @@ export default function Lobby({
                 每回合限挑戰一次。機遇會另外結算星星，之後回到本話選擇原本的行動。
               </p>
               <ul aria-label="機遇挑戰可能結果">
-                {selected.content.odds[selected.content.extraIndex].map(
+                {selected.content.odds?.[selected.content.extraIndex]?.map(
                   ({ chance, stars }, i) => (
                     <li key={i}>
                       <span>{chance}%</span>

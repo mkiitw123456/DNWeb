@@ -1,0 +1,1 @@
+Before editing this shared project, fetch origin, check local changes and incoming commits, and fast-forward the current tracking branch when possible. Preserve other contributors’ local work. Recheck the remote before pushing.

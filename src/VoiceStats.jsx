@@ -29,10 +29,8 @@ export default function VoiceStats({ request, onUnauthorized }) {
       }
     }
     refresh();
-    const timer = setInterval(refresh, 30000);
     return () => {
       live = false;
-      clearInterval(timer);
     };
   }, [request, onUnauthorized, revision]);
   return (
@@ -42,8 +40,7 @@ export default function VoiceStats({ request, onUnauthorized }) {
         <Button onClick={() => setRevision((n) => n + 1)}>重新整理</Button>
       </div>
       <p className="hint">
-        觀察模式：只累積時間，不發星星或任何獎勵。同頻道至少兩位非 Bot
-        成員才計時，排除伺服器 AFK 頻道。今日統計於台灣時間 09:00 換日。
+        語音時間累計已暫停。Bot 有收到新發言時才會同步文字統計。
       </p>
       {error && (
         <p role="alert" className="error">
@@ -51,13 +48,13 @@ export default function VoiceStats({ request, onUnauthorized }) {
         </p>
       )}
       <p role="status">
-        Bot 狀態：
-        {!data ? "讀取中…" : data.online ? "已連線" : "尚未連線／已離線"}
+        發言同步：
+        {!data ? "讀取中…" : data.lastSeen ? "已收到資料" : "等待新發言"}
         {data?.lastSeen &&
           ` · 上次同步 ${new Date(data.lastSeen).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}`}
       </p>
       <p className="muted">
-        約每 30 秒更新一次；離線與休眠期間不計時。以下顯示已綁定 Discord
+        以下顯示已綁定 Discord
         的啟用會員。
       </p>
       <Field

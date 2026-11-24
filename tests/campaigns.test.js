@@ -52,7 +52,7 @@ test("scheduled campaign unlocks at 09:00 and advances three chapters per member
   ];
   config.schedule = { "2026-11-20": { event: "journey-4" } };
   await activityAction(admin, users, "activity.config", config, start - 1);
-  assert.equal((await viewEvent(start - 1)).unlimited, true);
+  assert.equal((await viewEvent(start - 1)).unlimited, false);
   let current = await viewEvent(start);
   assert.deepEqual(current.campaign, {
     title: "停鐘之旅",

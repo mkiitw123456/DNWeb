@@ -194,7 +194,7 @@ export function normalizeActivityConfig(config) {
     schedule: config.schedule || {},
     campaignSchedule: config.campaignSchedule || [],
     journeyInstalled: true,
-    eventUnlimited: config.eventUnlimited ?? true,
+    eventUnlimited: false,
     events: (hasWeightedChoices ? config.events : upgradedJourney(config)).map(
       (event) => ({
         ...event,
@@ -356,7 +356,28 @@ function roundRules(config, a, day, today, member) {
     dailyLimit: campaign ? 3 : a.dailyLimit,
   };
 }
-function visibleActivity(config, a, memberId, period, today, member) {
+// Keep authored result text and use the same odds for previews and settlement.
+export function chapterOutcomes(option, contentId, campaign) {
+  const chapter = campaign ? campaign.progress + 1 : Number(/^journey-(\d+)$/.exec(contentId)?.[1]);
+  const outcomes = option.outcomes;
+  if (!(chapter >= 15)) return outcomes;
+  const ranked = [...outcomes].sort((a, b) => b.stars - a.stars);
+  const [win, ...losses] = ranked;
+  if (!losses.length) losses.push({ result: "這次行動沒有成功，你得花費星星重新整備。", chance: 1, stars: -1 });
+  const start = Math.min(60, win.chance);
+  const progress = Math.min(1, (chapter - 15) / Math.max(1, (campaign?.length || 60) - 15));
+  const chance = Math.round(start + (Math.min(start, 10) - start) * progress);
+  const weight = losses.reduce((sum, o) => sum + o.chance, 0);
+  let cumulative = 0, assigned = 0;
+  return [{ ...win, chance, stars: Math.max(1, win.stars) }, ...losses.map(o => {
+    cumulative += o.chance;
+    const target = Math.round((100 - chance) * cumulative / weight);
+    const share = target - assigned;
+    assigned = target;
+    return { ...o, chance: share, stars: -Math.max(1 + Math.floor(progress * 2), -o.stars) };
+  })];
+}
+function visibleActivity(config, a, memberId, period, today, member, isAdmin) {
   const { used, dailyLimit, unlimited, bonusUsed, campaign } =
     roundRules(config, a, period.day, today, member);
   const result = {
@@ -402,9 +423,9 @@ function visibleActivity(config, a, memberId, period, today, member) {
             options: choices.map((x) => x.text),
             choiceKeys: choices.map((x) => item.options.indexOf(x)),
             extraIndex: choices.findIndex((x) => x.revealChance !== undefined),
-            odds: choices.map((x) =>
-              x.outcomes.map(({ chance, stars }) => ({ chance, stars })),
-            ),
+            odds: isAdmin ? choices.map((x) =>
+              chapterOutcomes(x, item.id, campaign).map(({ chance, stars }) => ({ chance, stars })),
+            ) : undefined,
           };
   }
   return result;
@@ -480,6 +501,7 @@ export async function activityView(user, users, now = Date.now()) {
               daily,
               today,
               member,
+              user.admin,
             ),
           ),
         discordUrl: config.discordUrl,
@@ -632,7 +654,7 @@ function validateConfig(input, previous) {
     ...previous,
     campaignSchedule: validateCampaigns(input.campaignSchedule ?? previous.campaignSchedule ?? [], events),
     quizCategories,
-    eventUnlimited: input.eventUnlimited ?? previous.eventUnlimited,
+    eventUnlimited: false,
     events,
     fortunes,
     schedule,
@@ -906,13 +928,14 @@ export async function activityAction(
             }
             const roll = randomInt(100);
             let limit = 0;
-            const outcome = option.outcomes.find((o) => {
+            const outcomes = chapterOutcomes(option, content.id, campaign);
+            const outcome = outcomes.find((o) => {
               limit += o.chance;
               return roll < limit;
             });
             summary = outcome.result;
             delta = outcome.stars;
-            const rewards = option.outcomes.map((o) => o.stars);
+            const rewards = outcomes.map((o) => o.stars);
             const min = Math.min(...rewards),
               max = Math.max(...rewards);
             outcomeTier =

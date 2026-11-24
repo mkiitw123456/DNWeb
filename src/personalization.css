@@ -553,6 +553,10 @@ input[type="checkbox"]::after {
   content: none;
 }
 .settings-panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
   max-width: 820px;
   margin: 0 auto;
 }
@@ -561,6 +565,9 @@ input[type="checkbox"]::after {
   gap: 12px;
 }
 .settings-option {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   width: 100%;
   padding: 22px;
   text-align: left;
@@ -577,6 +584,9 @@ input[type="checkbox"]::after {
   margin-left: auto;
   color: var(--muted);
 }
+.settings-option select { width: auto; max-width: 100%; margin-left: auto; }
+.settings-option > svg { flex-shrink: 0; }
+@media (max-width: 550px) { label.settings-option { flex-wrap: wrap; } label.settings-option select { width: 100%; } }
 .settings-option span {
   display: grid;
   gap: 7px;

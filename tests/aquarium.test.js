@@ -77,11 +77,11 @@ test("09:00 Taiwan resets daily eligibility and starts an empty tank on the firs
   await assert.rejects(checkIn(user, december.day, reset), { status: 409 });
   assert.equal((await checkIn(user, january.day, reset)).totalCheckIns, 1);
   const tomorrow = (await view(user, reset + 86400000)).aquarium;
-  assert.equal(tomorrow.totalCheckIns, 1);
+  assert.equal(tomorrow.totalCheckIns, 0);
   assert.equal(tomorrow.checkedInToday, false);
   assert.equal(
     (await checkIn(user, tomorrow.day, reset + 86400000)).totalCheckIns,
-    2,
+    1,
   );
 });
 

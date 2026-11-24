@@ -42,8 +42,6 @@ export default function EventBank({
   events,
   onChange,
   save,
-  unlimited,
-  onUnlimited,
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(null);
@@ -61,15 +59,6 @@ export default function EventBank({
           儲存題庫
         </Button>
       </div>
-      <label className="switch-row">
-        冒險連玩測試（解除每日次數限制）
-        <input
-          type="checkbox"
-          checked={unlimited}
-
-          onChange={(e) => onUnlimited(e.target.checked)}
-        />
-      </label>
       <p className="muted">
         未開放正式劇本時，每天首次冒險優先使用日曆指定的事件，其餘回合接續個人旅程。星數照常結算。
       </p>

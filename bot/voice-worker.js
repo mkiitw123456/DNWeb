@@ -46,7 +46,7 @@ async function acquireLock() {
 }
 await acquireLock();
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
 let sessionId = randomUUID(),
@@ -72,24 +72,14 @@ client.on(Events.MessageCreate, message => {
   renameSync(pendingPath + ".tmp", pendingPath);
 });
 function snapshot() {
-  const guild = client.guilds.cache.get(guildId);
   return {
     guildId,
     sessionId,
     sequence: ++sequence,
     textSession, textCounts: Object.fromEntries(textCounts),
     observedAt: Date.now(),
-    afkChannelId: guild?.afkChannelId || null,
-    members:
-      ready && guild
-        ? Array.from(guild.voiceStates.cache.values())
-            .filter((v) => v.channelId && v.member)
-            .map((v) => ({
-              id: v.id,
-              channelId: v.channelId,
-              bot: v.member.user.bot,
-            }))
-        : [],
+    afkChannelId: null,
+    members: [],
   };
 }
 function send() {
@@ -144,14 +134,11 @@ client.on(Events.ClientReady, () => {
     void stop(1);
     return;
   }
-  void send();
-});
-client.on(Events.VoiceStateUpdate, (before, after) => {
-  if (after.guild.id === guildId && ready && before.channelId !== after.channelId) void send();
+  if (acknowledged !== textRevision) void send();
 });
 client.on(Events.ShardDisconnect, () => {
   ready = false;
-  void send();
+  if (acknowledged !== textRevision) void send();
 });
 client.on(Events.ShardReconnecting, () => {
   ready = false;
@@ -160,27 +147,19 @@ client.on(Events.ShardResume, () => {
   ready = true;
   sessionId = randomUUID();
   sequence = 0;
-  void send();
+  if (acknowledged !== textRevision) void send();
 });
 client.on(Events.Error, (e) => console.error("Discord 連線錯誤：", e.name));
 const timer = setInterval(() => {
   if (!ready) return;
-  const guild = client.guilds.cache.get(guildId);
-  const occupied = new Set();
-  const counting = guild?.voiceStates.cache.some(v => {
-    if (!v.channelId || v.channelId === guild.afkChannelId || !v.member || v.member.user.bot) return false;
-    if (occupied.has(v.channelId)) return true;
-    occupied.add(v.channelId);
-    return false;
-  });
-  if (counting || acknowledged !== textRevision || Date.now() - lastSuccess >= 300000) void send();
+  if (acknowledged !== textRevision) void send();
 }, 30000);
 async function stop(code = 0) {
   if (stopping) return;
   stopping = true;
   clearInterval(timer);
   ready = false;
-  await send();
+  if (acknowledged !== textRevision) await send();
   client.destroy();
   await unlink(lockPath).catch(() => {});
   process.exit(code);

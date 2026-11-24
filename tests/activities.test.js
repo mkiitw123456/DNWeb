@@ -7,6 +7,7 @@ import {
   activityAction,
   activityView,
   activityPeriods,
+  chapterOutcomes,
   normalizeActivityConfig,
   defaultActivityConfig,
 } from "../server/activities.js";
@@ -323,7 +324,8 @@ test("journey advances across days and retries, with a server-validated optional
   );
   const extra = chapters[1].options[2];
   extra.revealChance = 100;
-  c.eventUnlimited = true;
+  c.eventUnlimited = true; // Legacy setting must no longer bypass the daily limit.
+  c.activities.find(a => a.id === "event").dailyLimit = 2;
   c.schedule = {};
   await activityAction(admin, users, "activity.config", c, now);
   const event = async (time) =>
@@ -414,6 +416,7 @@ test("journey advances across days and retries, with a server-validated optional
   assert.equal(next.used, 0);
   const settings = (await view(admin, tomorrow)).adminConfig;
   settings.eventUnlimited = false;
+  settings.activities.find(a => a.id === "event").dailyLimit = 1;
   const chapter = settings.events.find((e) => e.id === next.content.id);
   chapter.options.push({ ...extra, revealChance: 0 });
   await activityAction(admin, users, "activity.config", settings, tomorrow);
@@ -498,4 +501,13 @@ test("journey odds upgrade only original rewards, keeps removed chapters removed
     left,
   ]);
   assert.deepEqual(config, normalizeActivityConfig(config));
+});
+
+test("late journey risk begins at 15 and reaches one win in ten", () => {
+  const option = { outcomes: [{ chance: 65, stars: 4 }, { chance: 35, stars: 1 }] };
+  assert.equal(chapterOutcomes(option, "journey-14"), option.outcomes);
+  const start = chapterOutcomes(option, "journey-15"), end = chapterOutcomes(option, "journey-60");
+  assert.ok(start[0].chance > end[0].chance);
+  assert.ok(start[1].stars < 0);
+  assert.deepEqual(end.map(o => [o.chance, o.stars]), [[10, 4], [90, -3]]);
 });
