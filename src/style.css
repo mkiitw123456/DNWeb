@@ -2168,14 +2168,20 @@ button.primary:disabled {
 .raid-cards { grid-template-columns: minmax(0,1fr); }
 .raid-card header { display:flex; align-items:center; flex-wrap:wrap; gap: .75rem; }
 .raid-card h2 { margin:0; }
-.raid-slots, .raid-editor-slots, .roster-search-results:has(.member-choice) {
+.raid-slots {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(118px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+}
+.raid-editor-slots, .roster-search-results:has(.member-choice) {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 5px;
 }
 .raid-slots li, .raid-slots li:last-child {
-  display: flex; align-items: center; gap: 8px;
-  min-height: 36px; padding: 2px 0; border: 0;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  padding: 6px; border: 1px solid var(--border); border-radius: 10px;
 }
 .raid-member {
   display: flex; align-items: center; min-width: 0; flex: 1; gap: 8px;
@@ -2186,7 +2192,7 @@ button.primary:disabled {
 .raid-member strong { min-width: 0; overflow-wrap: anywhere; }
 .raid-member small { margin: 0 0 0 auto; color: var(--muted); font-size: .78rem; }
 .raid-job-icon { width: 24px; height: 24px; object-fit: contain; flex: none; }
-.raid-slots li>.seat-tools { display:flex; flex:0 0 auto; gap:5px; margin-left:auto; }
+.raid-slots li>.seat-tools { display:flex; flex:0 0 auto; gap:5px; margin-top:auto; }
 .seat-tools button { padding:4px 8px; }
 .member-choice { background:none; text-align:left; padding:0; border:0; color:inherit; }
 .raid-professions { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; padding:0; border:0; }
