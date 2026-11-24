@@ -197,6 +197,7 @@ export default function App() {
       type,
       target: payload.id ?? payload.channel ?? payload.createKey ?? "",
       signature: JSON.stringify(payload),
+      seat: type === "raid.seat" ? payload : undefined,
     };
     writes.current = [...writes.current, ticket];
     setPendingWrites(writes.current);
@@ -234,7 +235,7 @@ export default function App() {
     } catch (e) {
       if (authVersion.current !== version) return false;
       if (e.status === 401) invalidate(version);
-      reconcile = !auth && (!e.status || e.status >= 500);
+      reconcile = !auth && (!e.status || e.status >= 500 || (type === "raid.seat" && e.status === 409));
       if (auth) setError(e.message);
       else notify(e.message, "error");
       return false;
@@ -550,7 +551,7 @@ export default function App() {
                     change={characterSaves.change}
                   />
                 ) : page === "raids" ? (
-                  <Raids {...shared} />
+                  <Raids {...shared} pendingSeats={pendingWrites.filter(w => w.seat).map(w => w.seat)} />
                 ) : page === "admin" && data.me.admin ? (
                   <Admin {...shared} />
                 ) : null}

@@ -148,7 +148,7 @@ function CharacterPicker({
     </Modal>
   );
 }
-export default function Raids({ data, mutate, busy, ask }) {
+export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
   const [scope, setScope] = useState("all"),
     [selectedDay, setSelectedDay] = useState(""),
     [draft, setDraft] = useState(null),
@@ -168,7 +168,23 @@ export default function Raids({ data, mutate, busy, ask }) {
       quick.raid.id,
     );
   const days = nextSevenDays();
-  const raids = [...(data.raids || [])].sort((a, b) => a.startsAt - b.startsAt);
+  const raids = (data.raids || [])
+    .map((raid) => {
+      const edit = pendingSeats.find((item) => item.id === raid.id);
+      if (!edit) return raid;
+      if (edit.revision !== raid.revision)
+        return { ...raid, savingSeat: edit.index };
+      const character = data.roster.find((c) => c.id === edit.characterId);
+      const preview = character
+        ? { ...character, characterId: character.id }
+        : null;
+      return {
+        ...raid,
+        savingSeat: edit.index,
+        slots: raid.slots.map((slot, i) => (i === edit.index ? preview : slot)),
+      };
+    })
+    .sort((a, b) => a.startsAt - b.startsAt);
   const shown = raids.filter(
     (r) =>
       (scope === "all" || mine(r, data.me.id)) &&
@@ -345,17 +361,18 @@ export default function Raids({ data, mutate, busy, ask }) {
                     ) : (
                       <span className="muted">待補</span>
                     )}
+                    {r.savingSeat === i && <small role="status">儲存中…</small>}
                     {data.me.admin && !r.settledAt && (
                       <div className="seat-tools">
                         <Button
-                          disabled={busy}
+                          disabled={busy || r.savingSeat != null}
                           onClick={() => setQuick({ raid: r, index: i })}
                         >
                           {slot ? "換人" : "新增"}
                         </Button>
                         {slot && (
                           <Button
-                            disabled={busy}
+                            disabled={busy || r.savingSeat != null}
                             onClick={async () => {
                               if (
                                 await ask(
@@ -403,6 +420,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                       primary
                       disabled={
                         busy ||
+                        r.savingSeat != null ||
                         r.startsAt > Date.now() ||
                         !r.slots.some(Boolean)
                       }
@@ -429,6 +447,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                       結算
                     </Button>
                     <Button
+                      disabled={busy || r.savingSeat != null}
                       onClick={() => {
                         setTemplateSource(r);
                         setTemplateName(r.dungeonName + " 常用團");
@@ -437,7 +456,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                       存為常用團
                     </Button>
                     <Button
-                      disabled={busy}
+                      disabled={busy || r.savingSeat != null}
                       onClick={() => {
                         setDraft({
                           ...r,
@@ -452,6 +471,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                     <Button
                       disabled={
                         busy ||
+                        r.savingSeat != null ||
                         r.startsAt < Date.now() ||
                         (["pending", "sending"].includes(r.notification) &&
                           Date.now() - (r.notificationAt || 0) < 60000)
@@ -472,7 +492,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                       {r.notification === "sent" ? "重新通知" : "於 DC 通知"}
                     </Button>
                     <Button
-                      disabled={busy}
+                      disabled={busy || r.savingSeat != null}
                       onClick={async () => {
                         if (
                           await ask(
@@ -516,20 +536,18 @@ export default function Raids({ data, mutate, busy, ask }) {
           slots={quick.raid.slots.map((s) => s?.characterId)}
           index={quick.index}
           onClose={() => setQuick(null)}
-          onPick={async (id) => {
-            if (
-              await mutate(
-                "raid.seat",
-                {
-                  id: quick.raid.id,
-                  revision: quick.raid.revision,
-                  index: quick.index,
-                  characterId: id,
-                },
-                "已更新席次",
-              )
-            )
-              setQuick(null);
+          onPick={(id) => {
+            setQuick(null);
+            mutate(
+              "raid.seat",
+              {
+                id: quick.raid.id,
+                revision: quick.raid.revision,
+                index: quick.index,
+                characterId: id,
+              },
+              "已更新席次",
+            );
           }}
         />
       )}
