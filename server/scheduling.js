@@ -1,4 +1,5 @@
 import { fail, id, text } from "./domain.js";
+import { remainingRaidRuns } from "../shared/scheduling.js";
 export function isOwner(s, u) {
   return !!u.admin && s.adminOwnerId === u.id;
 }
@@ -122,6 +123,7 @@ export function schedulingAction(s, u, type, p, now) {
       const c = s.characters.find((c) => c.id === characterId);
       const owner = c && s.users.find((x) => x.id === c.ownerId && x.active);
       if (!c || !owner) fail("角色已刪除或帳號已停用，請重新選擇");
+      if (!remainingRaidRuns(c, dungeon, startsAt)) fail(`${c.name} 的「${dungeon.name}」場次已用完，請更換角色`, 409);
       if (owners.has(owner.id)) fail("同一帳號每團只能安排一個角色");
       owners.add(owner.id);
       return {
@@ -159,6 +161,11 @@ export function schedulingAction(s, u, type, p, now) {
     if (!view.slots.some(Boolean)) fail("請先安排至少一位成員");
     if (view.slots.some((x) => x?.unavailable))
       fail("部分角色已刪除或停用，請先更新名單");
+    const dungeon = s.dungeons.find(d => d.id === old.dungeonId);
+    for (const slot of view.slots.filter(Boolean)) {
+      if (!remainingRaidRuns(s.characters.find(c => c.id === slot.characterId), dungeon, old.startsAt))
+        fail(`${slot.name} 已無可用副本場次，請更新排班`, 409);
+    }
     old.notificationEventId = queueDelivery(
       s,
       "raid",
@@ -198,10 +205,12 @@ export function raidMessage(s, r) {
   const rows = r.slots.map((slot, i) => {
     if (!slot) return `${i + 1}. 待補`;
     const profession = s.professions.find((p) => p.id === slot.professionId);
-    return `${profession?.discordEmoji || (profession ? "[" + escape(profession.name) + "]" : "▫️")} ${escape(slot.name).slice(0, 100)}`;
+    const owner = s.users.find(u => u.id === slot.ownerId);
+    const member = mentions.includes(owner?.discordId) ? `<@${owner.discordId}>` : escape(owner?.nickname || owner?.username || slot.username);
+    return `${i + 1}. ${member} · ${escape(slot.name)} · ${profession?.discordEmoji || ""}${escape(profession?.name || "未設定職業")}`;
   });
   return {
-    content: `${local}（台灣時間 · <t:${timestamp}:R>）\n**${escape(r.dungeonName)}**\n${rows.join("\n")}\n${mentions.map((x) => `<@${x}>`).join(" ")}`,
+    content: `${local}（台灣時間 · <t:${timestamp}:R>）\n**${escape(r.dungeonName)}**\n${rows.join("\n")}`,
     allowed_mentions: { parse: [], users: mentions },
   };
 }

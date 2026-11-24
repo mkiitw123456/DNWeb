@@ -41,7 +41,7 @@ export default function DiscordSettings({ data, mutate, isSaving }) {
           [
             "raid",
             "出團通知",
-            "暫時保留設定；排班入口目前隱藏，之後啟用時沿用",
+            "排班按下通知後，將副本、台灣時間與八人職業名單送到這個頻道，並標記已綁定 Discord 的成員",
           ],
         ].map(([key, label, description]) => (
           <form

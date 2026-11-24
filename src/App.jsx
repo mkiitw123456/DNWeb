@@ -37,8 +37,7 @@ const Characters = lazy(() => import("./Characters.jsx"));
 const Admin = lazy(() => import("./Admin.jsx"));
 const Raids = lazy(() => import("./Raids.jsx"));
 import Lobby from "./Lobby.jsx";
-// Re-enable this flag to restore the retained raid scheduling page.
-const SHOW_RAID_SCHEDULING = false;
+
 function duplicateWrite(pending, type, payload) {
   const target = payload.id ?? payload.channel ?? payload.createKey ?? "";
   const last = pending.findLast((w) => w.type === type && w.target === target);
@@ -417,7 +416,7 @@ export default function App() {
     ["casino", "賭場", Compass],
     ["competitions", "比賽", Trophy],
     ["racecourse", "賽馬場", Flag],
-    ...(SHOW_RAID_SCHEDULING ? [["raids", "出團排班", CalendarDays]] : []),
+    ["raids", "出團排班", CalendarDays],
   ];
   return (
     <FormErrorContext.Provider value={error}>
@@ -439,7 +438,10 @@ export default function App() {
                 key={id}
                 className={page === id ? "active" : ""}
                 aria-current={page === id ? "page" : undefined}
-                onClick={() => setPage(id)}
+                onClick={() => {
+                  setPage(id);
+                  if (id === "raids" && data.me.admin) refreshShell.current?.();
+                }}
               >
                 <Icon size={19} strokeWidth={1.7} />
                 {label}
@@ -547,7 +549,7 @@ export default function App() {
                     retry={characterSaves.retry}
                     change={characterSaves.change}
                   />
-                ) : SHOW_RAID_SCHEDULING && page === "raids" ? (
+                ) : page === "raids" ? (
                   <Raids {...shared} />
                 ) : page === "admin" && data.me.admin ? (
                   <Admin {...shared} />

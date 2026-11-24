@@ -84,10 +84,8 @@ function applyGear(current, changes) {
   }
   return gear;
 }
-export function periods(now = Date.now()) {
-  const day = Math.floor((now - 3600000) / 86400000);
-  return { day, week: Math.floor((day - 2) / 7) };
-}
+export { periods } from "../shared/scheduling.js";
+import { periods } from "../shared/scheduling.js";
 export function reset(state, now = Date.now()) {
   state.raids ??= [];
   state.raidTemplates ??= [];
@@ -223,7 +221,8 @@ export function publicState(s, u) {
     roster: u.admin
       ? s.characters
           .filter((c) => s.users.some((x) => x.id === c.ownerId && x.active))
-          .map(({ id, name, ownerId, professionId }) => ({
+          .map(({ id, name, ownerId, professionId, week, runs }) => ({
+            week, runs,
             id,
             name,
             ownerId,

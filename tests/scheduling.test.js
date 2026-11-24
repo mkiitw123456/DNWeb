@@ -318,3 +318,22 @@ test("short Discord emoji names resolve exact names, animated codes and whitespa
     /同名/,
   );
 });
+
+test("raid save and Discord notify recheck the selected dungeon in the scheduled week", () => {
+  const { s, owner, draft } = fixture();
+  const c = s.characters[0], dungeon = s.dungeons[0];
+  // Hold the fixture within one weekly period, independent of the system clock.
+  const start = Date.parse("2026-11-24T20:00:00+08:00");
+  reset(s, start);
+  draft.startsAt = new Date(start + 3600000).toISOString();
+  action(s, owner, "raid.save", draft, start);
+  const raid = s.raids[0];
+  c.runs[dungeon.id] = dungeon.max;
+  assert.throws(() => action(s, owner, "raid.save", draft, start), /場次已用完/);
+  assert.throws(() => action(s, owner, "raid.notify", { id: raid.id, revision: raid.revision }, start), /已無可用副本場次/);
+  assert.equal(s.deliveries.some(e => e.channel === "raid"), false);
+  draft.startsAt = new Date(start + 7 * 86400000).toISOString();
+  action(s, owner, "raid.save", draft, start);
+  assert.equal(s.raids.length, 2);
+  assert.equal(c.runs[dungeon.id], dungeon.max);
+});

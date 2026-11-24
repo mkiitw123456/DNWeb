@@ -36,3 +36,13 @@ export function searchRoster(roster, users, query, professionId) {
     }))
     .filter((u) => u.characters.length);
 }
+
+export function periods(now = Date.now()) {
+  const day = Math.floor((now - 3600000) / 86400000);
+  return { day, week: Math.floor((day - 2) / 7) };
+}
+export function remainingRaidRuns(character, dungeon, startsAt) {
+  if (!character || !dungeon || !Number.isFinite(startsAt)) return 0;
+  const used = character.week === periods(startsAt).week ? character.runs?.[dungeon.id] || 0 : 0;
+  return Math.max(0, dungeon.max - used);
+}

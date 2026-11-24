@@ -155,6 +155,9 @@ export default function useCharacterSaves(
           (state) =>
             state && {
               ...state,
+              roster: saved.runs && state.roster
+                ? state.roster.map(c => c.id === id ? { ...c, runs: saved.runs, week: saved.week } : c)
+                : state.roster,
               characters: state.characters.map((c) =>
                 c.id === id && c.ownerId === state.me.id
                   ? { ...c, ...saved }

@@ -9,6 +9,7 @@ import {
   nextSevenDays,
   mine,
   searchRoster,
+  remainingRaidRuns,
 } from "../shared/scheduling.js";
 const statusLabel = {
   unsent: "尚未通知",
@@ -18,11 +19,11 @@ const statusLabel = {
   failed: "通知失敗，可重試",
   unconfigured: "尚未設定出團 Webhook",
 };
-function CharacterPicker({ data, slots, index, onPick, onClose }) {
+function CharacterPicker({ data, available, remaining, slots, index, onPick, onClose }) {
   const [query, setQuery] = useState(""),
     [professionId, setProfessionId] = useState(""),
     [expanded, setExpanded] = useState(null);
-  const groups = searchRoster(data.roster, data.users, query, professionId);
+  const groups = searchRoster(available, data.users, query, professionId);
   const chosenOwners = new Set(
     slots
       .filter((_, i) => i !== index)
@@ -60,7 +61,7 @@ function CharacterPicker({ data, slots, index, onPick, onClose }) {
         }}
       />
       <p className="hint">
-        先選擇帳號，再選擇他的角色。同一帳號每團只能佔一個位置。
+        只列出在出團當週還有此副本場次的角色。同一帳號每團限選一個角色。
       </p>
       <div className="roster-search-results">
         {groups.map((u) => (
@@ -95,7 +96,7 @@ function CharacterPicker({ data, slots, index, onPick, onClose }) {
                   disabled={chosenOwners.has(u.id)}
                   onClick={() => onPick(c.id)}
                 >
-                  <span>{c.name}</span>
+                  <span>{c.name} · 剩 {remaining(c)} 場</span>
                   <ProfessionIcon
                     profession={data.professions.find(
                       (p) => p.id === c.professionId,
@@ -106,7 +107,7 @@ function CharacterPicker({ data, slots, index, onPick, onClose }) {
           </section>
         ))}
         {!groups.length && (
-          <p className="hint">找不到符合的帳號或角色，試試其他關鍵字或職業。</p>
+          <p className="hint">沒有符合條件且仍有此副本場次的角色。</p>
         )}
       </div>
     </Modal>
@@ -135,6 +136,12 @@ export default function Raids({ data, mutate, busy, ask }) {
     });
     setStep(1);
   };
+  const dungeon = data.dungeons.find(d => d.id === draft?.dungeonId);
+  const startsAt = Date.parse((draft?.startsAt || "") + ":00+08:00");
+  const remaining = c => remainingRaidRuns(c, dungeon, startsAt);
+  const available = draft ? data.roster.filter(c => remaining(c) > 0) : [];
+  const eligibleIds = new Set(available.map(c => c.id));
+  const invalidSlots = draft?.slots.filter(id => id && !eligibleIds.has(id)).length || 0;
   const close = () => {
     setDraft(null);
     setPicker(null);
@@ -204,6 +211,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                       startsAt: dateInput(Date.now() + 3600000),
                       dungeonId: t.dungeonId,
                       slots: [...t.slots],
+                      fromTemplate: true,
                     });
                     setStep(1);
                   }}
@@ -443,7 +451,11 @@ export default function Raids({ data, mutate, busy, ask }) {
                 "startsAt",
               );
               if (step === 1) {
-                setDraft((current) => ({ ...current, startsAt: selectedTime }));
+                setDraft(current => ({
+                  ...current, startsAt: selectedTime,
+                  skipped: current.fromTemplate ? invalidSlots : 0,
+                  slots: current.fromTemplate ? current.slots.map(id => eligibleIds.has(id) ? id : null) : current.slots,
+                }));
                 setStep(2);
                 return;
               }
@@ -451,7 +463,10 @@ export default function Raids({ data, mutate, busy, ask }) {
                 await mutate(
                   "raid.save",
                   {
-                    ...draft,
+                    id: draft.id,
+                    revision: draft.revision,
+                    dungeonId: draft.dungeonId,
+                    slots: draft.slots,
                     startsAt: new Date(
                       selectedTime + ":00+08:00",
                     ).toISOString(),
@@ -507,6 +522,8 @@ export default function Raids({ data, mutate, busy, ask }) {
                   可先保留空位；儲存後可隨時編輯。修改已通知的名單後，請重新按「於
                   DC 通知」。
                 </p>
+                {draft.skipped > 0 && <p role="status">常用名單有 {draft.skipped} 個位置的角色已失效或場次用完，已留空待補。</p>}
+                {invalidSlots > 0 && <p role="alert">部分位置已無法出團，請清除或更換角色。</p>}
                 <div className="raid-editor-slots">
                   {draft.slots.map((id, i) => {
                     const c = data.roster.find((c) => c.id === id);
@@ -521,7 +538,7 @@ export default function Raids({ data, mutate, busy, ask }) {
                           {c ? (
                             <>
                               <span>
-                                {c.name}
+                                {c.name} · 剩 {remaining(c)} 場
                                 <small>
                                   {
                                     data.users.find((u) => u.id === c.ownerId)
@@ -570,7 +587,7 @@ export default function Raids({ data, mutate, busy, ask }) {
               <Button type="button" onClick={close}>
                 取消
               </Button>
-              <Button primary disabled={busy || !data.dungeons.length}>
+              <Button primary disabled={busy || !dungeon || (step === 2 && invalidSlots > 0)}>
                 {step === 1 ? "建立並安排成員" : "儲存出團"}
               </Button>
             </div>
@@ -580,6 +597,8 @@ export default function Raids({ data, mutate, busy, ask }) {
       {picker !== null && draft && (
         <CharacterPicker
           data={data}
+          available={available}
+          remaining={remaining}
           slots={draft.slots}
           index={picker}
           onClose={() => setPicker(null)}
