@@ -193,14 +193,27 @@ export default function Lobby({
     setChoice(null);
     setResult(null);
   };
+  const [checkingDay, setCheckingDay] = useState(null);
+  const checkInFlight = useRef(null);
   const checkIn = async () => {
-    const aquarium = await perform("aquarium.checkIn", { day: view.aquarium.day });
-    if (!aquarium) return;
-    ++viewRequest.current;
-    const updated = { ...view, aquarium };
-    setView(updated);
-    onActivityChange(updated);
-    notify("今日簽到完成");
+    const { day, checkedInToday } = view.aquarium;
+    if (checkedInToday || checkInFlight.current) return;
+    checkInFlight.current = day;
+    setCheckingDay(day);
+    try {
+      const aquarium = await request("aquarium.checkIn", { day });
+      ++viewRequest.current;
+      onActivityChange(current => current?.aquarium.day === day
+        ? { ...current, aquarium } : current);
+      notify("今日簽到完成");
+    } catch (e) {
+      if (e.status === 401) onUnauthorized();
+      if (mounted.current && (e.status === 409 || !e.status || e.status >= 500))
+        refresh().catch(handleError);
+    } finally {
+      checkInFlight.current = null;
+      if (mounted.current) setCheckingDay(null);
+    }
   };
   const continueAdventure = async () => {
     if (lock.current) return;
@@ -342,7 +355,10 @@ export default function Lobby({
       )}
       <div className="view-transition" key={tab}>
         {tab === "lobby" && (
-          <Aquarium memberId={data.me.id} aquarium={view.aquarium} onCheckIn={checkIn} busy={busy} />
+          <Aquarium memberId={data.me.id} aquarium={checkingDay === view.aquarium.day && !view.aquarium.checkedInToday
+            ? { ...view.aquarium, checking: true, checkedInToday: true, totalCheckIns: view.aquarium.totalCheckIns + 1,
+                fishCount: Math.min(view.aquarium.capacity, view.aquarium.fishCount + 1) }
+            : view.aquarium} onCheckIn={checkIn} busy={busy} />
         )}
         <section
           className="adventure-stats"

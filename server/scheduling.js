@@ -154,6 +154,16 @@ export function schedulingAction(s, u, type, p, now) {
       startsAt > now + 366 * 86400000
     )
       fail("請選擇未來一年內的出團時間");
+    if (!old && p.submissionId !== undefined) {
+      if (typeof p.submissionId !== "string" || !/^[a-f0-9-]{36}$/i.test(p.submissionId)) fail("排班表單已失效");
+      const previous = s.raids.find(r => r.createdBy === u.id && r.submissionId === p.submissionId);
+      if (previous) {
+        const same = previous.dungeonId === p.dungeonId && previous.startsAt === startsAt &&
+          JSON.stringify(previous.slots.map(slot => slot?.characterId ?? null)) === JSON.stringify(p.slots);
+        if (!same) fail("此排班已建立，請從名單開啟編輯", 409);
+        return true;
+      }
+    }
     const dungeon = s.dungeons.find((d) => d.id === p.dungeonId);
     if (!dungeon) fail("請選擇副本");
     if (!Array.isArray(p.slots) || p.slots.length !== 8)
@@ -179,6 +189,7 @@ export function schedulingAction(s, u, type, p, now) {
     });
     const raid = {
       id: old?.id || id(),
+      ...(!old && p.submissionId ? { submissionId: p.submissionId } : {}),
       startsAt,
       dungeonId: dungeon.id,
       dungeonName: dungeon.name,

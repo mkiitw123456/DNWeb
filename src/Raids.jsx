@@ -1,3 +1,4 @@
+import useSubmitDialog from "./useSubmitDialog.js";
 import { useState } from "react";
 import { CalendarDays, Check, Plus, X } from "lucide-react";
 import { Heading, Button, Field, Modal, Empty } from "./ui.jsx";
@@ -151,11 +152,13 @@ function CharacterPicker({
 export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
   const [scope, setScope] = useState("all"),
     [selectedDay, setSelectedDay] = useState(""),
-    [draft, setDraft] = useState(null),
     [step, setStep] = useState(1),
     [picker, setPicker] = useState(null);
-  const [templateSource, setTemplateSource] = useState(null),
-    [templateName, setTemplateName] = useState("");
+  const raidDialog = useSubmitDialog();
+  const { draft, setDraft } = raidDialog;
+  const templateDialog = useSubmitDialog();
+  const templateSource = templateDialog.draft;
+  const [templateName, setTemplateName] = useState("");
   const [quick, setQuick] = useState(null);
   const quickDungeon =
     quick && data.dungeons.find((d) => d.id === quick.raid.dungeonId);
@@ -191,7 +194,8 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
       (!selectedDay || taipeiDay(r.startsAt) === selectedDay),
   );
   const add = () => {
-    setDraft({
+    raidDialog.open({
+      submissionId: crypto.randomUUID(),
       startsAt: dateInput(Date.now() + 3600000),
       dungeonId: data.dungeons[0]?.id || "",
       slots: Array(8).fill(null),
@@ -212,7 +216,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
   const invalidSlots =
     draft?.slots.filter((id) => id && !eligibleIds.has(id)).length || 0;
   const close = () => {
-    setDraft(null);
+    raidDialog.close();
     setPicker(null);
   };
   return (
@@ -276,7 +280,8 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                 </div>
                 <Button
                   onClick={() => {
-                    setDraft({
+                    raidDialog.open({
+                      submissionId: crypto.randomUUID(),
                       startsAt: dateInput(Date.now() + 3600000),
                       dungeonId: t.dungeonId,
                       slots: [...t.slots],
@@ -454,7 +459,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                     <Button
                       disabled={busy || r.savingSeat != null}
                       onClick={() => {
-                        setTemplateSource(r);
+                        templateDialog.open(r);
                         setTemplateName(r.dungeonName + " 常用團");
                       }}
                     >
@@ -463,7 +468,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                     <Button
                       disabled={busy || r.savingSeat != null}
                       onClick={() => {
-                        setDraft({
+                        raidDialog.open({
                           ...r,
                           startsAt: dateInput(r.startsAt),
                           slots: r.slots.map((x) => x?.characterId || null),
@@ -565,14 +570,13 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
       {templateSource && (
         <Modal
           title="儲存常用出團名單"
-          onClose={() => setTemplateSource(null)}
+          onClose={templateDialog.close}
           explicitCloseOnly
         >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (
-                await mutate(
+              await templateDialog.submit(() => mutate(
                   "raidTemplate.save",
                   {
                     raidId: templateSource.id,
@@ -580,9 +584,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                     name: templateName,
                   },
                   "常用出團名單已儲存",
-                )
-              )
-                setTemplateSource(null);
+                ));
             }}
           >
             <Field
@@ -633,12 +635,12 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                 setStep(2);
                 return;
               }
-              if (
-                await mutate(
+              await raidDialog.submit(() => mutate(
                   "raid.save",
                   {
                     id: draft.id,
                     revision: draft.revision,
+                    submissionId: draft.id ? undefined : draft.submissionId,
                     dungeonId: draft.dungeonId,
                     slots: draft.slots,
                     startsAt: new Date(
@@ -646,9 +648,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                     ).toISOString(),
                   },
                   "出團排班已儲存",
-                )
-              )
-                close();
+                ));
             }}
           >
             <div className="form-grid">

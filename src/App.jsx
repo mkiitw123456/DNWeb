@@ -6,7 +6,7 @@ import ThemeSettings, { applyTheme, loadTheme } from "./ThemeSettings.jsx";
 import DiscordSetup from "./DiscordSetup.jsx";
 import GuidedTour from "./GuidedTour.jsx";
 import "./personalization.css";
-import { apiRequest, initialSession } from "./api.js";
+import { apiRequest, initialSession, performRequest, trackWrite } from "./api.js";
 import useCharacterSaves from "./useCharacterSaves.js";
 import { RecordDraftContext } from "./useRecordEditor.js";
 import {
@@ -39,7 +39,7 @@ const Raids = lazy(() => import("./Raids.jsx"));
 import Lobby from "./Lobby.jsx";
 
 function duplicateWrite(pending, type, payload) {
-  const target = payload.id ?? payload.channel ?? payload.createKey ?? "";
+  const target = payload.id ?? payload.channel ?? payload.createKey ?? payload.submissionId ?? "";
   const last = pending.findLast((w) => w.type === type && w.target === target);
   if (!last) return false;
   // A changed value can be submitted while the previous edit is being saved.
@@ -51,12 +51,42 @@ function duplicateWrite(pending, type, payload) {
     (type.endsWith(".save") && !!payload.id);
   return !editable || last.signature === JSON.stringify(payload);
 }
+function pendingRecord(type, payload) {
+  if (!payload.id) return null;
+  const editors = {
+    "character.save": ["characters", ["name", "professionId", "gear"]],
+    "dungeon.save": ["dungeons", ["name", "max"]],
+    "profession.save": ["professions", ["name", "discordEmoji"]],
+    "quantityType.save": ["quantityTypes", ["name"]],
+  };
+  const editor = editors[type];
+  if (!editor) return null;
+  const [collection, keys] = editor;
+  const fields = Object.fromEntries(keys.filter(key => payload[key] !== undefined)
+    .map(key => [key, key === "max" ? Number(payload[key]) : payload[key]]));
+  return { collection, fields };
+}
 export default function App() {
-  const [data, setData] = useState(null),
+  const [confirmed, setData] = useState(null),
     [loading, setLoading] = useState(true),
     [page, setPage] = useState("lobby"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [pendingWrites, setPendingWrites] = useState([]);
+  const data = useMemo(() => {
+    if (!confirmed) return confirmed;
+    let preview = confirmed;
+    for (const write of pendingWrites) {
+      if (write.actor !== confirmed.me.id) continue;
+      if (write.profile) preview = { ...preview, me: { ...preview.me, ...write.profile } };
+      if (write.record) {
+        const { collection, fields } = write.record;
+        preview = { ...preview, [collection]: preview[collection].map(row =>
+          row.id === write.target ? { ...row, ...fields } : row) };
+      }
+    }
+    return preview;
+  }, [confirmed, pendingWrites]);
   const { sync: syncStars } = useStarRewards();
   const starMember = data?.activity?.member;
   useEffect(() => {
@@ -67,7 +97,6 @@ export default function App() {
   const refreshShell = useRef(null);
   const tail = useRef(Promise.resolve());
   const writes = useRef([]);
-  const [pendingWrites, setPendingWrites] = useState([]);
   const authVersion = useRef(0);
   const sessionMember = useRef(null);
   const generation = authVersion.current;
@@ -195,8 +224,13 @@ export default function App() {
     const version = authVersion.current;
     const ticket = {
       type,
-      target: payload.id ?? payload.channel ?? payload.createKey ?? "",
+      target: payload.id ?? payload.channel ?? payload.createKey ?? payload.submissionId ?? "",
       signature: JSON.stringify(payload),
+      actor: data?.me.id,
+      profile: type === "profile.nickname" ? { nickname: payload.nickname.trim() }
+        : type === "onboarding.tourComplete" ? { tourCompleted: true }
+        : type === "onboarding.discordSkip" ? { discordSetupDone: true } : null,
+      record: pendingRecord(type, payload),
       seat: type === "raid.seat" ? payload : undefined,
     };
     writes.current = [...writes.current, ticket];
@@ -206,9 +240,9 @@ export default function App() {
     characterSaves.flush();
     let reconcile = false;
     try {
-      return await enqueueWrite(async () => {
+      return await trackWrite(type, () => enqueueWrite(async () => {
         if (authVersion.current !== version) return false;
-        const next = await request(type, payload);
+        const next = await performRequest(type, payload);
         if (authVersion.current !== version) return false;
         revision.current++;
         if (auth) {
@@ -231,7 +265,7 @@ export default function App() {
         });
         notify(message);
         return next || true;
-      });
+      }));
     } catch (e) {
       if (authVersion.current !== version) return false;
       if (e.status === 401) invalidate(version);
@@ -266,6 +300,10 @@ export default function App() {
       revision.current++;
       setData((current) => {
         if (!current || authVersion.current !== generation) return current;
+        if (typeof activity === "function") {
+          const next = activity(current.activity);
+          return next === current.activity ? current : { ...current, activity: next };
+        }
         if (activity === null) return { ...current, activity: null };
         if (
           current.me.id !== activity?.member?.memberId ||
@@ -573,14 +611,8 @@ export default function App() {
             setPage={setPage}
             busy={busy}
             onFinish={async () => {
-              if (
-                await mutate(
-                  "onboarding.tourComplete",
-                  {},
-                  "可隨時重新開啟導覽",
-                )
-              )
-                setTourOpen(false);
+              setTourOpen(false);
+              await mutate("onboarding.tourComplete", {}, "可隨時重新開啟導覽");
             }}
           />
         )}

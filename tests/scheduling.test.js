@@ -399,3 +399,14 @@ test("delayed raid can announce immediate entry without changing its scheduled t
   assert.equal(r.startsAt,start);
   assert.equal(s.characters[0].runs[draft.dungeonId] || 0,0);
 });
+
+test("retrying a raid creation after a lost reply does not reserve another run", () => {
+  const { s, owner, draft } = fixture();
+  const submissionId = crypto.randomUUID();
+  const payload = { ...draft, submissionId };
+  action(s, owner, "raid.save", payload);
+  const first = structuredClone(s.raids[0]);
+  action(s, owner, "raid.save", payload);
+  assert.deepEqual(s.raids, [first]);
+  assert.throws(() => action(s, owner, "raid.save", { ...payload, slots: Array(8).fill(null) }), { status: 409 });
+});

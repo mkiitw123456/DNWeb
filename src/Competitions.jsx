@@ -255,6 +255,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
       }
       revision.current = view.revision;
       setRoom(view.room);
+      return view.room;
     } catch (e) {
       if (seq.current === stamp) {
         setError(e.message);
@@ -306,6 +307,18 @@ export default function Competitions({ me, request, onUnauthorized }) {
     lock.current = true;
     setBusy(true);
     const stamp = ++seq.current;
+    const before = room;
+    const previewEdits = ["score", "join", "bet"].includes(type);
+    const submittedForm = form;
+    if (type === "create") setForm(null);
+    if (previewEdits && room) {
+      const entries = room.pool?.bets ?? room.entries;
+      const next = type === "score"
+        ? entries.map(e => e.id === payload.memberId ? { ...e, coins: payload.coins } : e)
+        : [...entries, { id: me.id, name: me.nickname || me.username, coins: 0 }];
+      setRoom(room.pool ? { ...room, pool: { ...room.pool, bets: next } } : { ...room, entries: next });
+      setForm(null);
+    }
     try {
       const view = await request("competition." + type, payload);
       if (seq.current !== stamp) return;
@@ -335,11 +348,21 @@ export default function Competitions({ me, request, onUnauthorized }) {
       );
     } catch (e) {
       if (seq.current === stamp) {
+        if (type === "create") setForm(submittedForm);
+        if (previewEdits) {
+          setRoom(before);
+          setArrival(null);
+          setForm(submittedForm);
+        }
         notify(e.message, "error");
         if (e.status === 401) onUnauthorized();
         if (e.status === 409) {
           setForm(null);
-          await load();
+          const fresh = await load();
+          if (type === "score" && fresh?.id === payload.id && fresh.total == null) {
+            const member = (fresh.pool?.bets ?? fresh.entries).find(e => e.id === payload.memberId);
+            if (member) setForm({ ...submittedForm, previous: member.coins });
+          } else if (type === "create") setForm(submittedForm);
         }
       }
     } finally {
@@ -365,7 +388,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
       {!room && <>
       <Heading
         title="比賽"
-        onAdd={() =>
+        onAdd={busy ? undefined : () =>
           setForm({
             kind: "create",
             title: "",
@@ -409,7 +432,7 @@ export default function Competitions({ me, request, onUnauthorized }) {
       {history && (nextPage ?? archivePages) > 0 && <Button disabled={paging} onClick={loadOlder}>{paging ? "讀取中…" : "載入更早紀錄"}</Button>}
       </>}
       {room && <article className="match-page">
-        <div className="match-toolbar"><Button className="match-back" disabled={busy} onClick={() => { close(); load(null); }}><ArrowLeft size={16}/> 返回比賽清單</Button>
+        <div className="match-toolbar"><Button className="match-back" onClick={() => { close(); load(null); }}><ArrowLeft size={16}/> 返回比賽清單</Button>
             {open && !room.pool && !room.entries.some((e) => e.id === me.id) && (
               <Button
                 className="match-register primary"

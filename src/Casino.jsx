@@ -180,9 +180,11 @@ export default function Casino({ me, request, onUnauthorized }) {
       clearInterval(clockTimer);
     };
   }, [linked, refresh, onUnauthorized, tab]);
+  const [joiningRoom, setJoiningRoom] = useState(null);
   async function act(type, payload) {
     if (lock.current) return false;
     lock.current = true;
+    if (type === "casino.join") setJoiningRoom(payload.id);
     setBusy(true);
     sequence.current++;
     try {
@@ -203,6 +205,7 @@ export default function Casino({ me, request, onUnauthorized }) {
       if (e.status === 401) onUnauthorized();
       return false;
     } finally {
+      setJoiningRoom(null);
       lock.current = false;
       setBusy(false);
     }
@@ -392,7 +395,8 @@ export default function Casino({ me, request, onUnauthorized }) {
                 <p className="muted">
                   {time(room.startsAt)} · 房主 {room.ownerName}
                 </p>
-                {room.status === "open" && !ownEntry && (
+                {joiningRoom === room.id && <p role="status">報名同步中…</p>}
+            {room.status === "open" && !ownEntry && joiningRoom !== room.id && (
                   <Button
                     primary
                     disabled={busy || now >= room.startsAt}

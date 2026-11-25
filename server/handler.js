@@ -19,6 +19,8 @@ import { emojiNamePattern, fetchGuildEmojis } from "./emojis.js";
 import { audit } from "./scheduling.js";
 import { claimDeliveries, sendClaimedDeliveries } from "./deliveries.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { pgTransaction, usePostgres } from "./postgres.js";
+import { saveCharacterFields } from "./postgres-character.js";
 import { readState, transact } from "./store.js";
 import { findEditorCreate, rememberEditorCreate } from "./editor-creates.js";
 import {
@@ -269,6 +271,15 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
+    if (usePostgres() && (type === "character.quickSave" ||
+        (type === "character.gear" && Object.hasOwn(payload, "gear")))) {
+      const saved = await pgTransaction(c => saveCharacterFields(c, token, type, payload));
+      if (saved) {
+        background(sendClaimedDeliveries(saved.jobs));
+        cookie(res, saved.user);
+        return res.status(200).json(saved.state);
+      }
+    }
     if (type.startsWith("competition.")) {
       const { view, jobs } = await competitionRequest(token, type, payload);
       if (jobs.length) background(sendClaimedDeliveries(jobs));

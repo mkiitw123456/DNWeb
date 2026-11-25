@@ -1,24 +1,17 @@
 // Start the authenticated bootstrap while React's component modules initialize.
 // Only the HttpOnly cookie authenticates requests; no private state is cached in localStorage.
-const saveActions = new Set([
-  "profile.nickname",
-  "discordSettings.save",
-  "activity.config",
-  "activity.adjust",
-  "webhook.save",
-  "user.save",
-  "dungeon.save",
-  "profession.save",
-  "quantityType.save",
-  "character.save",
-  "casino.create",
-  "duel.create",
-  "game.create",
-  "user.role",
-  "user.discordApprove",
+// Reads (including background polling) and controls with their own sync indicator
+// do not open the shared status badge.
+const quietActions = new Set([
+  "state", "login", "logout", "register", "activity.summary", "activity.quizScores",
+  "activity.report", "competition.history", "competition.room", "firebase.usage",
+  "discord.members", "character.quickSave", "character.gear",
 ]);
-export async function apiRequest(type, payload) {
-  if (!saveActions.has(type)) return performRequest(type, payload);
+export function apiRequest(type, payload) {
+  return trackWrite(type, () => performRequest(type, payload));
+}
+export async function trackWrite(type, work) {
+  if (!type || type.endsWith(".state") || quietActions.has(type)) return work();
   const id = crypto.randomUUID();
   const announce = (state, message = "") =>
     window.dispatchEvent(
@@ -26,7 +19,7 @@ export async function apiRequest(type, payload) {
     );
   announce("pending");
   try {
-    const result = await performRequest(type, payload);
+    const result = await work();
     announce("success");
     return result;
   } catch (error) {
@@ -34,7 +27,7 @@ export async function apiRequest(type, payload) {
     throw error;
   }
 }
-async function performRequest(type, payload) {
+export async function performRequest(type, payload) {
   const response = await fetch(
     type ? "/api/app" : "/api/app?bootstrap=1",
     type

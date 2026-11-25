@@ -1,3 +1,4 @@
+import { pgTransaction, usePostgres } from "./postgres.js";
 import { transact } from "./store.js";
 
 function currentRaid(s, event) {
@@ -42,6 +43,7 @@ export function claimDeliveries(s, ids) {
         url,
         message: event.message,
         attemptAt: event.attemptAt,
+        channel: event.channel,
       });
   }
   return jobs;
@@ -67,6 +69,20 @@ export async function sendClaimedDeliveries(jobs) {
       return { id, attemptAt, status };
     }),
   );
+  if (usePostgres() && jobs.every(job => job.channel && job.channel !== "raid")) {
+    // Webhook receipts only change their matching attempt. A late reply must
+    // never overwrite a newer retry or revive a pruned event.
+    await pgTransaction(c => c.query(`
+      update documents set body = jsonb_set(body, '{deliveries}', (
+        select jsonb_agg(case when receipt.status is null then e
+                              else e || jsonb_build_object('status', receipt.status) end order by i)
+        from jsonb_array_elements(body->'deliveries') with ordinality as entries(e,i)
+        left join jsonb_to_recordset($1::jsonb) as receipt(id text, "attemptAt" bigint, status text)
+          on receipt.id = e->>'id' and receipt."attemptAt" = (e->>'attemptAt')::bigint
+      )) where path='dnweb/state' and jsonb_array_length(body->'deliveries') > 0
+    `, [JSON.stringify(results)]));
+    return;
+  }
   await transact((s) => {
     for (const { id, attemptAt, status } of results) {
       const event = s.deliveries.find((e) => e.id === id);

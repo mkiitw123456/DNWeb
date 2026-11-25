@@ -67,9 +67,11 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
       clearInterval(timer);
     };
   }, [refresh, onUnauthorized]);
+  const [joiningRoom, setJoiningRoom] = useState(null);
   async function act(type, payload) {
     if (lock.current) return false;
     lock.current = true;
+    if (type === "game.join") setJoiningRoom(payload.id);
     sequence.current++;
     setBusy(true);
     try {
@@ -83,6 +85,7 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
       if (e.status === 401) onUnauthorized();
       return false;
     } finally {
+      setJoiningRoom(null);
       lock.current = false;
       setBusy(false);
     }
@@ -276,7 +279,8 @@ export default function GuildGames({ kind, me, request, onUnauthorized }) {
               </div>
             ))}
           </div>
-          {room.status === "open" && !own && (
+          {joiningRoom === room.id && <p role="status">報名同步中…</p>}
+            {room.status === "open" && !own && joiningRoom !== room.id && (
             <form
               onSubmit={async (e) => {
                 e.preventDefault();

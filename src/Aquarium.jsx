@@ -121,7 +121,7 @@ function SceneryCard({ aquarium, onCheckIn, busy, scene, chooseScene }) {
         <div className="aquarium-actions">
           <Button primary={!checkedInToday} disabled={busy || checkedInToday} onClick={onCheckIn}>
             {checkedInToday ? <Check size={15} /> : <Icon size={15} />}
-            {checkedInToday ? "今日已簽到" : "今日簽到"}
+            {aquarium.checking ? "簽到同步中…" : checkedInToday ? "今日已簽到" : "今日簽到"}
           </Button>
           <Button type="button" onClick={toggle}>
             {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}

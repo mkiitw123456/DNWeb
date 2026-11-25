@@ -70,7 +70,13 @@ export async function transact(fn, { backup = false } = {}) {
     const state = await guildDoc(c), original = structuredClone(state);
     const result = await fn(state);
     if (backup) await putDoc(c, "dnweb_backups/" + backupId, original);
-    if (!isDeepStrictEqual(state, original)) await putDoc(c, "dnweb/state", state);
+    const removed = Object.keys(original).filter(key => !Object.hasOwn(state, key));
+    const changed = Object.fromEntries(Object.entries(state).filter(([key, value]) =>
+      !isDeepStrictEqual(original[key], value)));
+    if (removed.length || Object.keys(changed).length) {
+      await c.query("update documents set body = (body - $1::text[]) || $2::jsonb where path='dnweb/state'",
+        [removed, JSON.stringify(changed)]);
+    }
     return result;
   });
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
