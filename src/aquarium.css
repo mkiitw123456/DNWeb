@@ -115,6 +115,8 @@
 .scenery-aquarium .aquarium-stage canvas {
   width: min(100%, 760px);
   max-width: 100%;
+  aspect-ratio: 448 / 182;
+  image-rendering: auto;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -159,7 +161,7 @@
   color: #d6e9dc;
 }
 
-.fish-portrait { image-rendering: pixelated; display: block; max-width: 100%; }
+.fish-portrait { display: block; max-width: 100%; height: auto; aspect-ratio: 2; image-rendering: auto; }
 .daily-fish {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
   padding: 4px 13px 4px 3px; border-radius: 9px; text-align: left;
@@ -189,7 +191,7 @@ dialog.fish-guide { width: min(880px, calc(100vw - 24px)); padding: clamp(16px, 
   background-image: radial-gradient(var(--fish-ink) .7px,transparent .8px); background-size: 13px 13px;
   mask-image: linear-gradient(160deg,black,transparent 52%,black);
 }
-.fish-specimen-window .fish-portrait { width: 92%; }
+.fish-specimen-window .fish-portrait { width: 92%; aspect-ratio: 152 / 74; }
 .fish-tier-label, .fish-accession { position: absolute; color: var(--fish-ink); font-size: 12px; }
 .fish-tier-label { top: 12px; left: 14px; border-bottom: 2px solid currentColor; padding-bottom: 3px; }
 .fish-accession { right:12px; bottom:10px; font: 11px ui-monospace,monospace; }

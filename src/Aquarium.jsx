@@ -5,7 +5,8 @@ import { Check, Fish, Stars, Pause, Play, Waves, RotateCcw, Orbit, BookOpen } fr
 import FishGuide, {FishPortrait} from "./FishGuide.jsx";
 import { fishById, fishTiers } from "../shared/fish-catalog.js";
 import { Button } from "./ui.jsx";
-import { reconcileSchool, makeSeabed, renderSeabed, makeFrame, paintTank, tankCamera, tankHeight, tankWidth } from "./aquariumScene.js";
+import { reconcileSchool, makeSeabed, renderSeabed, makeFrame, paintTank, tankCamera, tankHeight, tankWidth, zoomTank } from "./aquariumScene.js";
+import { observeAquariumCanvas } from "./aquariumCanvas.js";
 import "./aquarium.css";
 
 function useSceneMotion(key, respectReducedMotion = false) {
@@ -53,9 +54,9 @@ function AquariumScene({ total, capacity, day, playing, species }) {
 
   useEffect(() => {
     const node = canvas.current;
-    const ctx = node.getContext("2d");
-    if (!ctx) return;
-    const geometry = makeSeabed(), bed = makeFrame(), buffer = makeFrame();
+    const stage = node.parentElement;
+    const geometry = makeSeabed();
+    let bed, buffer, present;
     let camera = tankCamera(), drag = null;
     let lamp;
     function readLamp() {
@@ -66,7 +67,8 @@ function AquariumScene({ total, capacity, day, playing, species }) {
     function paint() {
       if (bed.camera !== camera) renderSeabed(bed, geometry, camera, lamp);
       const { fish, arrivals } = school.current;
-      paintTank(ctx, bed, buffer, fish, elapsed.current, arrivals);
+      paintTank(bed, buffer, fish, elapsed.current, arrivals);
+      present(buffer.image);
     }
     function draw(now) {
       frame = 0;
@@ -78,10 +80,25 @@ function AquariumScene({ total, capacity, day, playing, species }) {
       if (enabled.current) frame = requestAnimationFrame(draw);
     }
     function setView(next) {
+      if (next === camera) return;
       camera = next;
-      if (!frame && onScreen && !document.hidden) frame = requestAnimationFrame(draw);
+      if (bed && !frame && onScreen && !document.hidden) frame = requestAnimationFrame(draw);
     }
-    resetView.current = () => setView(tankCamera());
+    function orbit(yaw, pitch) {
+      setView(tankCamera(yaw, pitch, camera.width, camera.height, camera));
+    }
+    resetView.current = () => setView(tankCamera(undefined, undefined, camera.width, camera.height));
+    function wheel(event) {
+      if (event.ctrlKey || event.metaKey) return;
+      const mode = event.deltaMode;
+      if (!event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      const bounds = node.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      event.preventDefault();
+      const unit = mode === WheelEvent.DOM_DELTA_LINE ? 16 : mode === WheelEvent.DOM_DELTA_PAGE ? bounds.height : 1;
+      setView(zoomTank(camera, Math.exp(-0.0017 * unit * event.deltaY),
+        (event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height));
+    }
     function startDrag(event) {
       if (!event.isPrimary || event.button !== 0 || drag) return;
       const bounds = node.getBoundingClientRect();
@@ -95,7 +112,7 @@ function AquariumScene({ total, capacity, day, playing, species }) {
       const dy = (event.clientY - drag.y) / drag.height;
       drag.x = event.clientX;
       drag.y = event.clientY;
-      setView(tankCamera(camera.yaw - dx * 2 * Math.PI, camera.pitch + dy * 2));
+      orbit(camera.yaw - dx * 2 * Math.PI, camera.pitch + dy * 2);
     }
     function endDrag(event) {
       if (event.pointerId !== drag?.id) return;
@@ -104,11 +121,14 @@ function AquariumScene({ total, capacity, day, playing, species }) {
       if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
     }
     function keyDown(event) {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const steps = {ArrowLeft: [-.15, 0], ArrowRight: [.15, 0], ArrowUp: [0, .1], ArrowDown: [0, -.1]};
       if (event.key === "Home") resetView.current();
+      else if (event.key === "+" || event.key === "=") setView(zoomTank(camera, 1.2));
+      else if (event.key === "-") setView(zoomTank(camera, 1 / 1.2));
       else if (steps[event.key]) {
         const [x, y] = steps[event.key];
-        setView(tankCamera(camera.yaw + x, camera.pitch + y));
+        orbit(camera.yaw + x, camera.pitch + y);
       } else return;
       event.preventDefault();
     }
@@ -116,11 +136,18 @@ function AquariumScene({ total, capacity, day, playing, species }) {
       cancelAnimationFrame(frame);
       frame = 0;
       previous = null;
-      if (onScreen && !document.hidden) {
+      if (bed && onScreen && !document.hidden) {
         paint();
         if (enabled.current) frame = requestAnimationFrame(draw);
       }
     }
+    const stopResizing = observeAquariumCanvas(node, tankWidth / tankHeight, 768, (width, height, resolve) => {
+      bed = makeFrame(width, height);
+      buffer = makeFrame(width, height);
+      present = resolve;
+      camera = tankCamera(camera.yaw, camera.pitch, width, height, camera);
+      resume();
+    });
     const observer = new IntersectionObserver(([entry]) => {
       onScreen = entry.isIntersecting;
       resume();
@@ -130,20 +157,22 @@ function AquariumScene({ total, capacity, day, playing, species }) {
       const next = readLamp();
       if (next === lamp) return;
       lamp = next;
-      bed.camera = null;
+      if (bed) bed.camera = null;
       resume();
     });
     themeObserver.observe(document.documentElement, {attributes:true, attributeFilter:["style","class"]});
     const controls = {pointerdown: startDrag, pointermove: moveDrag, pointerup: endDrag, pointercancel: endDrag, lostpointercapture: endDrag, keydown: keyDown};
     for (const [name, handler] of Object.entries(controls)) node.addEventListener(name, handler);
+    stage.addEventListener("wheel", wheel, { passive: false });
     document.addEventListener("visibilitychange", resume);
     repaint.current = resume;
-    resume();
     return () => {
       cancelAnimationFrame(frame);
+      stopResizing();
       observer.disconnect();
       themeObserver.disconnect();
       for (const [name, handler] of Object.entries(controls)) node.removeEventListener(name, handler);
+      stage.removeEventListener("wheel", wheel);
       resetView.current = null;
       document.removeEventListener("visibilitychange", resume);
       repaint.current = null;
@@ -151,8 +180,8 @@ function AquariumScene({ total, capacity, day, playing, species }) {
   }, []);
   return <>
     <canvas ref={canvas} width={tankWidth} height={tankHeight} tabIndex={0} role="img"
-      aria-label="立體水族箱，拖曳或使用方向鍵旋轉，Home 鍵回到預設視角" />
-    <span className="aquarium-orbit-hint" aria-hidden="true"><Orbit size={13} />拖曳旋轉</span>
+      aria-label="立體水族箱，拖曳或使用方向鍵旋轉，滾輪或加減鍵縮放，Home 鍵重設視角和倍率" />
+    <span className="aquarium-orbit-hint" aria-hidden="true"><Orbit size={13} />拖曳旋轉 · 滾輪縮放</span>
     <button type="button" className="aquarium-reset-view" aria-label="重設水族箱視角" title="重設視角" onClick={() => resetView.current?.()}><RotateCcw size={15} /></button>
   </>;
 }

@@ -2,34 +2,38 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Waves } from "lucide-react";
 import { fishById, fishCatalog, fishTiers } from "../shared/fish-catalog.js";
 import { makeFrame, paintFishPortrait } from "./aquariumScene.js";
+import { observeAquariumCanvas } from "./aquariumCanvas.js";
 import { Modal } from "./ui.jsx";
 
 export function FishPortrait({ species, animated = false }) {
   const canvas = useRef(null);
   useEffect(() => {
     const node = canvas.current;
-    const ctx = node.getContext("2d");
-    if (!ctx) return;
-    const frame = makeFrame(node.width, node.height);
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-    let timer,
-      elapsed = 0;
+    let timer, frame, present, elapsed = 0;
+    function paint() {
+      paintFishPortrait(frame, species, elapsed);
+      present(frame.image);
+    }
     function sync() {
       clearInterval(timer);
-      paintFishPortrait(ctx, frame, species, elapsed);
+      if (!frame) return;
+      paint();
       if (animated && !document.hidden && !reduced.matches) {
-        timer = setInterval(
-          () => paintFishPortrait(ctx, frame, species, (elapsed += 0.06)),
-          60,
-        );
+        timer = setInterval(() => { elapsed += 0.06; paint(); }, 60);
       }
     }
-    sync();
-    if (!animated) return;
+    const stopResizing = observeAquariumCanvas(node, animated ? 152 / 74 : 2, animated ? 480 : 116, (width, height, resolve) => {
+      frame = makeFrame(width, height);
+      present = resolve;
+      sync();
+    });
+    if (!animated) return stopResizing;
     document.addEventListener("visibilitychange", sync);
     reduced.addEventListener("change", sync);
     return () => {
       clearInterval(timer);
+      stopResizing();
       document.removeEventListener("visibilitychange", sync);
       reduced.removeEventListener("change", sync);
     };
