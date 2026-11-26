@@ -460,6 +460,7 @@ async function lobbySummary(users, now) {
   }
   const [board, aquarium] = await cachedSummary.pending;
   return { period, day, totalCheckIns: aquarium?.totalCheckIns || 0,
+    species: aquarium?.species ?? [],
     leaderboard: rankedLeaderboard(rankedRows(board, users), users) };
 }
 export async function activityView(user, users, now = Date.now()) {
@@ -487,7 +488,7 @@ export async function activityView(user, users, now = Date.now()) {
       return {
         period,
         timezone: "Asia/Taipei",
-        aquarium: aquariumView(daily.day, aquarium, today),
+        aquarium: aquariumView(daily.day, aquarium, today, member),
         member,
         weekly: own?.points || 0,
         weeklyCount: own?.count || 0,
@@ -719,7 +720,7 @@ export async function activityAction(
   if (type === "aquarium.checkIn") {
     const { day } = dailyActivityPeriods(now);
     if (p.day !== day) fail("簽到日期已更新，請重新載入大廳", 409);
-    return checkInAquarium(user, day, `day_${keyOf(user.id, day)}`, now);
+    return checkInAquarium(user, day, `day_${keyOf(user.id, day)}`, now, defaultMember(user.id));
   }
   if (type === "activity.history") fail("個人明細已停用，請查看積分摘要", 410);
   if (type === "activity.report") {

@@ -1,6 +1,7 @@
 import { encounterMotion } from "./encounterMotion.js";
 import { useStarRewards, STAR_ASSET } from "./StarRewards.jsx";
 import Aquarium from "./Aquarium.jsx";
+import { fishById, fishTiers } from "../shared/fish-catalog.js";
 import useSubmitDialog from "./useSubmitDialog.js";
 import { playSound } from "./sounds.js";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
@@ -135,7 +136,8 @@ export default function Lobby({
         }
         const total = Math.max(previous.aquarium.totalCheckIns, summary.totalCheckIns);
         onActivityChange({ ...previous, leaderboard: summary.leaderboard,
-          aquarium: { ...previous.aquarium, totalCheckIns: total, fishCount: Math.min(previous.aquarium.capacity, total) } });
+          aquarium: { ...previous.aquarium, totalCheckIns: total, fishCount: Math.min(previous.aquarium.capacity, total),
+            species: summary.totalCheckIns >= previous.aquarium.totalCheckIns ? summary.species ?? previous.aquarium.species : previous.aquarium.species } });
       } catch (e) {
         if (live) handleError(e);
       } finally { pending = false; }
@@ -205,7 +207,8 @@ export default function Lobby({
       ++viewRequest.current;
       onActivityChange(current => current?.aquarium.day === day
         ? { ...current, aquarium } : current);
-      notify("今日簽到完成");
+      const found = fishById.get(aquarium.todayFish);
+      notify(found ? `今日簽到 · 抽到${fishTiers[found.tier].name}「${found.name}」` : "今日簽到完成");
     } catch (e) {
       if (e.status === 401) onUnauthorized();
       if (mounted.current && (e.status === 409 || !e.status || e.status >= 500))
@@ -356,8 +359,7 @@ export default function Lobby({
       <div className="view-transition" key={tab}>
         {tab === "lobby" && (
           <Aquarium memberId={data.me.id} aquarium={checkingDay === view.aquarium.day && !view.aquarium.checkedInToday
-            ? { ...view.aquarium, checking: true, checkedInToday: true, totalCheckIns: view.aquarium.totalCheckIns + 1,
-                fishCount: Math.min(view.aquarium.capacity, view.aquarium.fishCount + 1) }
+            ? { ...view.aquarium, checking: true, checkedInToday: true }
             : view.aquarium} onCheckIn={checkIn} busy={busy} />
         )}
         <section

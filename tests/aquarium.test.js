@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activityAction, activityView } from "../server/activities.js";
+import { fishById, drawFishSpecies, fishTiers } from "../shared/fish-catalog.js";
 
 let folder;
 before(async () => {
@@ -49,10 +50,19 @@ test("same-day requests share one fish across tabs, preserving daily game counts
     Array.from({ length: 6 }, () => checkIn(a, day, now)),
   );
   assert.ok(results.every((r) => r.totalCheckIns === 1 && r.checkedInToday));
+  const drawn = results[0].todayFish;
+  assert.ok(fishById.has(drawn));
+  for (const r of results) {
+    assert.equal(r.todayFish, drawn);
+    assert.deepEqual(r.species, [drawn]);
+    assert.deepEqual(r.collection, { [drawn]:1 });
+  }
+  assert.deepEqual((await view(b, now)).aquarium.collection,{});
   assert.equal((await view(b, now)).aquarium.checkedInToday, false);
   await Promise.all([playFortune(a), playFortune(b)]);
   const retry = await checkIn(a, day, now);
   assert.equal(retry.totalCheckIns, 1);
+  assert.deepEqual(retry.collection, results[0].collection);
   assert.equal((await checkIn(b, day, now)).totalCheckIns, 2);
   for (const user of [a, b]) {
     const updated = await view(user, now);
@@ -74,6 +84,8 @@ test("09:00 Taiwan resets daily eligibility and starts an empty tank on the firs
   assert.equal(january.day, "2027-01-01");
   assert.equal(january.fishCount, 0);
   assert.equal(january.checkedInToday, false);
+  assert.deepEqual(january.collection, december.collection);
+  assert.equal(january.todayFish, null);
   await assert.rejects(checkIn(user, december.day, reset), { status: 409 });
   assert.equal((await checkIn(user, january.day, reset)).totalCheckIns, 1);
   const tomorrow = (await view(user, reset + 86400000)).aquarium;
@@ -93,6 +105,8 @@ test("a full aquarium continues recording participation, including simultaneous 
   assert.equal(capacity, 24);
   assert.equal(full.fishCount, capacity);
   assert.equal(full.totalCheckIns, users.length);
+  assert.equal(full.species.length,capacity);
+  assert.ok(full.species.every(s=>fishById.has(s)));
   assert.deepEqual(await checkIn(users[0], day, now), full);
 });
 
@@ -102,9 +116,19 @@ test("cached lobby summaries exclude private fields and roll over at Taipei 09:0
   const summary = now => activityAction(member, users, "activity.summary", {}, now);
   await checkIn(member, "2027-03-31", before);
   const previous = await summary(before);
-  assert.deepEqual(Object.keys(previous).sort(), ["day", "leaderboard", "period", "totalCheckIns"]);
+  assert.deepEqual(Object.keys(previous).sort(), ["day", "leaderboard", "period", "species", "totalCheckIns"]);
+  assert.ok(fishById.has(previous.species[0]));
   assert.equal(previous.totalCheckIns, 1);
   const next = await summary(before + 1000);
   assert.equal(next.day, "2027-04-01");
   assert.equal(next.totalCheckIns, 0);
+});
+
+test("a hundred rarity tickets have the advertised distribution", () => {
+  const counts=fishTiers.map(()=>0);
+  for(let i=0;i<100;i++){
+    const id=drawFishSpecies(limit=>limit===100?i:0);
+    counts[fishById.get(id).tier]++;
+  }
+  assert.deepEqual(counts, fishTiers.map(t=>t.rate));
 });
