@@ -1,3 +1,4 @@
+import OverlayLicenses from "./OverlayLicenses.jsx";
 import { useFeedback } from "./FeedbackHost.jsx";
 import ActivityAdmin from "./ActivityAdmin.jsx";
 import { matchesContent } from "./activity-calendar.js";
@@ -82,6 +83,7 @@ export default function Admin({
           ["quantities", "數量項目"],
           ["discord", "Discord 通知"],
           ["voice", "語音統計"],
+          ["licenses", "軟體授權碼"],
         ].map(([id, name]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -96,7 +98,7 @@ export default function Admin({
           </button>
         ))}
       </div>
-      {tab === "voice" ? (
+      {tab === "licenses" ? <OverlayLicenses /> : tab === "voice" ? (
         <VoiceStats request={request} onUnauthorized={onUnauthorized} />
       ) : tab === "activities" || tab === "quiz" ? (
         configEditor.draft ? (

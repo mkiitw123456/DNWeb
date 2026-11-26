@@ -1,3 +1,4 @@
+import { activateLicense, manageLicenses } from "./licenses.js";
 import { competitionRequest } from "./competition-store.js";
 import { casinoAction, settleCasino } from "./casino.js";
 import { gameAction } from "./guild-games.js";
@@ -191,6 +192,7 @@ export default async function handler(req, res) {
     const payload = body.payload || {};
     if (process.env.VERCEL && ["state", "activity.state", "activity.summary", "competition.room", "competition.state"].includes(type))
       console.info("db_usage request", type, req.url?.includes("bootstrap=1") ? "bootstrap" : "");
+    if (type === "license.activate") return res.status(200).json(await transact(s => activateLicense(s, payload)));
     await cleanupDeploymentTest();
     if (type === "logout") {
       const token = session(req);
@@ -271,6 +273,10 @@ export default async function handler(req, res) {
     }
     const token = session(req);
     if (!token) fail("請先登入", 401);
+    if (type.startsWith("license.")) {
+      const store = type === "license.list" ? readState : transact;
+      return res.status(200).json(await store(s => manageLicenses(s, token, type, payload)));
+    }
     if (usePostgres() && (type === "character.quickSave" ||
         (type === "character.gear" && Object.hasOwn(payload, "gear")))) {
       const saved = await pgTransaction(c => saveCharacterFields(c, token, type, payload));
