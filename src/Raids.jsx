@@ -1,5 +1,6 @@
 import useSubmitDialog from "./useSubmitDialog.js";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiRequest } from "./api.js";
 import { CalendarDays, Check, Plus, X } from "lucide-react";
 import { Heading, Button, Field, Modal, Empty } from "./ui.jsx";
 import {
@@ -20,7 +21,7 @@ const statusLabel = {
   unconfigured: "尚未設定出團 Webhook",
 };
 const gradeColors = { A: "#d8751f", S: "#9353d6", L: "#a82348" };
-function MemberCard({ member, professions, subtitle }) {
+function MemberCard({ member, professions, subtitle, guildOwners }) {
   const profession = professions.find((p) => p.id === member.professionId);
   const gear = member.gear || {};
   return (
@@ -33,6 +34,7 @@ function MemberCard({ member, professions, subtitle }) {
         ]),
       )}
     >
+      {guildOwners.has(member.ownerId) && <span className="raid-guild-star" role="img" aria-label="公會成員" title="公會成員">★</span>}
       {profession?.icon && (
         <img
           className="raid-job-icon"
@@ -46,6 +48,7 @@ function MemberCard({ member, professions, subtitle }) {
   );
 }
 function CharacterPicker({
+  guildOwners,
   data,
   available,
   availability,
@@ -125,6 +128,7 @@ function CharacterPicker({
               onClick={() => onPick(c.id)}
             >
               <MemberCard
+                guildOwners={guildOwners}
                 member={c}
                 professions={data.professions}
                 subtitle={
@@ -150,6 +154,25 @@ function CharacterPicker({
   );
 }
 export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
+  const [guildOwners, setGuildOwners] = useState(() => new Set());
+  const [guildError, setGuildError] = useState(false);
+  useEffect(() => {
+    let live = true, pending = false;
+    async function refresh() {
+      if (document.hidden || pending) return;
+      pending = true;
+      try {
+        const { owners } = await apiRequest("raid.guildMembers.state");
+        if (live) { setGuildOwners(new Set(owners)); setGuildError(false); }
+      } catch {
+        if (live) { setGuildOwners(new Set()); setGuildError(true); }
+      } finally { pending = false; }
+    }
+    refresh();
+    const timer = setInterval(refresh, 300000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { live = false; clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [data.me.id]);
   const [scope, setScope] = useState("all"),
     [selectedDay, setSelectedDay] = useState(""),
     [step, setStep] = useState(1),
@@ -227,6 +250,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
         onAdd={data.me.admin ? add : undefined}
         addLabel="新增出團"
       />
+      {guildError && <p className="hint" role="status">暫時無法確認 Discord 公會身分，排班仍可使用。</p>}
       <section className="raid-calendar" aria-label="我的未來七天排班">
         <div className="section-title">
           <h2>
@@ -365,6 +389,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                     {slot ? (
                       <MemberCard
                         member={slot}
+                        guildOwners={guildOwners}
                         professions={data.professions}
                         subtitle={slot.unavailable ? "已停用" : ""}
                       />
@@ -542,6 +567,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
       )}
       {quick && (
         <CharacterPicker
+          guildOwners={guildOwners}
           data={data}
           available={data.roster.filter(
             (c) =>
@@ -718,6 +744,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
                           {c ? (
                             <MemberCard
                               member={c}
+                              guildOwners={guildOwners}
                               professions={data.professions}
                               subtitle={`剩 ${remaining(c)} 場`}
                             />
@@ -768,6 +795,7 @@ export default function Raids({ data, mutate, busy, ask, pendingSeats = [] }) {
       )}
       {picker !== null && draft && (
         <CharacterPicker
+          guildOwners={guildOwners}
           data={data}
           available={available}
           availability={availability}

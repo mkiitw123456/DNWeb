@@ -15,7 +15,7 @@ import { activityAction, activityView } from "../server/activities.js";
 import { activityTransaction } from "../server/activity-store.js";
 import { transact } from "../server/store.js";
 import { audit } from "../server/scheduling.js";
-import { searchDiscordMembers } from "../server/discord-members.js";
+import { raidGuildOwners, searchDiscordMembers } from "../server/discord-members.js";
 let folder, s, owner, member, peer;
 const now = Date.now();
 before(async () => {
@@ -197,12 +197,15 @@ test("substring Discord search matches both Wo and lf, uses cached safe display 
       json: async () => [
         {
           nick: "MrAirWolf",
+          roles: ["1559201656636309604"],
           user: { id: "123456789012345679", username: "wolf_account" },
         },
         {
           nick: "WolfBot",
+          roles: ["1559201656636309604"],
           user: { id: "123456789012345680", username: "bot", bot: true },
         },
+        { roles: ["123456789012345600"], user: { id: "123456789012345681", username: "guest" } },
       ],
     };
   };
@@ -211,6 +214,12 @@ test("substring Discord search matches both Wo and lf, uses cached safe display 
     "MrAirWolf",
   );
   assert.equal((await searchDiscordMembers("lf", fake, now)).members.length, 1);
+  assert.deepEqual(await raidGuildOwners([
+    {id:"member", active:true, discordId:"123456789012345679"},
+    {id:"bot", active:true, discordId:"123456789012345680"},
+    {id:"guest", active:true, discordId:"123456789012345681"},
+    {id:"unlinked", active:true},
+  ], fake, now), ["member"]);
   assert.equal(calls, 1);
 });
 test("Discord binding requires server-verified membership and preserves uniqueness", () => {

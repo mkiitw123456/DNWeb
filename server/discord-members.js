@@ -19,13 +19,7 @@ export async function verifyDiscordMember(id, fetcher = fetch) {
     fail("請選擇有效的 Discord 成員");
   return id;
 }
-export async function searchDiscordMembers(
-  query,
-  fetcher = fetch,
-  now = Date.now(),
-) {
-  const q = text(query, "Discord 名稱", 80).toLocaleLowerCase();
-  if (q.length < 2) fail("請至少輸入兩個字元");
+async function guildMembers(fetcher, now) {
   const token = process.env.DISCORD_BOT_TOKEN,
     guild = process.env.DISCORD_GUILD_ID;
   if (!token || !/^\d{17,20}$/.test(guild || ""))
@@ -60,6 +54,7 @@ export async function searchDiscordMembers(
                 username: m.user.username,
                 displayName: m.nick || m.user.global_name || m.user.username,
                 globalName: m.user.global_name || "",
+                guildMember: m.roles?.includes("1559201656636309604") === true,
               })),
           );
           if (rows.length < 1000) {
@@ -74,13 +69,26 @@ export async function searchDiscordMembers(
       });
     await loading;
   }
-  const matches = cache.members.filter((m) =>
+  return cache.members;
+}
+
+export async function raidGuildOwners(users, fetcher = fetch, now = Date.now()) {
+  const linked = users.filter(u => u.active && u.discordId);
+  if (!linked.length) return [];
+  const ids = new Set((await guildMembers(fetcher, now)).filter(m => m.guildMember).map(m => m.id));
+  return linked.filter(u => ids.has(u.discordId)).map(u => u.id);
+}
+
+export async function searchDiscordMembers(query, fetcher = fetch, now = Date.now()) {
+  const q = text(query, "Discord 名稱", 80).toLocaleLowerCase();
+  if (q.length < 2) fail("請至少輸入兩個字元");
+  const matches = (await guildMembers(fetcher, now)).filter((m) =>
     [m.username, m.displayName, m.globalName].some((n) =>
       n.toLocaleLowerCase().includes(q),
     ),
   );
   return {
-    members: matches.slice(0, 20).map(({ globalName, ...m }) => m),
+    members: matches.slice(0, 20).map(({ id, username, displayName }) => ({ id, username, displayName })),
     more: matches.length > 20,
   };
 }

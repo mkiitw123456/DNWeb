@@ -12,6 +12,7 @@ import {
 } from "./activity-maintenance.js";
 import {
   searchDiscordMembers,
+  raidGuildOwners,
   verifyDiscordMember,
 } from "./discord-members.js";
 import { waitUntil } from "@vercel/functions";
@@ -336,6 +337,7 @@ export default async function handler(req, res) {
       type === "voice.state" ||
       type === "firebase.usage" ||
       type === "discord.members" ||
+      type === "raid.guildMembers.state" ||
       type === "maintenance.retryDeletions"
     ) {
       const auth = await readState((s) => {
@@ -367,6 +369,8 @@ export default async function handler(req, res) {
       }
       if (type === "discord.members")
         return res.status(200).json(await searchDiscordMembers(payload.query));
+      if (type === "raid.guildMembers.state")
+        return res.status(200).json({ owners: await raidGuildOwners(auth.users) });
       const audited = [
         "activity.submit",
         "activity.adjust",

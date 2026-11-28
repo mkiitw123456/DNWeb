@@ -2184,11 +2184,14 @@ button.primary:disabled {
   padding: 6px; border: 1px solid var(--border); border-radius: 10px;
 }
 .raid-member {
+  position: relative;
   display: flex; align-items: center; min-width: 0; flex: 1; gap: 8px;
   padding: 5px 10px; min-height: 34px; border: 2px solid transparent; border-radius: 8px;
   background: linear-gradient(var(--surface),var(--surface)) padding-box,
     linear-gradient(90deg,var(--equipment) 0% 23%,var(--weapon) 44% 56%,var(--accessory) 77% 100%) border-box;
 }
+.raid-guild-star { position:absolute; top:-7px; left:2px; color:#ffcf45; background:var(--surface); border-radius:50%; font-size:14px; line-height:1; text-shadow:0 1px 1px #61440b; }
+.member-choice .raid-guild-star { position:static; flex:none; }
 .raid-member strong { min-width: 0; overflow-wrap: anywhere; }
 .raid-member small { margin: 0 0 0 auto; color: var(--muted); font-size: .78rem; }
 .raid-job-icon { width: 24px; height: 24px; object-fit: contain; flex: none; }
