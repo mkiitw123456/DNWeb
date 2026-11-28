@@ -1,6 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
 import { action, fail } from "./domain.js";
-import { periods } from "../shared/scheduling.js";
 import { claimDeliveries } from "./deliveries.js";
 import { audit } from "./scheduling.js";
 
@@ -13,6 +12,10 @@ export async function saveCharacterFields(client, token, type, payload, now = Da
                 'version', u->'version', 'username', u->'username')
        from jsonb_array_elements(body->'users') u where u->>'id' = $1 limit 1) as actor,
       ch.value as person, ch.pos - 1 as idx,
+      (select jsonb_build_object('id',u->'id','active',u->'active') from jsonb_array_elements(body->'users') u
+        where u->>'id'=coalesce($5::text,ch.value->>'ownerId') limit 1) as owner,
+      (select jsonb_build_object('id',p->'id') from jsonb_array_elements(body->'professions') p
+        where p->>'id'=coalesce($6::text,ch.value->>'professionId') limit 1) as profession,
       (select jsonb_agg(d) from jsonb_array_elements(body->'dungeons') d
         where d->>'id' = any($3::text[])) as dungeons,
       (select jsonb_agg(t) from jsonb_array_elements(body->'quantityTypes') t
@@ -20,21 +23,21 @@ export async function saveCharacterFields(client, token, type, payload, now = Da
       body->'discordWebhooks'->>'log' as log_url,
       body->'discordWebhooks'->>'important' as important_url,
       body->>'professionIconsMigrated' = 'true' and body->>'iconlessProfessionsRemoved' = 'true'
-        and not exists (select 1 from jsonb_array_elements(body->'characters') c
-          where c->>'week' is distinct from $5 or not (c ? 'quantities') or c ?| array['fatigue','day'])
+        and not coalesce(ch.value ?| array['fatigue','day'],false)
         as ready
     from documents left join lateral (
       select value, pos from jsonb_array_elements(body->'characters') with ordinality as x(value,pos)
       where value->>'id' = $2 limit 1
     ) ch on true where path = 'dnweb/state' for update of documents
-  `, [token.id, payload.id, Object.keys(payload.runs || {}), Object.keys(payload.quantities || {}), String(periods(now).week)]);
+  `, [token.id, payload.id, Object.keys(payload.runs || {}), Object.keys(payload.quantities || {}), payload.ownerId || null, payload.professionId ?? null]);
   if (!row) fail("公會資料尚未就緒", 503);
   const user = row.actor;
   if (!user?.active || user.version !== token.version) fail("登入已過期，請重新登入", 401);
-  // Run existing whole-guild migrations and weekly rollover on the normal path.
+  // Legacy migrations still use the normal path. action resets the selected character's week.
   if (!row.ready) return null;
   const s = {
-    users: [user], characters: row.person ? [row.person] : [],
+    users: row.owner ? [user,row.owner] : [user], characters: row.person ? [row.person] : [],
+    professions: row.profession ? [row.profession] : [],
     professionIconsMigrated: true, iconlessProfessionsRemoved: true,
     dungeons: row.dungeons || [], quantityTypes: row.quantities || [],
     discordWebhooks: { log: row.log_url, important: row.important_url },
@@ -59,5 +62,10 @@ export async function saveCharacterFields(client, token, type, payload, now = Da
       )
     ) where path='dnweb/state'
   `, [String(row.idx), JSON.stringify(fields), JSON.stringify(s.deliveries), now - 86400000]);
+  if (type === "character.save") {
+    const {hp,attack,...characterPatch} = row.person;
+    return {state:{characterPatch},jobs,user};
+  }
+  if (before.week !== row.person.week) Object.assign(state,{week:row.person.week,runs:row.person.runs});
   return { state, jobs, user };
 }

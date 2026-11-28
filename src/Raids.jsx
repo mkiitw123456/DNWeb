@@ -72,7 +72,7 @@ function CharacterPicker({
         : "";
       return selectedProfessions.includes(id);
     }),
-    data.users,
+    data.raidUsers ?? data.users,
     query,
   );
   const chosenOwners = new Set(

@@ -1,3 +1,4 @@
+import { applyCharacterPatch } from "./guildPatches.js";
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 import { notify } from "./FeedbackHost.jsx";
@@ -151,20 +152,10 @@ export default function useCharacterSaves(
             if (store.getItem(k) === receipt) store.removeItem(k);
         });
         revision.current++;
-        setData(
-          (state) =>
-            state && {
-              ...state,
-              roster: saved.runs && state.roster
-                ? state.roster.map(c => c.id === id ? { ...c, runs: saved.runs, week: saved.week } : c)
-                : state.roster,
-              characters: state.characters.map((c) =>
-                c.id === id && c.ownerId === state.me.id
-                  ? { ...c, ...saved }
-                  : c,
-              ),
-            },
-        );
+        setData(state => {
+          const own = state?.characters.find(c => c.id === id && c.ownerId === state.me.id);
+          return own ? applyCharacterPatch(state, {...own,...saved}) : state;
+        });
         batch.delete(id);
         publish();
       } catch (error) {

@@ -23,6 +23,7 @@ import { claimDeliveries, sendClaimedDeliveries } from "./deliveries.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { pgTransaction, usePostgres } from "./postgres.js";
 import { saveCharacterFields } from "./postgres-character.js";
+import { guildPanel, linkedGuildUsers, saveRaidSeat } from "./postgres-raids.js";
 import { readState, transact } from "./store.js";
 import { findEditorCreate, rememberEditorCreate } from "./editor-creates.js";
 import {
@@ -278,9 +279,18 @@ export default async function handler(req, res) {
       const store = type === "license.list" ? readState : transact;
       return res.status(200).json(await store(s => manageLicenses(s, token, type, payload)));
     }
+    if (usePostgres() && type === "raid.guildMembers.state") {
+      const users = await pgTransaction(c => linkedGuildUsers(c, token));
+      return res.status(200).json({owners:await raidGuildOwners(users)});
+    }
+    if (usePostgres() && type === "guildPanel.state")
+      return res.status(200).json(await pgTransaction(c => guildPanel(c, token, payload.page)));
     if (usePostgres() && (type === "character.quickSave" ||
+        (type === "character.save" && payload.id && payload.partial === true) ||
+        (type === "raid.seat" && payload.partial === true) ||
         (type === "character.gear" && Object.hasOwn(payload, "gear")))) {
-      const saved = await pgTransaction(c => saveCharacterFields(c, token, type, payload));
+      const saved = await pgTransaction(c => type === "raid.seat" ? saveRaidSeat(c, token, payload)
+        : saveCharacterFields(c, token, type, payload));
       if (saved) {
         background(sendClaimedDeliveries(saved.jobs));
         cookie(res, saved.user);

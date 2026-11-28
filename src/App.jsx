@@ -1,3 +1,4 @@
+import { applySeatPatch, applyCharacterPatch } from "./guildPatches.js";
 import { useStarRewards } from "./StarRewards.jsx";
 import { notify, useFeedback } from "./FeedbackHost.jsx";
 import StarLoading from "./StarLoading.jsx";
@@ -95,6 +96,9 @@ export default function App() {
   const lock = useRef(false);
   const revision = useRef(0);
   const refreshShell = useRef(null);
+  const panelScope = useRef(null);
+  panelScope.current = data?.storage === "Supabase" && ["characters","raids"].includes(page)
+    ? {page, memberId:data.me.id, admin:!!data.me.admin} : null;
   const tail = useRef(Promise.resolve());
   const writes = useRef([]);
   const authVersion = useRef(0);
@@ -155,7 +159,7 @@ export default function App() {
   const request = apiRequest;
   useEffect(() => {
     let live = true;
-    const refresh = (initial = false) => {
+    const refresh = (initial = false, scope = panelScope.current) => {
       if (
         lock.current ||
         writes.current.length ||
@@ -165,9 +169,14 @@ export default function App() {
         return;
       const current = ++revision.current;
       const expected = authVersion.current;
-      (initial === true ? initialSession : request("state"))
+      (initial === true ? initialSession : scope ? request("guildPanel.state",{page:scope.page}) : request("state"))
         .then((d) => {
           if (live && current === revision.current) {
+            if (d?.panel) {
+              if (d.memberId !== scope.memberId || d.admin !== scope.admin) return refresh(false,null);
+              setData(previous => previous?.me.id === d.memberId ? {...previous,...d.panel} : previous);
+              return;
+            }
             const memberId = d?.me?.id ?? null;
             if (sessionMember.current !== memberId) {
               authVersion.current++;
@@ -242,7 +251,8 @@ export default function App() {
     try {
       return await trackWrite(type, () => enqueueWrite(async () => {
         if (authVersion.current !== version) return false;
-        const next = await performRequest(type, payload);
+        const partial = type === "raid.seat" || (type === "character.save" && payload.id);
+        const next = await performRequest(type, partial ? {...payload,partial:true} : payload);
         if (authVersion.current !== version) return false;
         revision.current++;
         if (auth) {
@@ -254,6 +264,8 @@ export default function App() {
           for (const slot of Object.keys(payload.gear || {})) characterSaves.clearField(payload.id, "gear", slot);
         }
         setData((current) => {
+          if (next?.seatPatch) return current && applySeatPatch(current, next.seatPatch);
+          if (next?.characterPatch) return current && applyCharacterPatch(current, next.characterPatch);
           if (
             !next ||
             !current ||
@@ -479,7 +491,9 @@ export default function App() {
                 aria-current={page === id ? "page" : undefined}
                 onClick={() => {
                   setPage(id);
-                  if (id === "raids" && data.me.admin) refreshShell.current?.();
+                  if (data.storage === "Supabase" && ["raids","characters"].includes(id))
+                    refreshShell.current?.(false,{page:id,memberId:data.me.id,admin:!!data.me.admin});
+                  else if (id === "raids" && data.me.admin) refreshShell.current?.();
                 }}
               >
                 <Icon size={19} strokeWidth={1.7} />
